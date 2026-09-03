@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f4ed">
+  <title>作业小账本</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">HOMEWORK LEDGER</p>
+        <h1>作业小账本</h1>
+      </div>
+      <button class="icon-button" id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsPanel">
+        <span aria-hidden="true">⚙</span>
+        <span>设置</span>
+      </button>
+    </header>
+
+    <section class="settings-panel" id="settingsPanel" hidden>
+      <div>
+        <h2>统计设置</h2>
+        <p>开始日期之前的记录会保留，但不计入当前统计。</p>
+      </div>
+      <div class="settings-row">
+        <label for="startDate">开始日期</label>
+        <input id="startDate" type="date">
+        <button class="small-button" id="saveSettingsButton" type="button">保存</button>
+      </div>
+    </section>
+
+    <section class="summary-card" aria-labelledby="balanceLabel">
+      <div class="summary-main">
+        <p id="balanceLabel">当前累计</p>
+        <p class="balance" id="balance">¥ 0.00</p>
+        <p class="period" id="periodLabel">从今天开始</p>
+      </div>
+      <div class="summary-stats">
+        <div>
+          <strong id="recordDays">0</strong>
+          <span>完成天数</span>
+        </div>
+        <div>
+          <strong id="rewardDays">0</strong>
+          <span>奖励天数</span>
+        </div>
+        <div>
+          <strong id="deductionTotal">¥0.00</strong>
+          <span>累计扣款</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="date-strip">
+      <div>
+        <span>当前查看</span>
+        <strong id="viewModeLabel">平日记录</strong>
+      </div>
+      <div class="date-control">
+        <input id="recordDate" type="date" aria-label="记录日期">
+        <button id="todayButton" type="button">今天</button>
+      </div>
+    </section>
+
+    <section class="card weekend-card" id="weekendCard" hidden>
+      <div class="section-heading compact">
+        <div>
+          <p class="section-kicker">周末任务包</p>
+          <h2>先安排，再按计划完成</h2>
+          <p class="weekend-range" id="weekendRange"></p>
+        </div>
+        <span class="mode-badge">周五至周日共用</span>
+      </div>
+
+      <div class="prep-grid weekend-checks">
+        <button class="prep-check" id="weekendConfirmedButton" type="button" aria-pressed="false">
+          <span class="check-mark" aria-hidden="true">✓</span>
+          <span><strong>周末作业已全部确认</strong><small id="weekendConfirmedStatus">已核对钉钉和成长记录册</small></span>
+        </button>
+        <button class="prep-check" id="dailySeparatedButton" type="button" aria-pressed="false">
+          <span class="check-mark" aria-hidden="true">✓</span>
+          <span><strong>已区分每日任务</strong><small>阅读、跳绳等不计入一次性作业</small></span>
+        </button>
+        <button class="prep-check" id="specialSeparatedButton" type="button" aria-pressed="false">
+          <span class="check-mark" aria-hidden="true">✓</span>
+          <span><strong>已区分特殊任务</strong><small>必须周日完成的任务单独安排</small></span>
+        </button>
+      </div>
+
+      <div class="weekend-plan">
+        <div class="weekend-plan-heading">
+          <div><h3>时间安排</h3><p>结合下面的作业清单，估算三个时段的分钟数。</p></div>
+          <strong id="weekendPlannedTotal">共 0 分钟</strong>
+        </div>
+        <div class="plan-fields">
+          <label>周五完成<input id="fridayPlanMinutes" type="number" min="0" max="300" step="5" inputmode="numeric" placeholder="40"></label>
+          <label>周六上午<input id="saturdayMorningMinutes" type="number" min="0" max="300" step="5" inputmode="numeric" placeholder="90"></label>
+          <label>周六下午<input id="saturdayAfternoonMinutes" type="number" min="0" max="300" step="5" inputmode="numeric" placeholder="60"></label>
+          <label>周六目标时间<input id="saturdayTargetTime" type="time" value="18:00"></label>
+        </div>
+        <button class="primary-button compact-button" id="saveWeekendPlanButton" type="button">保存周末计划</button>
+      </div>
+
+      <div class="weekend-progress">
+        <div class="weekend-progress-heading">
+          <div><p class="section-kicker">执行进度</p><h3 id="weekendStatus">等待制定计划</h3></div>
+          <div class="focus-total"><span>累计有效作业</span><strong id="weekendActualMinutes">0 分钟</strong></div>
+        </div>
+        <div class="milestone-list">
+          <div class="milestone" id="fridayMilestone"><span>1</span><div><strong>完成周五安排</strong><small id="fridayMilestoneStatus">奖励部分 ¥0.50</small></div></div>
+          <div class="milestone" id="saturdayMorningMilestone"><span>2</span><div><strong>完成周六上午安排</strong><small id="saturdayMorningMilestoneStatus">按自己制定的计划执行</small></div></div>
+          <div class="milestone" id="saturdayMilestone"><span>3</span><div><strong>周六完成学校作业</strong><small id="saturdayMilestoneStatus">目标时间前奖励部分 ¥1.00</small></div></div>
+        </div>
+        <div class="session-actions" id="weekendActions"></div>
+        <div class="day-result" id="weekendResult" hidden>
+          <div><span>周末结算</span><strong id="weekendResultLabel"></strong></div>
+          <b id="weekendResultAmount"></b>
+        </div>
+      </div>
+    </section>
+
+    <section class="card record-card">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">今日流程</p>
+          <h2 id="recordHeading">今天进行到哪里了？</h2>
+        </div>
+      </div>
+
+      <div class="prep-grid">
+        <div class="prep-check sport-check" id="sportCard">
+          <span class="check-mark" aria-hidden="true">✓</span>
+          <span class="sport-copy">
+            <strong>运动打卡</strong>
+            <small id="sportStatus">选择今天完成的运动</small>
+          </span>
+          <div class="sport-options" id="sportOptions" aria-label="运动项目">
+            <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
+            <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
+            <button type="button" data-sport="50米跑" aria-pressed="false">50米跑</button>
+            <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
+            <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
+          </div>
+        </div>
+        <button class="prep-check" id="ledgerButton" type="button" aria-pressed="false">
+          <span class="check-mark" aria-hidden="true">✓</span>
+          <span>
+            <strong>成长记录册已补全</strong>
+            <small id="ledgerStatus">已核对钉钉全部作业</small>
+          </span>
+        </button>
+      </div>
+
+      <div class="task-panel" id="taskPanel">
+        <div class="task-panel-heading">
+          <div>
+            <p class="section-kicker">作业清单</p>
+            <h3>先收齐，再一项一项做</h3>
+            <p>确认后每次只能进行一项，单项速度不参与奖罚。</p>
+          </div>
+          <strong id="taskSummary">0 项</strong>
+        </div>
+
+        <div class="task-entry" id="taskEntry">
+          <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
+            <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
+            <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
+            <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
+            <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+          </div>
+          <div class="voice-entry-row">
+            <button class="voice-button" id="voiceTaskButton" type="button">🎙 开始报作业</button>
+            <small id="voiceStatus">可以连续说“语文……，数学……，英语……”</small>
+          </div>
+          <textarea id="taskDraft" rows="3" maxlength="500" placeholder="例如：语文 背诵第3课；语文 练习册第12页；数学 口算；英语 朗读课文"></textarea>
+          <div class="task-entry-actions">
+            <button class="primary-button compact-button" id="addTasksButton" type="button">生成作业清单</button>
+            <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
+          </div>
+        </div>
+
+        <div class="active-task-banner" id="activeTaskBanner" hidden>
+          <span>现在只做这一项</span>
+          <strong id="activeTaskTitle"></strong>
+          <small id="activeTaskTime"></small>
+        </div>
+
+        <div class="task-list" id="taskList"></div>
+        <div class="empty-task-list" id="emptyTaskList">还没有作业，点击麦克风连续报完，或直接输入文字。</div>
+        <div class="task-list-footer">
+          <span id="taskConfirmHint">录入后先核对，避免漏掉作业。</span>
+          <button class="secondary-button" id="confirmTaskListButton" type="button" hidden>确认作业清单</button>
+        </div>
+
+        <div class="day-result" id="dayResult" hidden>
+          <div>
+            <span>完成结算</span>
+            <strong id="resultLabel">8:30 及以前</strong>
+          </div>
+          <b id="resultAmount">+ ¥1.50</b>
+        </div>
+      </div>
+
+      <label class="note-field" for="note">
+        <span>备注 <em>选填</em></span>
+        <input id="note" type="text" maxlength="60" placeholder="例如：今天没有提醒，自己完成">
+      </label>
+
+      <div class="record-actions">
+        <button class="text-button danger" id="resetDayButton" type="button">清除当天记录</button>
+      </div>
+    </section>
+
+    <section class="card history-card">
+      <div class="section-heading compact">
+        <div>
+          <p class="section-kicker">历史记录</p>
+          <h2>最近的表现</h2>
+        </div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <div id="emptyState" class="empty-state">
+        <span aria-hidden="true">✓</span>
+        <p>还没有记录</p>
+        <small>完成第一份作业清单后，这里会出现记录。</small>
+      </div>
+    </section>
+
+    <footer>数据只保存在当前浏览器中，不会上传。</footer>
+  </main>
+
+  <div class="focus-modal" id="focusModal" role="dialog" aria-modal="true" aria-labelledby="focusModalTitle" hidden>
+    <div class="focus-dialog">
+      <button class="focus-close" id="focusCloseButton" type="button" aria-label="暂时收起专注卡">×</button>
+      <p class="section-kicker">专注计时中</p>
+      <span class="focus-subject" id="focusModalSubject">语文</span>
+      <h2 id="focusModalTitle">当前作业</h2>
+      <div class="focus-clock" id="focusModalElapsed">00:00</div>
+      <div class="focus-start-row"><span>开始时间</span><strong id="focusModalStartedAt">--:--</strong></div>
+      <p class="focus-reminder">现在只做这一项，认真完成后再看下一项。</p>
+      <div class="focus-dialog-actions">
+        <button class="secondary-button" id="focusPauseButton" type="button">暂停</button>
+        <button class="primary-button" id="focusCompleteButton" type="button">完成这项</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
