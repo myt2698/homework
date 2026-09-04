@@ -59,7 +59,9 @@
     readingButton: $("#readingButton"), readingStatus: $("#readingStatus"),
     choresButton: $("#choresButton"), choresStatus: $("#choresStatus"),
     ledgerButton: $("#ledgerButton"), ledgerStatus: $("#ledgerStatus"),
-    taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
+    taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
+    taskEntryModal: $("#taskEntryModal"), taskEntryCloseButton: $("#taskEntryCloseButton"),
+    taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
@@ -479,7 +481,21 @@
     document.body.classList.remove("modal-open");
   }
 
+  function openTaskEntryModal() {
+    if (elements.taskEntryLauncher.hidden) return;
+    elements.taskEntryModal.hidden = false;
+    document.body.classList.add("modal-open");
+    elements.taskEntryCloseButton.focus();
+  }
+
+  function closeTaskEntryModal() {
+    if (elements.taskEntryModal.hidden) return;
+    elements.taskEntryModal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
   function openHistoryPage() {
+    closeTaskEntryModal();
     closeWeekendPlanModal();
     closeFocusModal();
     renderHistory();
@@ -603,11 +619,21 @@
     const canArrangeOrder = confirmed && canEditList && allPending && (!key || weekend.planSaved);
     const sortingMode = canArrangeOrder && !orderSaved;
     const orderPendingWeekend = confirmed && Boolean(key && !isFriday && weekend.planSaved && !orderSaved);
-    elements.taskEntry.hidden = confirmed || !canEditList || !ledgerReady;
+    const canEnterTasks = !confirmed && canEditList && ledgerReady;
+    elements.taskEntryLauncher.hidden = !canEnterTasks;
+    elements.taskEntry.hidden = !canEnterTasks;
+    const entryStatus = tasks.length
+      ? `已录入 ${tasks.length} 项，可继续补充其他科目`
+      : "选择科目，语音或文字录入";
+    elements.taskEntryLauncherStatus.textContent = entryStatus;
+    elements.taskEntryModalStatus.textContent = tasks.length
+      ? `已经录入 ${tasks.length} 项。可以继续录下一科，关闭后再统一核对清单。`
+      : "先选择科目，再用语音或文字录入。";
+    if (!canEnterTasks) closeTaskEntryModal();
     elements.emptyTaskList.hidden = tasks.length > 0;
     elements.emptyTaskList.textContent = key && !isFriday
       ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
-      : ledgerReady ? "还没有作业，点击麦克风连续报完，或直接输入文字。" : "先核对钉钉和成长记录册，再录入作业。";
+      : ledgerReady ? "还没有作业，点击“录入作业”开始。" : "先核对钉钉和成长记录册，再录入作业。";
     elements.confirmTaskListButton.hidden = tasks.length === 0 || !canEditList || (confirmed && !allPending);
     elements.confirmTaskListButton.textContent = confirmed ? "修改作业清单" : "确认作业清单";
     elements.taskOrderButton.hidden = !canArrangeOrder;
@@ -627,7 +653,7 @@
         ? key ? "周末清单已全部完成并自动结算。"
           : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
         : key ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
-      : tasks.length ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。";
+      : tasks.length ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。";
     const questMode = confirmed && orderSaved && (!key || weekend.planSaved);
     const questTasks = !questMode ? tasks : !key ? tasks
       : date === key
@@ -933,6 +959,7 @@
     saveAndRender("时间已调整");
   }
   function setRecordDate(date) {
+    closeTaskEntryModal();
     closeFocusModal();
     taskListExpanded = false;
     completedTasksExpanded = false;
@@ -1331,6 +1358,11 @@
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
   elements.openHistoryButton.addEventListener("click", openHistoryPage);
   elements.closeHistoryButton.addEventListener("click", closeHistoryPage);
+  elements.taskEntryLauncher.addEventListener("click", openTaskEntryModal);
+  elements.taskEntryCloseButton.addEventListener("click", closeTaskEntryModal);
+  elements.taskEntryModal.addEventListener("click", (event) => {
+    if (event.target === elements.taskEntryModal) closeTaskEntryModal();
+  });
   elements.weekendPlanEntry.addEventListener("click", openWeekendPlanModal);
   elements.weekendPlanCloseButton.addEventListener("click", closeWeekendPlanModal);
   elements.weekendPlanModal.addEventListener("click", (event) => {
@@ -1338,7 +1370,8 @@
   });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
+    if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
+    else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
     else if (!elements.historyPage.hidden) closeHistoryPage();
   });
   elements.weekendTaskPlanList.addEventListener("click", (event) => {

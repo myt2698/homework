@@ -157,6 +157,9 @@ public class MainActivity extends Activity {
     private TextView ledgerStatusView;
 
     private LinearLayout taskEntryPanel;
+    private LinearLayout taskEntryLauncher;
+    private TextView taskEntryLauncherStatus;
+    private TextView taskEntryDialogStatus;
     private EditText taskDraftInput;
     private TextView taskSummaryView;
     private TextView taskPanelTitleView;
@@ -222,6 +225,7 @@ public class MainActivity extends Activity {
     private TextView emptyHistoryView;
 
     private AlertDialog taskFocusDialog;
+    private AlertDialog taskEntryDialog;
     private AlertDialog weekendTaskPlanDialog;
     private TextView taskFocusElapsedView;
     private JSONObject taskFocusTask;
@@ -277,6 +281,7 @@ public class MainActivity extends Activity {
         timerHandler.removeCallbacks(timerTick);
         timerHandler.removeCallbacks(taskFocusTick);
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
+        if (taskEntryDialog != null) taskEntryDialog.dismiss();
         if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
         super.onDestroy();
     }
@@ -836,7 +841,7 @@ public class MainActivity extends Activity {
         taskEntryPanel.addView(entryActions, entryActionParams);
         LinearLayout.LayoutParams entryParams = matchWrap();
         entryParams.topMargin = dp(13);
-        panel.addView(taskEntryPanel, entryParams);
+        panel.addView(buildTaskEntryLauncher(), entryParams);
 
         taskQuestProgressPanel = vertical();
         taskQuestProgressPanel.setPadding(dp(14), dp(13), dp(14), dp(12));
@@ -934,6 +939,81 @@ public class MainActivity extends Activity {
         settlementParams.topMargin = dp(12);
         panel.addView(taskSettlementPanel, settlementParams);
         return panel;
+    }
+
+    private LinearLayout buildTaskEntryLauncher() {
+        LinearLayout entry = horizontal();
+        entry.setGravity(Gravity.CENTER_VERTICAL);
+        entry.setPadding(dp(13), dp(11), dp(13), dp(11));
+        entry.setBackground(rounded(GREEN_SOFT, 16, Color.rgb(188, 209, 248), 1));
+        entry.setClickable(true);
+        entry.setFocusable(true);
+        entry.setOnClickListener(v -> showTaskEntryDialog());
+
+        TextView icon = text("✍", 20, GREEN, true);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(rounded(Color.WHITE, 12, Color.WHITE, 0));
+        entry.addView(icon, fixed(dp(38), dp(38)));
+        entry.addView(spaceHorizontal(11));
+
+        LinearLayout copy = vertical();
+        copy.addView(text("录入作业", 14, INK, true));
+        taskEntryLauncherStatus = text("选择科目，语音或文字录入", 10, MUTED, false);
+        taskEntryLauncherStatus.setPadding(0, dp(3), 0, 0);
+        copy.addView(taskEntryLauncherStatus);
+        entry.addView(copy, weightedWrap(1));
+
+        TextView arrow = text("›", 27, Color.rgb(101, 136, 201), false);
+        arrow.setGravity(Gravity.CENTER);
+        entry.addView(arrow, fixed(dp(24), dp(38)));
+        taskEntryLauncher = entry;
+        return entry;
+    }
+
+    private void showTaskEntryDialog() {
+        if (taskEntryLauncher == null || taskEntryLauncher.getVisibility() != View.VISIBLE
+                || taskEntryPanel == null) return;
+        if (taskEntryDialog != null && taskEntryDialog.isShowing()) return;
+        if (taskEntryPanel.getParent() instanceof ViewGroup) {
+            ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
+        }
+        taskEntryPanel.setVisibility(View.VISIBLE);
+
+        LinearLayout content = vertical();
+        content.setPadding(dp(18), dp(18), dp(18), dp(8));
+        TextView kicker = text("每日录入作业", 10, GREEN, true);
+        kicker.setLetterSpacing(0.1f);
+        content.addView(kicker);
+        content.addView(text("把今天的作业一次录完整", 18, INK, true));
+        taskEntryDialogStatus = text("先选择科目，再用语音或文字录入。", 10, MUTED, false);
+        taskEntryDialogStatus.setPadding(0, dp(5), 0, 0);
+        content.addView(taskEntryDialogStatus);
+        LinearLayout.LayoutParams entryParams = matchWrap();
+        entryParams.topMargin = dp(14);
+        content.addView(taskEntryPanel, entryParams);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(content, matchWrap());
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(scroll)
+                .setNegativeButton("关闭", null)
+                .create();
+        taskEntryDialog = dialog;
+        dialog.setOnDismissListener(ignored -> {
+            if (taskEntryPanel.getParent() instanceof ViewGroup) {
+                ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
+            }
+            if (taskEntryDialog == dialog) taskEntryDialog = null;
+            taskEntryDialogStatus = null;
+        });
+        dialog.show();
+        renderTasks();
+    }
+
+    private void dismissTaskEntryDialog() {
+        if (taskEntryDialog != null && taskEntryDialog.isShowing()) taskEntryDialog.dismiss();
+        taskEntryDialog = null;
     }
 
     private LinearLayout buildWeekendTaskPlanEntry() {
@@ -1589,11 +1669,23 @@ public class MainActivity extends Activity {
         taskPanelHelpView.setText(sortingMode ? "这是你的计划，想先做哪一项由你决定。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : questMode ? "不用一次想完，只看眼前这一项。" : "一次专心做一项，每完成一项都很棒！");
-        taskEntryPanel.setVisibility(!confirmed && canEditList && ledgerReady ? View.VISIBLE : View.GONE);
+        boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
+        taskEntryLauncher.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
+        taskEntryPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
+        String entryStatus = tasks.length() > 0
+                ? "已录入 " + tasks.length() + " 项，可继续补充其他科目"
+                : "选择科目，语音或文字录入";
+        taskEntryLauncherStatus.setText(entryStatus);
+        if (taskEntryDialogStatus != null) {
+            taskEntryDialogStatus.setText(tasks.length() > 0
+                    ? "已经录入 " + tasks.length() + " 项。可以继续录下一科，关闭后再统一核对清单。"
+                    : "先选择科目，再用语音或文字录入。");
+        }
+        if (!canEnterTasks) dismissTaskEntryDialog();
         emptyTaskView.setVisibility(tasks.length() == 0 ? View.VISIBLE : View.GONE);
         emptyTaskView.setText(weekendMode && !isFriday
                 ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
-                : ledgerReady ? "还没有作业，点击麦克风连续报完，或直接输入文字。"
+                : ledgerReady ? "还没有作业，点击“录入作业”开始。"
                 : "先核对钉钉和成长记录册，再录入作业。");
         taskConfirmButton.setVisibility(tasks.length() == 0 || !canEditList || confirmed && !allPending
                 ? View.GONE : View.VISIBLE);
@@ -1617,7 +1709,7 @@ public class MainActivity extends Activity {
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
                         ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
                     : weekendMode ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
-                : tasks.length() > 0 ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。");
+                : tasks.length() > 0 ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。");
 
         Result settlement = weekendMode ? null : resultFor(dailyRecord);
         taskSettlementPanel.setVisibility(settlement == null ? View.GONE : View.VISIBLE);
@@ -3450,6 +3542,7 @@ public class MainActivity extends Activity {
     }
 
     private void selectDate(String date) {
+        dismissTaskEntryDialog();
         dismissTaskFocusDialog();
         taskListExpanded = false;
         completedTasksExpanded = false;

@@ -317,6 +317,29 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-panel-heading h3 { font-size: 1.05rem; }
 .task-panel-heading p:last-child { margin: 5px 0 0; color: var(--muted); font-size: .73rem; }
 .task-panel-heading > strong { padding: 6px 11px; border-radius: 999px; color: #356bcf; background: var(--green-soft); font-size: .75rem; white-space: nowrap; }
+.task-entry-launcher {
+  display: flex;
+  width: 100%;
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid #bcd1f8;
+  border-radius: 16px;
+  align-items: center;
+  gap: 11px;
+  color: var(--ink);
+  background: linear-gradient(135deg, #eef5ff, #f8fbff);
+  box-shadow: 0 6px 16px rgba(75,130,239,.08);
+  text-align: left;
+  cursor: pointer;
+}
+.task-entry-launcher[hidden] { display: none; }
+.task-entry-launcher:hover { border-color: #8fb2f3; transform: translateY(-1px); }
+.task-entry-launcher-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; place-items: center; background: #fff; font-size: 1.15rem; box-shadow: 0 3px 9px rgba(42,71,125,.09); }
+.task-entry-launcher-copy { min-width: 0; flex: 1; }
+.task-entry-launcher-copy strong, .task-entry-launcher-copy small { display: block; }
+.task-entry-launcher-copy strong { font-size: .88rem; }
+.task-entry-launcher-copy small { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: .69rem; text-overflow: ellipsis; white-space: nowrap; }
+.task-entry-launcher-arrow { color: #6588c9; font-size: 1.65rem; line-height: 1; }
 .task-entry { margin-top: 16px; padding: 14px; border: 1px dashed #bfd3f6; border-radius: 17px; background: #f7faff; }
 .task-entry[hidden] { display: none; }
 .subject-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 11px; }
@@ -512,6 +535,31 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .weekend-plan-dialog .focus-close { z-index: 1; }
 .weekend-plan-dialog .weekend-task-planner { margin-top: 0; padding: 25px; border: 0; border-radius: 26px; }
 body.modal-open { overflow: hidden; }
+
+.task-entry-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  padding: 18px;
+  place-items: center;
+  background: rgba(36,50,74,.48);
+  backdrop-filter: blur(5px);
+}
+.task-entry-modal[hidden] { display: none; }
+.task-entry-dialog {
+  position: relative;
+  width: min(620px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0,0,0,.28);
+}
+.task-entry-dialog-status { margin: 6px 42px 0 0; color: var(--muted); font-size: .76rem; }
+.task-entry-dialog .task-entry { margin-top: 18px; }
 
 .weekend-task-planner {
   padding: 20px;
@@ -760,9 +808,10 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 
 @media (max-width: 500px) {
   .app-shell { width: min(100% - 16px, 440px); }
-  .weekend-plan-modal { padding: 8px; }
+  .weekend-plan-modal, .task-entry-modal { padding: 8px; }
   .weekend-plan-dialog { max-height: calc(100vh - 16px); border-radius: 20px; }
   .weekend-plan-dialog .weekend-task-planner { padding: 22px 14px 16px; border-radius: 20px; }
+  .task-entry-dialog { max-height: calc(100vh - 16px); padding: 24px 14px 16px; border-radius: 20px; }
   .card { padding: 20px 16px; border-radius: 19px; }
   .topbar { padding: 0 4px; }
   .icon-button > span:last-child { display: none; }

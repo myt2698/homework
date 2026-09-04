@@ -102,23 +102,14 @@
           <strong id="taskSummary">0 项</strong>
         </div>
 
-        <div class="task-entry" id="taskEntry">
-          <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
-            <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
-            <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
-            <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
-            <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
-          </div>
-          <div class="voice-entry-row">
-            <button class="voice-button" id="voiceTaskButton" type="button">🎙 开始报作业</button>
-            <small id="voiceStatus">可以连续说“语文……，数学……，英语……”</small>
-          </div>
-          <textarea id="taskDraft" rows="3" maxlength="500" placeholder="例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文"></textarea>
-          <div class="task-entry-actions">
-            <button class="primary-button compact-button" id="addTasksButton" type="button">生成作业清单</button>
-            <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
-          </div>
-        </div>
+        <button class="task-entry-launcher" id="taskEntryLauncher" type="button" hidden>
+          <span class="task-entry-launcher-icon" aria-hidden="true">✍️</span>
+          <span class="task-entry-launcher-copy">
+            <strong>录入作业</strong>
+            <small id="taskEntryLauncherStatus">选择科目，语音或文字录入</small>
+          </span>
+          <span class="task-entry-launcher-arrow" aria-hidden="true">›</span>
+        </button>
 
         <div class="active-task-banner" id="activeTaskBanner" hidden>
           <span>✨ 正在专心完成</span>
@@ -127,7 +118,7 @@
         </div>
 
         <div class="task-list" id="taskList"></div>
-        <div class="empty-task-list" id="emptyTaskList">还没有作业，点击麦克风连续报完，或直接输入文字。</div>
+        <div class="empty-task-list" id="emptyTaskList">还没有作业，点击“录入作业”开始。</div>
         <div class="task-list-footer">
           <span id="taskConfirmHint">录入后先核对，避免漏掉作业。</span>
           <div class="task-footer-actions">
@@ -210,6 +201,32 @@
       </div>
     </section>
   </section>
+
+  <div class="task-entry-modal" id="taskEntryModal" role="dialog" aria-modal="true" aria-labelledby="taskEntryModalTitle" hidden>
+    <div class="task-entry-dialog">
+      <button class="focus-close" id="taskEntryCloseButton" type="button" aria-label="关闭作业录入">×</button>
+      <p class="section-kicker">每日录入作业</p>
+      <h2 id="taskEntryModalTitle">把今天的作业一次录完整</h2>
+      <p class="task-entry-dialog-status" id="taskEntryModalStatus">先选择科目，再用语音或文字录入。</p>
+      <div class="task-entry" id="taskEntry">
+        <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
+          <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
+          <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
+          <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
+          <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+        </div>
+        <div class="voice-entry-row">
+          <button class="voice-button" id="voiceTaskButton" type="button">🎙 开始报作业</button>
+          <small id="voiceStatus">可以连续说“语文……，数学……，英语……”</small>
+        </div>
+        <textarea id="taskDraft" rows="3" maxlength="500" placeholder="例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文"></textarea>
+        <div class="task-entry-actions">
+          <button class="primary-button compact-button" id="addTasksButton" type="button">生成作业清单</button>
+          <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="weekend-plan-modal" id="weekendPlanModal" role="dialog" aria-modal="true" aria-labelledby="weekendPlannerTitle" hidden>
     <div class="weekend-plan-dialog">
