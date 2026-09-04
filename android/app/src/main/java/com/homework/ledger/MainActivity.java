@@ -1232,12 +1232,14 @@ public class MainActivity extends Activity {
         for (int index = 0; index < parsed.size(); index++) {
             JSONObject task = parsed.get(index);
             put(task, "id", stamp + "-" + index);
+            put(task, "addedAt", stamp);
+            put(task, "addedSequence", index);
             put(task, "status", "pending");
             put(task, "elapsedMs", 0L);
             if (weekendKey != null) put(task, "plannedDay", "saturday");
             tasks.put(task);
         }
-        put(owner, "tasks", tasks);
+        put(owner, "tasks", sortedPendingTasks(tasks));
         if (weekendKey != null) {
             put(owner, "confirmed", false);
             owner.remove("confirmedAt");
@@ -1331,6 +1333,58 @@ public class MainActivity extends Activity {
         if ("英语".equals(subject)) return Color.rgb(118, 92, 167);
         if ("科学".equals(subject)) return Color.rgb(55, 126, 104);
         return Color.rgb(117, 111, 101);
+    }
+
+    private int taskSubjectRank(String subject) {
+        for (int index = 0; index < TASK_SUBJECTS.length; index++) {
+            if (TASK_SUBJECTS[index].equals(subject)) return index;
+        }
+        return TASK_SUBJECTS.length;
+    }
+
+    private long taskAddedAt(JSONObject task) {
+        long addedAt = task.optLong("addedAt", 0L);
+        if (addedAt > 0) return addedAt;
+        String id = task.optString("id", "");
+        int separator = id.indexOf('-');
+        String timestamp = separator >= 0 ? id.substring(0, separator) : id;
+        try {
+            return Long.parseLong(timestamp);
+        } catch (NumberFormatException ignored) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private int taskAddedSequence(JSONObject task) {
+        if (task.has("addedSequence")) return task.optInt("addedSequence", 0);
+        String id = task.optString("id", "");
+        int separator = id.indexOf('-');
+        if (separator < 0 || separator == id.length() - 1) return 0;
+        try {
+            return Integer.parseInt(id.substring(separator + 1));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private JSONArray sortedPendingTasks(JSONArray tasks) {
+        List<JSONObject> ordered = new ArrayList<>();
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null) ordered.add(task);
+        }
+        Collections.sort(ordered, (left, right) -> {
+            int subjectCompare = Integer.compare(
+                    taskSubjectRank(left.optString("subject", "其他")),
+                    taskSubjectRank(right.optString("subject", "其他")));
+            if (subjectCompare != 0) return subjectCompare;
+            int timeCompare = Long.compare(taskAddedAt(left), taskAddedAt(right));
+            if (timeCompare != 0) return timeCompare;
+            return Integer.compare(taskAddedSequence(left), taskAddedSequence(right));
+        });
+        JSONArray result = new JSONArray();
+        for (JSONObject task : ordered) result.put(task);
+        return result;
     }
 
     private int taskSubjectSoftColor(String subject) {
@@ -1474,6 +1528,8 @@ public class MainActivity extends Activity {
             }
         }
         JSONObject owner = taskOwner(true);
+        tasks = sortedPendingTasks(tasks);
+        put(owner, "tasks", tasks);
         String field = weekendKey != null ? "confirmed" : "tasksConfirmed";
         String timeField = weekendKey != null ? "confirmedAt" : "tasksConfirmedAt";
         put(owner, field, !confirmed);
@@ -1610,6 +1666,10 @@ public class MainActivity extends Activity {
                 || dailyRecord != null && dailyRecord.optBoolean("ledgerConfirmed");
         JSONArray tasks = taskArray(false);
         boolean confirmed = taskListConfirmed();
+        if (!confirmed && canEditList && tasks.length() > 1) {
+            tasks = sortedPendingTasks(tasks);
+            put(taskOwner(true), "tasks", tasks);
+        }
         int allDoneCount = 0;
         boolean allPending = true;
         for (int index = 0; index < tasks.length(); index++) {

@@ -10,6 +10,7 @@
   };
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
   const SPORTS = ["跳绳", "仰卧起坐", "50米跑", "踢毽子", "坐位体前屈"];
+  const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
   const $ = (selector) => document.querySelector(selector);
   const todayIso = () => {
     const now = new Date();
@@ -603,6 +604,27 @@
     return `<button class="${className}" type="button" data-task-action="${action}" data-task-id="${escapeHtml(String(id))}">${label}</button>`;
   }
 
+  function taskAddedKey(task, fallbackIndex) {
+    const idMatch = String(task.id || "").match(/^(\d+)(?:-(\d+))?$/);
+    const addedAt = Number(task.addedAt) || Number(idMatch?.[1]) || Number.MAX_SAFE_INTEGER;
+    const sequence = Number.isFinite(Number(task.addedSequence))
+      ? Number(task.addedSequence) : Number(idMatch?.[2]) || 0;
+    return { addedAt, sequence, fallbackIndex };
+  }
+
+  function pendingTaskOrder(tasks) {
+    const subjectRanks = new Map(TASK_SUBJECTS.map((subject, index) => [subject, index]));
+    return tasks.map((task, index) => ({
+      task,
+      rank: subjectRanks.get(task.subject) ?? TASK_SUBJECTS.length,
+      ...taskAddedKey(task, index)
+    })).sort((left, right) => left.rank - right.rank
+      || left.addedAt - right.addedAt
+      || left.sequence - right.sequence
+      || left.fallbackIndex - right.fallbackIndex)
+      .map(({ task }) => task);
+  }
+
   function renderTasks() {
     const date = elements.recordDate.value;
     const key = weekendKeyFor(date);
@@ -760,7 +782,8 @@
     }
 
     if (!questMode) {
-      elements.taskList.innerHTML = tasks.map((task) => taskCard(task, { allowActions: !orderPendingWeekend })).join("");
+      const displayedTasks = confirmed ? tasks : pendingTaskOrder(tasks);
+      elements.taskList.innerHTML = displayedTasks.map((task) => taskCard(task, { allowActions: !orderPendingWeekend })).join("");
       return;
     }
 
@@ -977,14 +1000,16 @@
     const owner = taskOwnerForDate(elements.recordDate.value, true);
     const existing = Array.isArray(owner.tasks) ? owner.tasks : [];
     const stamp = Date.now();
-    owner.tasks = existing.concat(parsed.map((task, index) => ({
+    owner.tasks = pendingTaskOrder(existing.concat(parsed.map((task, index) => ({
       id: `${stamp}-${index}`,
+      addedAt: stamp,
+      addedSequence: index,
       subject: task.subject,
       title: task.title,
       status: "pending",
       elapsedMs: 0,
       ...(key ? { plannedDay: "saturday" } : {})
-    })));
+    }))));
     if (key) {
       owner.confirmed = false;
       delete owner.confirmedAt;
@@ -1017,6 +1042,7 @@
     if (confirmed && activeTaskForDate()) return showToast("请先暂停当前作业再修改清单");
     if (confirmed && tasks.some((task) => (task.status || "pending") !== "pending"))
       return showToast("已经开始闯关，不能再修改清单");
+    owner.tasks = pendingTaskOrder(tasks);
     if (key) {
       owner.confirmed = !confirmed;
       if (owner.confirmed) owner.confirmedAt = currentTime(); else delete owner.confirmedAt;
