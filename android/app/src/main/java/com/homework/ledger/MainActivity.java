@@ -8,6 +8,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -27,6 +28,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.Space;
 import android.widget.TextView;
@@ -151,6 +153,14 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryPanel;
     private EditText taskDraftInput;
     private TextView taskSummaryView;
+    private TextView taskPanelTitleView;
+    private TextView taskPanelHelpView;
+    private LinearLayout taskQuestProgressPanel;
+    private TextView taskQuestStageView;
+    private TextView taskQuestRemainingView;
+    private TextView taskQuestPercentView;
+    private TextView taskQuestMessageView;
+    private ProgressBar taskQuestProgressBar;
     private LinearLayout activeTaskPanel;
     private TextView activeTaskTitleView;
     private TextView activeTaskTimeView;
@@ -175,6 +185,8 @@ public class MainActivity extends Activity {
     private Button weekendTaskPenaltyButton;
     private final List<Button> subjectTabButtons = new ArrayList<>();
     private String selectedTaskSubject = "语文";
+    private boolean taskListExpanded;
+    private boolean completedTasksExpanded;
 
     private TextView sessionStatusView;
     private TextView focusView;
@@ -727,10 +739,11 @@ public class MainActivity extends Activity {
         TextView kicker = text("作业清单", 10, GREEN, true);
         kicker.setLetterSpacing(0.1f);
         copy.addView(kicker);
-        copy.addView(text("选一项，轻松开始吧", 17, INK, true));
-        TextView tip = text("一次专心做一项，每完成一项都很棒！", 10, MUTED, false);
-        tip.setPadding(0, dp(4), 0, 0);
-        copy.addView(tip);
+        taskPanelTitleView = text("选一项，轻松开始吧", 17, INK, true);
+        copy.addView(taskPanelTitleView);
+        taskPanelHelpView = text("一次专心做一项，每完成一项都很棒！", 10, MUTED, false);
+        taskPanelHelpView.setPadding(0, dp(4), 0, 0);
+        copy.addView(taskPanelHelpView);
         head.addView(copy, weightedWrap(1));
         taskSummaryView = text("0 项", 12, GREEN, true);
         taskSummaryView.setPadding(dp(8), dp(5), dp(8), dp(5));
@@ -810,6 +823,37 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams entryParams = matchWrap();
         entryParams.topMargin = dp(13);
         panel.addView(taskEntryPanel, entryParams);
+
+        taskQuestProgressPanel = vertical();
+        taskQuestProgressPanel.setPadding(dp(14), dp(13), dp(14), dp(12));
+        taskQuestProgressPanel.setBackground(rounded(Color.rgb(237, 244, 255), 16,
+                Color.rgb(191, 212, 251), 1));
+        LinearLayout questHead = horizontal();
+        questHead.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout questCopy = vertical();
+        taskQuestStageView = text("第 1 关", 10, Color.rgb(83, 115, 166), true);
+        taskQuestRemainingView = text("还剩 0 项", 15, INK, true);
+        taskQuestRemainingView.setPadding(0, dp(3), 0, 0);
+        questCopy.addView(taskQuestStageView);
+        questCopy.addView(taskQuestRemainingView);
+        questHead.addView(questCopy, weightedWrap(1));
+        taskQuestPercentView = text("0%", 18, GREEN, true);
+        questHead.addView(taskQuestPercentView);
+        taskQuestProgressPanel.addView(questHead, matchWrap());
+        taskQuestProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        taskQuestProgressBar.setMax(100);
+        taskQuestProgressBar.setProgressTintList(ColorStateList.valueOf(GREEN));
+        taskQuestProgressBar.setProgressBackgroundTintList(ColorStateList.valueOf(Color.rgb(220, 232, 251)));
+        LinearLayout.LayoutParams progressParams = matchFixed(dp(10));
+        progressParams.topMargin = dp(10);
+        taskQuestProgressPanel.addView(taskQuestProgressBar, progressParams);
+        taskQuestMessageView = text("先完成一小项，作业就会开始变少啦！", 10,
+                Color.rgb(84, 112, 153), true);
+        taskQuestMessageView.setPadding(0, dp(8), 0, 0);
+        taskQuestProgressPanel.addView(taskQuestMessageView);
+        LinearLayout.LayoutParams questParams = matchWrap();
+        questParams.topMargin = dp(12);
+        panel.addView(taskQuestProgressPanel, questParams);
 
         activeTaskPanel = vertical();
         activeTaskPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
@@ -1273,6 +1317,8 @@ public class MainActivity extends Activity {
             owner.remove("planSaved");
             owner.remove("planSavedAt");
         }
+        taskListExpanded = false;
+        completedTasksExpanded = false;
         saveTaskData();
         renderAll();
         toast(confirmed ? "可以修改作业清单了" : "清单已确认，共 " + tasks.length() + " 项");
@@ -1291,12 +1337,35 @@ public class MainActivity extends Activity {
                 || dailyRecord != null && dailyRecord.optBoolean("ledgerConfirmed");
         JSONArray tasks = taskArray(false);
         boolean confirmed = taskListConfirmed();
-        int done = 0;
+        int allDoneCount = 0;
         for (int index = 0; index < tasks.length(); index++) {
             JSONObject task = tasks.optJSONObject(index);
-            if (task != null && "done".equals(task.optString("status"))) done++;
+            if (task != null && "done".equals(task.optString("status"))) allDoneCount++;
         }
-        taskSummaryView.setText(tasks.length() == 0 ? "0 项" : done + " / " + tasks.length() + " 项完成");
+
+        boolean questMode = confirmed && (!weekendMode || !isFriday && planSaved);
+        List<Integer> questIndexes = new ArrayList<>();
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null) continue;
+            boolean include = !weekendMode
+                    || currentDate.equals(addDays(weekendKey, 1)) && "saturday".equals(plannedDayForTask(task))
+                    || currentDate.equals(addDays(weekendKey, 2))
+                    && ("sunday".equals(plannedDayForTask(task))
+                    || !"done".equals(task.optString("status"))
+                    || currentDate.equals(task.optString("completedDate")));
+            if (!questMode || include) questIndexes.add(index);
+        }
+        int questDoneCount = 0;
+        for (int index : questIndexes) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && "done".equals(task.optString("status"))) questDoneCount++;
+        }
+        int progressTotal = questMode ? questIndexes.size() : tasks.length();
+        int progressDone = questMode ? questDoneCount : allDoneCount;
+        taskSummaryView.setText(progressTotal == 0 ? "0 项" : progressDone + " / " + progressTotal + " 项完成");
+        taskPanelTitleView.setText(questMode ? "今天一关一关来" : "选一项，轻松开始吧");
+        taskPanelHelpView.setText(questMode ? "不用一次想完，只看眼前这一项。" : "一次专心做一项，每完成一项都很棒！");
         taskEntryPanel.setVisibility(!confirmed && canEditList && ledgerReady ? View.VISIBLE : View.GONE);
         emptyTaskView.setVisibility(tasks.length() == 0 ? View.VISIBLE : View.GONE);
         emptyTaskView.setText(weekendMode && !isFriday
@@ -1309,7 +1378,7 @@ public class MainActivity extends Activity {
                 ? planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
                 : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
                 : confirmed
-                ? done == tasks.length() && tasks.length() > 0
+                ? allDoneCount == tasks.length() && tasks.length() > 0
                     ? weekendMode ? "周末清单已全部完成并自动结算。"
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
                         ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
@@ -1327,92 +1396,223 @@ public class MainActivity extends Activity {
         }
 
         JSONObject active = activeTask(false);
-        activeTaskPanel.setVisibility(active == null ? View.GONE : View.VISIBLE);
+        activeTaskPanel.setVisibility(active == null || questMode ? View.GONE : View.VISIBLE);
         if (active != null) {
             activeTaskTitleView.setText(active.optString("subject", "其他") + " · " + active.optString("title", ""));
             activeTaskTimeView.setText("已专注 " + taskDurationLabel(active));
         }
 
+        taskQuestProgressPanel.setVisibility(questMode ? View.VISIBLE : View.GONE);
+        if (questMode) {
+            int progress = progressTotal == 0 ? 100 : Math.round(progressDone * 100f / progressTotal);
+            int remaining = Math.max(0, progressTotal - progressDone);
+            taskQuestStageView.setText(progress == 100 ? "🏆 今日通关" : "第 " + (progressDone + 1) + " 关 · 共 " + progressTotal + " 关");
+            taskQuestRemainingView.setText(progress == 100 ? "全部完成啦！" : "还剩 " + remaining + " 项");
+            taskQuestPercentView.setText(progress + "%");
+            taskQuestProgressBar.setProgress(progress);
+            String encouragement = "先完成一小项，作业就会开始变少啦！";
+            if (progressDone > 0 && progress < 50) encouragement = "已经闯过第一关，作业没有想象中那么难！";
+            else if (progress >= 50 && progress < 80) encouragement = "已经完成一半多啦，胜利正在靠近！";
+            else if (progress >= 80 && progress < 100) encouragement = "快到终点了，只剩 " + remaining + " 项！";
+            else if (progress == 100) encouragement = "全部通关，今天的坚持太棒了！";
+            taskQuestMessageView.setText(encouragement);
+            int questFill = progress == 100 ? Color.rgb(255, 248, 217) : Color.rgb(237, 244, 255);
+            int questStroke = progress == 100 ? Color.rgb(240, 212, 124) : Color.rgb(191, 212, 251);
+            taskQuestProgressPanel.setBackground(rounded(questFill, 16, questStroke, 1));
+        }
+
         taskListContainer.removeAllViews();
-        int suggestedTaskIndex = -1;
-        if (confirmed && activeTask(false) == null) {
+        if (!questMode) {
+            int suggestedTaskIndex = -1;
+            if (confirmed && active == null) {
+                for (int index = 0; index < tasks.length(); index++) {
+                    JSONObject candidate = tasks.optJSONObject(index);
+                    if (candidate == null || !"pending".equals(candidate.optString("status", "pending"))) continue;
+                    boolean canStart = !weekendMode || planSaved && !isFriday
+                            && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(candidate)));
+                    if (canStart) { suggestedTaskIndex = index; break; }
+                }
+            }
             for (int index = 0; index < tasks.length(); index++) {
-                JSONObject candidate = tasks.optJSONObject(index);
-                if (candidate == null || !"pending".equals(candidate.optString("status", "pending"))) continue;
-                boolean candidateCanStart = !weekendMode || planSaved && !isFriday
-                        && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(candidate)));
-                if (candidateCanStart) {
-                    suggestedTaskIndex = index;
-                    break;
+                addTaskCard(tasks, index, confirmed, canEditList, weekendMode, isFriday,
+                        planSaved, weekendKey, index == suggestedTaskIndex, false, false, true);
+            }
+            return;
+        }
+
+        List<Integer> remainingIndexes = new ArrayList<>();
+        List<Integer> doneIndexes = new ArrayList<>();
+        int currentIndex = -1;
+        for (int index : questIndexes) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null) continue;
+            if ("done".equals(task.optString("status"))) doneIndexes.add(index);
+            else {
+                remainingIndexes.add(index);
+                if ("active".equals(task.optString("status"))) currentIndex = index;
+            }
+        }
+        if (currentIndex < 0) {
+            for (int index : remainingIndexes) {
+                if ("paused".equals(tasks.optJSONObject(index).optString("status"))) { currentIndex = index; break; }
+            }
+        }
+        if (currentIndex < 0 && !remainingIndexes.isEmpty()) currentIndex = remainingIndexes.get(0);
+
+        if (remainingIndexes.isEmpty()) {
+            addQuestVictory();
+        } else {
+            addQuestSection("🎯 现在只做这一关", "不用想后面的，先把眼前这一项做好");
+            addTaskCard(tasks, currentIndex, true, canEditList, weekendMode, isFriday,
+                    planSaved, weekendKey, true, true, false, true);
+            List<Integer> upcoming = new ArrayList<>();
+            List<Integer> later = new ArrayList<>();
+            for (int index : remainingIndexes) {
+                if (index == currentIndex) continue;
+                if (upcoming.size() < 2) upcoming.add(index); else later.add(index);
+            }
+            if (!upcoming.isEmpty()) {
+                addQuestSection("接下来", "提前看一眼就好");
+                for (int index : upcoming) addTaskCard(tasks, index, true, canEditList, weekendMode,
+                        isFriday, planSaved, weekendKey, false, false, true, false);
+            }
+            if (!later.isEmpty()) {
+                addQuestToggle(taskListExpanded ? "收起后面的作业  ⌃" : "稍后还有 " + later.size() + " 项  ⌄", false);
+                if (taskListExpanded) {
+                    for (int index : later) addTaskCard(tasks, index, true, canEditList, weekendMode,
+                            isFriday, planSaved, weekendKey, false, false, true, false);
                 }
             }
         }
-        for (int index = 0; index < tasks.length(); index++) {
-            JSONObject task = tasks.optJSONObject(index);
-            if (task == null) continue;
-            final int taskIndex = index;
-            String status = task.optString("status", "pending");
-            boolean canDoToday = !weekendMode || planSaved && !isFriday
-                    && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(task)));
-            boolean plannedToday = weekendMode && !isFriday && currentDate.equals(plannedDateForTask(weekendKey, task));
-            LinearLayout item = vertical();
-            item.setPadding(dp(12), dp(11), dp(12), dp(11));
-            String subjectName = task.optString("subject", "其他");
-            int subjectColor = taskSubjectColor(subjectName);
-            int fill = taskSubjectSoftColor(subjectName);
-            int stroke = "active".equals(status) ? GREEN : plannedToday ? AMBER : subjectColor;
-            item.setBackground(rounded(fill, 13, stroke, 1));
-            String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
-            LinearLayout mainRow = horizontal();
-            mainRow.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout taskCopy = vertical();
-            LinearLayout titleRow = horizontal();
-            titleRow.setGravity(Gravity.CENTER_VERTICAL);
-            TextView subjectBadge = text(subjectName, 10, Color.WHITE, true);
-            subjectBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
-            subjectBadge.setBackground(rounded(subjectColor, 16, subjectColor, 0));
-            titleRow.addView(subjectBadge);
-            titleRow.addView(spaceHorizontal(7));
-            TextView title = text(task.optString("title", "未命名作业") + planLabel, 13, INK, true);
-            if ("done".equals(status)) title.setAlpha(0.6f);
-            titleRow.addView(title, weightedWrap(1));
-            taskCopy.addView(titleRow, matchWrap());
-            String meta = "待开始";
-            if ("active".equals(status)) meta = "正在进行 · " + taskDurationLabel(task);
-            else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);
-            else if ("done".equals(status)) meta = (hasText(task, "completedDate") ? formatShortDate(task.optString("completedDate")) + " " : "")
-                    + task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
-            else if (weekendMode && planSaved && !isFriday && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
-            TextView metaView = text(meta, 10, MUTED, false);
-            metaView.setPadding(0, dp(4), 0, 0);
-            taskCopy.addView(metaView);
-            mainRow.addView(taskCopy, weightedWrap(1));
-            LinearLayout actions = horizontal();
-            if (!confirmed && canEditList) {
-                addTaskActionButton(actions, "删除", false, true, () -> performTaskAction("delete", taskIndex));
-            } else if (confirmed && canDoToday && "active".equals(status)) {
-                addTaskActionButton(actions, "暂停", false, false, () -> performTaskAction("pause", taskIndex));
-                addTaskActionButton(actions, "完成", true, false, () -> performTaskAction("complete", taskIndex));
-            } else if (confirmed && canDoToday && "paused".equals(status)) {
-                addTaskActionButton(actions, "继续", true, false, () -> performTaskAction("start", taskIndex));
-                addTaskActionButton(actions, "完成", false, false, () -> performTaskAction("complete", taskIndex));
-            } else if (confirmed && canDoToday && "done".equals(status)) {
-                addTaskActionButton(actions, "撤销完成", false, false, () -> performTaskAction("undo", taskIndex));
-            } else if (confirmed && canDoToday) {
-                boolean suggested = taskIndex == suggestedTaskIndex;
-                addTaskActionButton(actions, suggested ? "▶ 开始" : "开始", suggested, false,
-                        () -> performTaskAction("start", taskIndex));
+        if (!doneIndexes.isEmpty()) {
+            addQuestToggle(completedTasksExpanded ? "收起已完成作业  ⌃" : "✅ 已闯过 " + doneIndexes.size() + " 关  ⌄", true);
+            if (completedTasksExpanded) {
+                for (int index : doneIndexes) addTaskCard(tasks, index, true, canEditList, weekendMode,
+                        isFriday, planSaved, weekendKey, false, false, true, true);
             }
-            if (actions.getChildCount() > 0) {
-                mainRow.addView(spaceHorizontal(8));
-                mainRow.addView(actions, new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            }
-            item.addView(mainRow, matchWrap());
-            LinearLayout.LayoutParams itemParams = matchWrap();
-            if (taskListContainer.getChildCount() > 0) itemParams.topMargin = dp(8);
-            taskListContainer.addView(item, itemParams);
         }
+    }
+
+    private void addQuestSection(String titleValue, String hintValue) {
+        LinearLayout section = vertical();
+        TextView title = text(titleValue, 11, Color.rgb(52, 95, 186), true);
+        section.addView(title);
+        TextView hint = text(hintValue, 9, MUTED, false);
+        hint.setPadding(0, dp(2), 0, 0);
+        section.addView(hint);
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(11);
+        taskListContainer.addView(section, params);
+    }
+
+    private void addQuestToggle(String label, boolean completedToggle) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(11);
+        button.setTextColor(completedToggle ? Color.rgb(56, 123, 104) : Color.rgb(99, 120, 156));
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setAllCaps(false);
+        int fill = completedToggle ? Color.rgb(240, 251, 247) : Color.rgb(247, 250, 255);
+        int stroke = completedToggle ? Color.rgb(183, 223, 208) : Color.rgb(185, 203, 237);
+        button.setBackground(rounded(fill, 12, stroke, 1));
+        button.setOnClickListener(v -> {
+            if (completedToggle) completedTasksExpanded = !completedTasksExpanded;
+            else taskListExpanded = !taskListExpanded;
+            renderTasks();
+        });
+        LinearLayout.LayoutParams params = matchFixed(dp(42));
+        params.topMargin = dp(8);
+        taskListContainer.addView(button, params);
+    }
+
+    private void addQuestVictory() {
+        LinearLayout victory = vertical();
+        victory.setGravity(Gravity.CENTER);
+        victory.setPadding(dp(14), dp(19), dp(14), dp(19));
+        victory.setBackground(rounded(Color.rgb(255, 248, 217), 18, Color.rgb(240, 212, 124), 1));
+        TextView icon = text("🎉", 32, INK, false);
+        icon.setGravity(Gravity.CENTER);
+        victory.addView(icon);
+        TextView title = text("太棒了，全部通关！", 16, Color.rgb(114, 83, 28), true);
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, dp(5), 0, 0);
+        victory.addView(title);
+        TextView detail = text("看起来很多的作业，也被你一项一项完成啦。", 10, MUTED, false);
+        detail.setGravity(Gravity.CENTER);
+        detail.setPadding(0, dp(5), 0, 0);
+        victory.addView(detail);
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(8);
+        taskListContainer.addView(victory, params);
+    }
+
+    private void addTaskCard(JSONArray tasks, int index, boolean confirmed, boolean canEditList,
+                             boolean weekendMode, boolean isFriday, boolean planSaved, String weekendKey,
+                             boolean suggested, boolean current, boolean compact, boolean allowActions) {
+        JSONObject task = tasks.optJSONObject(index);
+        if (task == null) return;
+        final int taskIndex = index;
+        String status = task.optString("status", "pending");
+        boolean canDoToday = !weekendMode || planSaved && !isFriday
+                && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(task)));
+        boolean plannedToday = weekendMode && !isFriday && currentDate.equals(plannedDateForTask(weekendKey, task));
+        LinearLayout item = vertical();
+        item.setPadding(dp(compact ? 10 : current ? 14 : 12), dp(compact ? 9 : current ? 13 : 11),
+                dp(compact ? 10 : current ? 14 : 12), dp(compact ? 9 : current ? 13 : 11));
+        String subjectName = task.optString("subject", "其他");
+        int subjectColor = taskSubjectColor(subjectName);
+        int fill = taskSubjectSoftColor(subjectName);
+        int stroke = current || "active".equals(status) ? GREEN : plannedToday ? AMBER : subjectColor;
+        item.setBackground(rounded(fill, current ? 15 : 13, stroke, current ? 2 : 1));
+        String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
+        LinearLayout mainRow = horizontal();
+        mainRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout taskCopy = vertical();
+        LinearLayout titleRow = horizontal();
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView subjectBadge = text(subjectName, compact ? 9 : 10, Color.WHITE, true);
+        subjectBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
+        subjectBadge.setBackground(rounded(subjectColor, 16, subjectColor, 0));
+        titleRow.addView(subjectBadge);
+        titleRow.addView(spaceHorizontal(7));
+        TextView title = text(task.optString("title", "未命名作业") + planLabel, compact ? 12 : current ? 14 : 13, INK, true);
+        if ("done".equals(status)) title.setAlpha(0.6f);
+        titleRow.addView(title, weightedWrap(1));
+        taskCopy.addView(titleRow, matchWrap());
+        String meta = "待开始";
+        if ("active".equals(status)) meta = "正在进行 · " + taskDurationLabel(task);
+        else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);
+        else if ("done".equals(status)) meta = (hasText(task, "completedDate") ? formatShortDate(task.optString("completedDate")) + " " : "")
+                + task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
+        else if (weekendMode && planSaved && !isFriday && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
+        TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
+        metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
+        taskCopy.addView(metaView);
+        mainRow.addView(taskCopy, weightedWrap(1));
+        LinearLayout actions = horizontal();
+        if (!confirmed && canEditList) {
+            addTaskActionButton(actions, "删除", false, true, () -> performTaskAction("delete", taskIndex));
+        } else if (confirmed && canDoToday && allowActions && "active".equals(status)) {
+            addTaskActionButton(actions, "暂停", false, false, () -> performTaskAction("pause", taskIndex));
+            addTaskActionButton(actions, "完成", true, false, () -> performTaskAction("complete", taskIndex));
+        } else if (confirmed && canDoToday && allowActions && "paused".equals(status)) {
+            addTaskActionButton(actions, "继续", true, false, () -> performTaskAction("start", taskIndex));
+            addTaskActionButton(actions, "完成", false, false, () -> performTaskAction("complete", taskIndex));
+        } else if (confirmed && canDoToday && allowActions && "done".equals(status)) {
+            addTaskActionButton(actions, "撤销完成", false, false, () -> performTaskAction("undo", taskIndex));
+        } else if (confirmed && canDoToday && allowActions) {
+            addTaskActionButton(actions, suggested ? "▶ 开始" : "开始", suggested, false,
+                    () -> performTaskAction("start", taskIndex));
+        }
+        if (actions.getChildCount() > 0) {
+            mainRow.addView(spaceHorizontal(8));
+            mainRow.addView(actions, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+        item.addView(mainRow, matchWrap());
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(current ? 7 : 8);
+        taskListContainer.addView(item, params);
     }
 
     private void renderWeekendTaskPlanner() {
@@ -1669,6 +1869,8 @@ public class MainActivity extends Activity {
             }
             cleanupCurrentRecord();
             cleanupWeekend();
+            taskListExpanded = false;
+            completedTasksExpanded = false;
             saveTaskData();
             renderAll();
             toast("作业已删除");
@@ -1735,7 +1937,26 @@ public class MainActivity extends Activity {
                 Result result = weekendResultFor(weekendKey, weekend);
                 toast("周末作业已全部完成，" + result.label + " " + amountText(result.amount));
             } else {
-                toast("完成一项，选择下一项吧");
+                int todayTotal = 0;
+                int todayDone = 0;
+                for (int taskPosition = 0; taskPosition < tasks.length(); taskPosition++) {
+                    JSONObject todayTask = tasks.optJSONObject(taskPosition);
+                    if (todayTask == null) continue;
+                    boolean include = weekendKey == null
+                            || currentDate.equals(addDays(weekendKey, 1)) && "saturday".equals(plannedDayForTask(todayTask))
+                            || currentDate.equals(addDays(weekendKey, 2))
+                            && ("sunday".equals(plannedDayForTask(todayTask))
+                            || !"done".equals(todayTask.optString("status"))
+                            || currentDate.equals(todayTask.optString("completedDate")));
+                    if (!include) continue;
+                    todayTotal++;
+                    if ("done".equals(todayTask.optString("status"))) todayDone++;
+                }
+                int remaining = Math.max(0, todayTotal - todayDone);
+                if (remaining == 0) toast("今天安排的作业已通关，太棒了！");
+                else if (remaining <= 2) toast("太棒了，快到终点了，只剩 " + remaining + " 项！");
+                else if (todayDone >= Math.ceil(todayTotal / 2.0)) toast("成功闯过一关，已经完成一半多啦！");
+                else toast("成功闯过一关！已经完成 " + todayDone + " 项");
             }
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
@@ -1752,6 +1973,8 @@ public class MainActivity extends Activity {
             }
             toast("已撤销完成，可以继续这项作业");
         }
+        taskListExpanded = false;
+        completedTasksExpanded = false;
         saveTaskData();
         renderAll();
         if (showFocusAfterRender) showTaskFocusDialog(task, index);
@@ -2734,6 +2957,8 @@ public class MainActivity extends Activity {
 
     private void selectDate(String date) {
         dismissTaskFocusDialog();
+        taskListExpanded = false;
+        completedTasksExpanded = false;
         currentDate = date;
         renderAll();
     }

@@ -332,6 +332,65 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry textarea:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
 .task-entry-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .task-list { display: grid; gap: 9px; margin-top: 14px; }
+.quest-progress {
+  padding: 15px 16px;
+  border: 1px solid #bfd4fb;
+  border-radius: 19px;
+  background: linear-gradient(135deg, #edf4ff, #f7fbff);
+  box-shadow: 0 8px 22px rgba(75,130,239,.1);
+}
+.quest-progress.complete { border-color: #f0d47c; background: linear-gradient(135deg, #fff8d9, #ebfbf4); }
+.quest-progress-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+.quest-progress-head > div { display: flex; flex-direction: column; }
+.quest-progress-head span { color: #5373a6; font-size: .68rem; font-weight: 800; }
+.quest-progress-head strong { margin-top: 3px; color: var(--ink); font-size: .96rem; }
+.quest-progress-head b { color: var(--green); font-size: 1.15rem; }
+.quest-progress-track { height: 11px; margin-top: 11px; overflow: hidden; border-radius: 999px; background: #dce8fb; }
+.quest-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #6aa0ff, #58c9ac, #ffd36b); transition: width .35s ease; }
+.quest-progress p { margin: 9px 0 0; color: #547099; font-size: .73rem; font-weight: 700; }
+.quest-section-title { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-top: 8px; padding: 3px 3px 0; }
+.quest-section-title span { color: #345fba; font-size: .8rem; font-weight: 850; }
+.quest-section-title small { color: var(--muted); font-size: .66rem; }
+.quest-section-title.compact { margin-top: 4px; }
+.quest-section-title.compact span { color: var(--muted); }
+.quest-current-card { padding: 16px; border-width: 2px; box-shadow: 0 11px 26px rgba(75,130,239,.15); }
+.quest-current-card .task-title { font-size: .94rem; }
+.quest-preview-list, .quest-collapsed-list { display: grid; gap: 7px; }
+.quest-compact-card { padding: 9px 11px; border-left-width: 3px; box-shadow: none; }
+.quest-compact-card .task-title { font-size: .79rem; }
+.quest-compact-card .task-meta { margin-top: 3px; font-size: .64rem; }
+.quest-toggle {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 13px;
+  border: 1px dashed #b9cbed;
+  border-radius: 13px;
+  color: #63789c;
+  background: #f7faff;
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.quest-toggle.completed { border-color: #b7dfd0; color: #387b68; background: #f0fbf7; }
+.quest-toggle span { font-size: .9rem; }
+.quest-victory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 23px 16px;
+  border: 1px solid #f0d47c;
+  border-radius: 21px;
+  text-align: center;
+  background: linear-gradient(145deg, #fff7d6, #effbf5);
+  box-shadow: 0 10px 24px rgba(238,155,33,.13);
+}
+.quest-victory > span { font-size: 2.3rem; animation: quest-pop .5s ease-out; }
+.quest-victory strong { margin-top: 5px; color: #72531c; font-size: 1.06rem; }
+.quest-victory small { margin-top: 5px; color: #697a73; font-size: .72rem; }
+@keyframes quest-pop { from { opacity: 0; transform: scale(.65) rotate(-8deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 .task-item {
   --subject-color: #756f65;
   --subject-soft: #f2efe9;
@@ -622,8 +681,10 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .voice-entry-row, .task-list-footer { align-items: stretch; flex-direction: column; }
   .voice-entry-row small { text-align: left; }
   .voice-button, .task-list-footer button { width: 100%; }
+  .quest-section-title { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .quest-current-card { padding: 14px 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }

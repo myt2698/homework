@@ -58,6 +58,7 @@
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
+    taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
     activeTaskBanner: $("#activeTaskBanner"), activeTaskTitle: $("#activeTaskTitle"),
     activeTaskTime: $("#activeTaskTime"), taskList: $("#taskList"),
     emptyTaskList: $("#emptyTaskList"), taskConfirmHint: $("#taskConfirmHint"),
@@ -77,6 +78,8 @@
   let speechListening = false;
   let selectedTaskSubject = "语文";
   let focusModalTaskId = null;
+  let taskListExpanded = false;
+  let completedTasksExpanded = false;
 
   function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -529,7 +532,6 @@
     const confirmed = taskListConfirmed(date);
     const doneCount = tasks.filter((task) => task.status === "done").length;
     const active = activeTaskForDate(date);
-    elements.taskSummary.textContent = tasks.length ? `${doneCount} / ${tasks.length} 项完成` : "0 项";
     elements.taskEntry.hidden = confirmed || !canEditList || !ledgerReady;
     elements.emptyTaskList.hidden = tasks.length > 0;
     elements.emptyTaskList.textContent = key && !isFriday
@@ -547,7 +549,22 @@
           : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
         : key ? "清单已确认；接下来给每项作业安排周六或周日。" : "清单已确认；一次只开始一项。"
       : tasks.length ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。";
-    elements.activeTaskBanner.hidden = !active;
+    const questMode = confirmed && (!key || (!isFriday && weekend.planSaved));
+    const questTasks = !questMode ? tasks : !key ? tasks
+      : date === addDays(key, 1)
+        ? tasks.filter((task) => plannedDayForTask(task) === "saturday")
+        : tasks.filter((task) => plannedDayForTask(task) === "sunday"
+          || task.status !== "done" || task.completedDate === date);
+    const questDone = questTasks.filter((task) => task.status === "done");
+    const questRemaining = questTasks.filter((task) => task.status !== "done");
+    const progressTotal = questMode ? questTasks.length : tasks.length;
+    const progressDone = questMode ? questDone.length : doneCount;
+    elements.taskPanelTitle.textContent = questMode ? "今天一关一关来" : "选一项，轻松开始吧";
+    elements.taskPanelHelp.textContent = questMode
+      ? "不用一次想完，只看眼前这一项。"
+      : "一次专心做一项，每完成一项都很棒！";
+    elements.taskSummary.textContent = progressTotal ? `${progressDone} / ${progressTotal} 项完成` : "0 项";
+    elements.activeTaskBanner.hidden = !active || questMode;
     if (active) {
       elements.activeTaskTitle.textContent = `${active.subject} · ${active.title}`;
       elements.activeTaskTime.textContent = `已专注 ${taskDurationLabel(active)}`;
@@ -555,13 +572,18 @@
 
     const canDoTaskToday = (task) => !key || (weekend.planSaved && !isFriday
       && (date === addDays(key, 2) || plannedDayForTask(task) === "saturday"));
-    const suggestedTask = active ? null : tasks.find((task) => (task.status || "pending") === "pending" && canDoTaskToday(task));
+    const questCurrent = questMode
+      ? active || questRemaining.find((task) => task.status === "paused") || questRemaining[0] || null
+      : null;
+    const suggestedTask = active ? null : questCurrent
+      || tasks.find((task) => (task.status || "pending") === "pending" && canDoTaskToday(task));
 
-    elements.taskList.innerHTML = tasks.map((task) => {
+    const taskCard = (task, options = {}) => {
       const status = task.status || "pending";
       let buttons = "";
       const canDoToday = canDoTaskToday(task);
-      if (confirmed && canDoToday) {
+      const allowActions = options.allowActions !== false;
+      if (confirmed && canDoToday && allowActions) {
         if (status === "active") {
           buttons = taskButton("暂停", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
@@ -583,7 +605,7 @@
             : key && weekend.planSaved && !isFriday && !canDoToday ? `计划${plannedDayLabel(task)}完成` : "待开始";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && !isFriday && plannedDateForTask(key, task) === date;
-      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}" data-subject="${escapeHtml(task.subject || "其他")}">
+      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}" data-subject="${escapeHtml(task.subject || "其他")}">
         <div class="task-main-row">
           <div class="task-copy">
             <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${planBadge}
@@ -592,7 +614,44 @@
           <div class="task-buttons">${buttons}</div>
         </div>
       </article>`;
-    }).join("");
+    };
+
+    if (!questMode) {
+      elements.taskList.innerHTML = tasks.map((task) => taskCard(task)).join("");
+      return;
+    }
+
+    const progress = progressTotal ? Math.round(progressDone / progressTotal * 100) : 100;
+    const remainingCount = Math.max(0, progressTotal - progressDone);
+    let encouragement = "先完成一小项，作业就会开始变少啦！";
+    if (progressDone > 0 && progress < 50) encouragement = "已经闯过第一关，作业没有想象中那么难！";
+    else if (progress >= 50 && progress < 80) encouragement = "已经完成一半多啦，胜利正在靠近！";
+    else if (progress >= 80 && progress < 100) encouragement = `快到终点了，只剩 ${remainingCount} 项！`;
+    else if (progress === 100) encouragement = "全部通关，今天的坚持太棒了！";
+
+    const progressHtml = `<div class="quest-progress${progress === 100 ? " complete" : ""}">
+      <div class="quest-progress-head"><div><span>${progress === 100 ? "🏆 今日通关" : `第 ${progressDone + 1} 关 · 共 ${progressTotal} 关`}</span><strong>${progress === 100 ? "全部完成啦！" : `还剩 ${remainingCount} 项`}</strong></div><b>${progress}%</b></div>
+      <div class="quest-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div>
+      <p>${encouragement}</p>
+    </div>`;
+
+    if (progress === 100) {
+      const completedHtml = questDone.length
+        ? `<button class="quest-toggle" type="button" data-list-toggle="completed">${completedTasksExpanded ? "收起已完成作业" : `看看闯过的 ${questDone.length} 关`} <span>${completedTasksExpanded ? "⌃" : "⌄"}</span></button>
+          ${completedTasksExpanded ? `<div class="quest-collapsed-list">${questDone.map((task) => taskCard(task, { compact: true })).join("")}</div>` : ""}` : "";
+      elements.taskList.innerHTML = `${progressHtml}<div class="quest-victory"><span>🎉</span><strong>太棒了，全部通关！</strong><small>看起来很多的作业，也被你一项一项完成啦。</small></div>${completedHtml}`;
+      return;
+    }
+
+    const upcoming = questRemaining.filter((task) => task !== questCurrent).slice(0, 2);
+    const later = questRemaining.filter((task) => task !== questCurrent && !upcoming.includes(task));
+    const currentHtml = questCurrent ? `<div class="quest-section-title"><span>🎯 现在只做这一关</span><small>不用想后面的，先把眼前这一项做好</small></div>${taskCard(questCurrent, { current: true })}` : "";
+    const upcomingHtml = upcoming.length ? `<div class="quest-section-title compact"><span>接下来</span><small>提前看一眼就好</small></div><div class="quest-preview-list">${upcoming.map((task) => taskCard(task, { compact: true, allowActions: false })).join("")}</div>` : "";
+    const laterHtml = later.length ? `<button class="quest-toggle" type="button" data-list-toggle="later">${taskListExpanded ? "收起后面的作业" : `稍后还有 ${later.length} 项`} <span>${taskListExpanded ? "⌃" : "⌄"}</span></button>
+      ${taskListExpanded ? `<div class="quest-collapsed-list">${later.map((task) => taskCard(task, { compact: true, allowActions: false })).join("")}</div>` : ""}` : "";
+    const doneHtml = questDone.length ? `<button class="quest-toggle completed" type="button" data-list-toggle="completed">✅ 已闯过 ${questDone.length} 关 <span>${completedTasksExpanded ? "⌃" : "⌄"}</span></button>
+      ${completedTasksExpanded ? `<div class="quest-collapsed-list">${questDone.map((task) => taskCard(task, { compact: true })).join("")}</div>` : ""}` : "";
+    elements.taskList.innerHTML = `${progressHtml}${currentHtml}${upcomingHtml}${laterHtml}${doneHtml}`;
   }
 
   function renderCurrentRecord() {
@@ -758,6 +817,8 @@
   }
   function setRecordDate(date) {
     closeFocusModal();
+    taskListExpanded = false;
+    completedTasksExpanded = false;
     elements.recordDate.value = date;
     render();
   }
@@ -829,6 +890,8 @@
         if (owner.ledgerConfirmed) owner.finishTime = owner.tasksFinishedAt;
       }
     }
+    taskListExpanded = false;
+    completedTasksExpanded = false;
     persist();
     render();
     showToast(confirmed ? "可以修改作业清单了" : `清单已确认，共 ${tasks.length} 项`);
@@ -856,6 +919,8 @@
       }
       cleanupCurrentRecord();
       cleanupWeekend();
+      taskListExpanded = false;
+      completedTasksExpanded = false;
       persist();
       render();
       return showToast("作业已删除");
@@ -903,7 +968,16 @@
         const result = weekendResultFor(key, weekend);
         showToast(`周末作业已全部完成，${result.label} ${amountText(result.amount, false)}`);
       } else {
-        showToast("完成一项，选择下一项吧");
+        const todayTasks = !key ? tasks : date === addDays(key, 1)
+          ? tasks.filter((item) => plannedDayForTask(item) === "saturday")
+          : tasks.filter((item) => plannedDayForTask(item) === "sunday"
+            || item.status !== "done" || item.completedDate === date);
+        const todayDone = todayTasks.filter((item) => item.status === "done").length;
+        const remaining = Math.max(0, todayTasks.length - todayDone);
+        if (remaining === 0) showToast("今天安排的作业已通关，太棒了！");
+        else if (remaining <= 2) showToast(`太棒了，快到终点了，只剩 ${remaining} 项！`);
+        else if (todayDone >= Math.ceil(todayTasks.length / 2)) showToast("成功闯过一关，已经完成一半多啦！");
+        else showToast(`成功闯过一关！已经完成 ${todayDone} 项`);
       }
     } else if (action === "undo") {
       task.status = "paused";
@@ -920,6 +994,8 @@
       }
       showToast("已撤销完成，可以继续这项作业");
     }
+    taskListExpanded = false;
+    completedTasksExpanded = false;
     persist();
     render();
     if (openFocusAfterRender) openFocusModal(id);
@@ -1060,6 +1136,13 @@
   elements.clearTaskDraftButton.addEventListener("click", () => { elements.taskDraft.value = ""; });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskList.addEventListener("click", (event) => {
+    const toggle = event.target.closest("button[data-list-toggle]");
+    if (toggle) {
+      if (toggle.dataset.listToggle === "later") taskListExpanded = !taskListExpanded;
+      if (toggle.dataset.listToggle === "completed") completedTasksExpanded = !completedTasksExpanded;
+      renderTasks();
+      return;
+    }
     const button = event.target.closest("button[data-task-action]");
     if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
   });
