@@ -578,7 +578,7 @@
             : key && weekend.planSaved && !isFriday && !canDoToday ? `计划${plannedDayLabel(task)}完成` : "待开始";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && !isFriday && plannedDateForTask(key, task) === date;
-      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}">
+      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}" data-subject="${escapeHtml(task.subject || "其他")}">
         <div class="task-main-row">
           <div class="task-copy">
             <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${planBadge}

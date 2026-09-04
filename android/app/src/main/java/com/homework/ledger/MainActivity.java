@@ -1085,6 +1085,22 @@ public class MainActivity extends Activity {
         return addDays(weekendKey, "sunday".equals(plannedDayForTask(task)) ? 2 : 1);
     }
 
+    private int taskSubjectColor(String subject) {
+        if ("语文".equals(subject)) return Color.rgb(197, 107, 69);
+        if ("数学".equals(subject)) return Color.rgb(64, 117, 174);
+        if ("英语".equals(subject)) return Color.rgb(118, 92, 167);
+        if ("科学".equals(subject)) return Color.rgb(55, 126, 104);
+        return Color.rgb(117, 111, 101);
+    }
+
+    private int taskSubjectSoftColor(String subject) {
+        if ("语文".equals(subject)) return Color.rgb(251, 233, 223);
+        if ("数学".equals(subject)) return Color.rgb(231, 240, 250);
+        if ("英语".equals(subject)) return Color.rgb(238, 233, 248);
+        if ("科学".equals(subject)) return Color.rgb(228, 243, 237);
+        return Color.rgb(242, 239, 233);
+    }
+
     private long taskElapsedMillis(JSONObject task) {
         long elapsed = task.optLong("elapsedMs", 0L);
         if ("active".equals(task.optString("status"))) {
@@ -1324,16 +1340,26 @@ public class MainActivity extends Activity {
             boolean plannedToday = weekendMode && !isFriday && currentDate.equals(plannedDateForTask(weekendKey, task));
             LinearLayout item = vertical();
             item.setPadding(dp(12), dp(11), dp(12), dp(11));
-            int fill = "active".equals(status) ? GREEN_SOFT : plannedToday ? Color.rgb(255, 250, 240) : PAGE;
-            int stroke = "active".equals(status) ? GREEN : plannedToday ? Color.rgb(216, 204, 177) : LINE;
+            String subjectName = task.optString("subject", "其他");
+            int subjectColor = taskSubjectColor(subjectName);
+            int fill = taskSubjectSoftColor(subjectName);
+            int stroke = "active".equals(status) ? GREEN : plannedToday ? AMBER : subjectColor;
             item.setBackground(rounded(fill, 13, stroke, 1));
             String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
             LinearLayout mainRow = horizontal();
             mainRow.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout taskCopy = vertical();
-            TextView title = text(task.optString("subject", "其他") + " · " + task.optString("title", "未命名作业") + planLabel, 13, INK, true);
+            LinearLayout titleRow = horizontal();
+            titleRow.setGravity(Gravity.CENTER_VERTICAL);
+            TextView subjectBadge = text(subjectName, 10, Color.WHITE, true);
+            subjectBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
+            subjectBadge.setBackground(rounded(subjectColor, 16, subjectColor, 0));
+            titleRow.addView(subjectBadge);
+            titleRow.addView(spaceHorizontal(7));
+            TextView title = text(task.optString("title", "未命名作业") + planLabel, 13, INK, true);
             if ("done".equals(status)) title.setAlpha(0.6f);
-            taskCopy.addView(title);
+            titleRow.addView(title, weightedWrap(1));
+            taskCopy.addView(titleRow, matchWrap());
             String meta = "待开始";
             if ("active".equals(status)) meta = "正在进行 · " + taskDurationLabel(task);
             else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);

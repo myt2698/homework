@@ -319,13 +319,25 @@ input:focus { border-color: #82a993; box-shadow: 0 0 0 3px rgba(47, 109, 85, 0.1
 .task-entry textarea:focus { border-color: #82a993; box-shadow: 0 0 0 3px rgba(47, 109, 85, .1); }
 .task-entry-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .task-list { display: grid; gap: 9px; margin-top: 14px; }
-.task-item { padding: 12px 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--page); }
-.task-item.planned-today { border-color: #d8ccb1; background: #fffaf0; }
-.task-item.active { border-color: var(--green); background: var(--green-soft); box-shadow: 0 8px 22px rgba(47, 109, 85, .1); }
+.task-item {
+  --subject-color: #756f65;
+  --subject-soft: #f2efe9;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--subject-color);
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--subject-soft), #fff 72%);
+}
+.task-item[data-subject="语文"] { --subject-color: #c56b45; --subject-soft: #fbe9df; }
+.task-item[data-subject="数学"] { --subject-color: #4075ae; --subject-soft: #e7f0fa; }
+.task-item[data-subject="英语"] { --subject-color: #765ca7; --subject-soft: #eee9f8; }
+.task-item[data-subject="科学"] { --subject-color: #377e68; --subject-soft: #e4f3ed; }
+.task-item.planned-today { border-color: #d8ccb1; border-left-color: var(--subject-color); background: linear-gradient(90deg, var(--subject-soft), #fffaf0 72%); }
+.task-item.active { border-color: var(--green); border-left-color: var(--subject-color); background: linear-gradient(90deg, var(--subject-soft), var(--green-soft) 72%); box-shadow: 0 8px 22px rgba(47, 109, 85, .1); }
 .task-item.done { opacity: .7; }
 .task-item.done .task-title { text-decoration: line-through; }
 .task-copy { min-width: 0; flex: 1 1 auto; }
-.subject-badge { display: inline-block; margin-right: 7px; padding: 3px 7px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: .67rem; font-weight: 800; vertical-align: middle; }
+.subject-badge { display: inline-block; margin-right: 7px; padding: 3px 8px; border-radius: 999px; color: #fff; background: var(--subject-color); font-size: .67rem; font-weight: 800; vertical-align: middle; box-shadow: 0 2px 5px rgba(45,39,31,.1); }
 .task-title { font-size: .86rem; line-height: 1.45; overflow-wrap: anywhere; vertical-align: middle; }
 .task-meta { display: block; margin-top: 5px; color: var(--muted); font-size: .69rem; }
 .task-buttons { display: flex; flex: 0 0 auto; gap: 5px; margin-left: auto; }
