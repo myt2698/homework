@@ -30,6 +30,7 @@ import android.view.Window;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -97,6 +98,8 @@ public class MainActivity extends Activity {
     private String startDate;
     private String currentDate;
     private boolean loadingNote;
+    private View mainPageView;
+    private View historyPageView;
 
     private TextView balanceView;
     private TextView periodView;
@@ -279,6 +282,15 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onBackPressed() {
+        if (historyPageView != null && historyPageView.getVisibility() == View.VISIBLE) {
+            showMainPage();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != VOICE_TASK_REQUEST || resultCode != RESULT_OK || data == null) return;
@@ -306,6 +318,7 @@ public class MainActivity extends Activity {
     }
 
     private View buildScreen() {
+        FrameLayout root = new FrameLayout(this);
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
         scrollView.setBackgroundColor(PAGE);
@@ -322,14 +335,20 @@ public class MainActivity extends Activity {
         weekendCard = buildWeekendCard();
         weekendSpacer = space(0);
         content.addView(buildProcessCard());
-        content.addView(space(14));
-        content.addView(buildHistoryCard());
         content.addView(space(16));
 
         TextView footer = text("🌱 每天完成一点点，就会越来越厉害\n数据只保存在这台手机中", 11, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         content.addView(footer, matchWrap());
-        return scrollView;
+        mainPageView = scrollView;
+        historyPageView = buildHistoryPage();
+        historyPageView.setVisibility(View.GONE);
+        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        root.addView(mainPageView, pageParams);
+        root.addView(historyPageView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        return root;
     }
 
     private View buildHeader() {
@@ -386,6 +405,20 @@ public class MainActivity extends Activity {
         rewardDaysView = addStat(stats, "0", "收获奖励");
         deductionView = addStat(stats, "¥0.00", "需要加油");
         card.addView(stats, matchWrap());
+
+        LinearLayout historyEntry = horizontal();
+        historyEntry.setGravity(Gravity.CENTER_VERTICAL);
+        historyEntry.setPadding(dp(12), dp(9), dp(12), dp(9));
+        historyEntry.setBackground(rounded(Color.argb(38, 255, 255, 255), 14,
+                Color.argb(62, 255, 255, 255), 1));
+        historyEntry.setClickable(true);
+        historyEntry.setFocusable(true);
+        historyEntry.setOnClickListener(v -> showHistoryPage());
+        historyEntry.addView(text("🌈  成长足迹", 13, Color.WHITE, true), weightedWrap(1));
+        historyEntry.addView(text("查看记录  ›", 11, Color.argb(190, 255, 255, 255), true));
+        LinearLayout.LayoutParams historyEntryParams = matchFixed(dp(44));
+        historyEntryParams.topMargin = dp(18);
+        card.addView(historyEntry, historyEntryParams);
         return card;
     }
 
@@ -2534,6 +2567,57 @@ public class MainActivity extends Activity {
         return new TextView[]{dot, time, labelView};
     }
 
+    private View buildHistoryPage() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(PAGE);
+        LinearLayout content = vertical();
+        content.setPadding(dp(16), dp(22), dp(16), dp(28));
+        scroll.addView(content, matchWrap());
+
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        Button back = new Button(this);
+        back.setText("‹");
+        back.setTextSize(26);
+        back.setTextColor(GREEN);
+        back.setAllCaps(false);
+        back.setMinHeight(0);
+        back.setMinimumHeight(0);
+        back.setBackground(rounded(Color.WHITE, 15, LINE, 1));
+        back.setOnClickListener(v -> showMainPage());
+        header.addView(back, fixed(dp(44), dp(44)));
+        header.addView(spaceHorizontal(13));
+        LinearLayout copy = vertical();
+        copy.addView(text("🌈 每一步都算数", 10, GREEN, true));
+        copy.addView(text("成长足迹", 25, GREEN_DARK, true));
+        TextView cheer = text("回头看看，你已经完成了很多关。", 10, MUTED, false);
+        cheer.setPadding(0, dp(3), 0, 0);
+        copy.addView(cheer);
+        header.addView(copy, weightedWrap(1));
+        content.addView(header, matchWrap());
+        content.addView(space(16));
+        content.addView(buildHistoryCard());
+        content.addView(space(16));
+        TextView footer = text("🌱 每一条记录，都是认真坚持的证明", 11, MUTED, true);
+        footer.setGravity(Gravity.CENTER);
+        content.addView(footer, matchWrap());
+        return scroll;
+    }
+
+    private void showHistoryPage() {
+        renderHistoryAndSummary();
+        mainPageView.setVisibility(View.GONE);
+        historyPageView.setVisibility(View.VISIBLE);
+        if (historyPageView instanceof ScrollView) ((ScrollView) historyPageView).scrollTo(0, 0);
+    }
+
+    private void showMainPage() {
+        historyPageView.setVisibility(View.GONE);
+        mainPageView.setVisibility(View.VISIBLE);
+        if (mainPageView instanceof ScrollView) ((ScrollView) mainPageView).scrollTo(0, 0);
+    }
+
     private View buildHistoryCard() {
         LinearLayout card = card();
         TextView kicker = text("🌈 成长足迹", 10, GREEN, true);
@@ -3133,6 +3217,7 @@ public class MainActivity extends Activity {
         actions.setGravity(Gravity.END);
         Button view = textButton("查看");
         view.setOnClickListener(v -> {
+            showMainPage();
             selectDate(date);
             toast("已打开这一天的记录");
         });
@@ -3182,6 +3267,7 @@ public class MainActivity extends Activity {
             String sunday = addDays(key, 2);
             String target = todayIso().compareTo(key) >= 0 && todayIso().compareTo(sunday) <= 0
                     ? todayIso() : todayIso().compareTo(sunday) > 0 ? sunday : key;
+            showMainPage();
             selectDate(target);
             toast("已打开本周末计划");
         });

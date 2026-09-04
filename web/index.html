@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="app-shell">
+  <main class="app-shell" id="mainPage">
     <header class="topbar">
       <div class="brand">
         <span class="brand-mascot" aria-hidden="true">🌟</span>
@@ -41,6 +41,12 @@
         <p id="balanceLabel">我的成长能量 ⭐</p>
         <p class="balance" id="balance">¥ 0.00</p>
         <p class="period" id="periodLabel">从今天开始</p>
+        <button class="summary-history-entry" id="openHistoryButton" type="button">
+          <span aria-hidden="true">🌈</span>
+          <strong>成长足迹</strong>
+          <small>查看记录</small>
+          <b aria-hidden="true">›</b>
+        </button>
       </div>
       <div class="summary-stats">
         <div>
@@ -179,10 +185,22 @@
       </div>
     </section>
 
+    <footer>🌱 每天完成一点点，就会越来越厉害 · 数据只保存在当前浏览器中</footer>
+  </main>
+
+  <section class="app-shell history-page" id="historyPage" aria-labelledby="historyPageTitle" hidden>
+    <header class="history-page-header">
+      <button class="history-back-button" id="closeHistoryButton" type="button" aria-label="返回今日任务">‹</button>
+      <div>
+        <p class="eyebrow">🌈 每一步都算数</p>
+        <h1 id="historyPageTitle">成长足迹</h1>
+        <p class="hero-cheer">回头看看，你已经完成了很多关。</p>
+      </div>
+    </header>
     <section class="card history-card">
       <div class="section-heading compact">
         <div>
-          <p class="section-kicker">🌈 成长足迹</p>
+          <p class="section-kicker">最近记录</p>
           <h2>看看最近的进步</h2>
         </div>
       </div>
@@ -193,9 +211,7 @@
         <small>完成第一份作业清单后，这里会留下你的进步。</small>
       </div>
     </section>
-
-    <footer>🌱 每天完成一点点，就会越来越厉害 · 数据只保存在当前浏览器中</footer>
-  </main>
+  </section>
 
   <div class="weekend-plan-modal" id="weekendPlanModal" role="dialog" aria-modal="true" aria-labelledby="weekendPlannerTitle" hidden>
     <div class="weekend-plan-dialog">

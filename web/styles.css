@@ -151,6 +151,24 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .summary-main > p:first-child { margin-bottom: 4px; color: rgba(255,255,255,.76); font-size: .92rem; }
 .balance { margin-bottom: 6px; font-size: clamp(2.5rem, 8vw, 4.2rem); font-weight: 800; letter-spacing: -0.05em; }
 .period { margin-bottom: 0; color: rgba(255,255,255,.65); font-size: .8rem; }
+.summary-history-entry {
+  display: flex;
+  width: fit-content;
+  margin-top: 20px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 14px;
+  align-items: center;
+  gap: 7px;
+  color: #fff;
+  background: rgba(255,255,255,.13);
+  box-shadow: 0 5px 14px rgba(20,64,137,.1);
+  cursor: pointer;
+}
+.summary-history-entry:hover { background: rgba(255,255,255,.2); }
+.summary-history-entry strong { font-size: .78rem; }
+.summary-history-entry small { color: rgba(255,255,255,.68); font-size: .67rem; }
+.summary-history-entry b { margin-left: 2px; font-size: 1.15rem; line-height: 1; }
 
 .summary-stats {
   display: grid;
@@ -625,6 +643,23 @@ body.modal-open { overflow: hidden; }
 .time-fields label { color: var(--muted); font-size: .72rem; }
 .time-fields input { width: 100%; margin-top: 6px; padding: 9px 8px; }
 
+.history-page[hidden] { display: none; }
+.history-page-header { display: flex; margin-bottom: 18px; align-items: center; gap: 14px; }
+.history-back-button {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  color: var(--green);
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 7px 18px rgba(70,108,163,.08);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.history-page-header h1 { font-size: clamp(1.55rem, 4vw, 2rem); }
+.history-page-header .hero-cheer { margin-bottom: 0; }
 .history-list { display: grid; }
 .history-item {
   display: grid;

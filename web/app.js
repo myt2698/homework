@@ -40,6 +40,8 @@
   let state = loadState();
   let toastTimer = null;
   const elements = {
+    mainPage: $("#mainPage"), historyPage: $("#historyPage"),
+    openHistoryButton: $("#openHistoryButton"), closeHistoryButton: $("#closeHistoryButton"),
     settingsButton: $("#settingsButton"), settingsPanel: $("#settingsPanel"),
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
@@ -475,6 +477,21 @@
   function closeWeekendPlanModal() {
     elements.weekendPlanModal.hidden = true;
     document.body.classList.remove("modal-open");
+  }
+
+  function openHistoryPage() {
+    closeWeekendPlanModal();
+    closeFocusModal();
+    renderHistory();
+    elements.mainPage.hidden = true;
+    elements.historyPage.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeHistoryPage() {
+    elements.historyPage.hidden = true;
+    elements.mainPage.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function renderWeekend() {
@@ -1312,13 +1329,17 @@
   });
   elements.recordDate.addEventListener("change", () => setRecordDate(elements.recordDate.value));
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
+  elements.openHistoryButton.addEventListener("click", openHistoryPage);
+  elements.closeHistoryButton.addEventListener("click", closeHistoryPage);
   elements.weekendPlanEntry.addEventListener("click", openWeekendPlanModal);
   elements.weekendPlanCloseButton.addEventListener("click", closeWeekendPlanModal);
   elements.weekendPlanModal.addEventListener("click", (event) => {
     if (event.target === elements.weekendPlanModal) closeWeekendPlanModal();
   });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !elements.weekendPlanModal.hidden) closeWeekendPlanModal();
+    if (event.key !== "Escape") return;
+    if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
+    else if (!elements.historyPage.hidden) closeHistoryPage();
   });
   elements.weekendTaskPlanList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-plan-day]");
@@ -1422,6 +1443,7 @@
       const target = kind === "weekend"
         ? todayIso() >= date && todayIso() <= sunday ? todayIso() : todayIso() > sunday ? sunday : date
         : date;
+      closeHistoryPage();
       setRecordDate(target);
       document.querySelector(".record-card").scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (action === "delete") {
