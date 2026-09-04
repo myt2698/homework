@@ -940,7 +940,7 @@ public class MainActivity extends Activity {
         copy.addView(weekendTaskPlannerKicker);
         weekendTaskPlannerTitle = text("给每项作业安排完成日期", 17, INK, true);
         copy.addView(weekendTaskPlannerTitle);
-        weekendTaskPlannerHelp = text("默认安排在周六；确实需要周日完成的，再改成周日。", 10, MUTED, false);
+        weekendTaskPlannerHelp = text("默认安排在周六；挑一部分放到今天完成，其余再分到周末。", 10, MUTED, false);
         weekendTaskPlannerHelp.setPadding(0, dp(4), 0, 0);
         copy.addView(weekendTaskPlannerHelp);
         head.addView(copy, weightedWrap(1));
@@ -1163,15 +1163,18 @@ public class MainActivity extends Activity {
     }
 
     private String plannedDayForTask(JSONObject task) {
+        if (task != null && "friday".equals(task.optString("plannedDay"))) return "friday";
         return task != null && "sunday".equals(task.optString("plannedDay")) ? "sunday" : "saturday";
     }
 
     private String plannedDayLabel(JSONObject task) {
-        return "sunday".equals(plannedDayForTask(task)) ? "周日" : "周六";
+        String day = plannedDayForTask(task);
+        return "friday".equals(day) ? "周五" : "sunday".equals(day) ? "周日" : "周六";
     }
 
     private String plannedDateForTask(String weekendKey, JSONObject task) {
-        return addDays(weekendKey, "sunday".equals(plannedDayForTask(task)) ? 2 : 1);
+        String day = plannedDayForTask(task);
+        return addDays(weekendKey, "friday".equals(day) ? 0 : "sunday".equals(day) ? 2 : 1);
     }
 
     private int taskSubjectColor(String subject) {
@@ -1372,7 +1375,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (weekendKey != null && !owner.optBoolean("planSaved")) {
-            toast("请先安排每项作业在周六还是周日完成");
+            toast("请先安排每项作业在周五、周六还是周日完成");
             return;
         }
         for (int index = 0; index < tasks.length(); index++) {
@@ -1410,7 +1413,7 @@ public class MainActivity extends Activity {
         String weekendKey = weekendKeyFor(currentDate);
         if (moving == null || target == null) return;
         if (weekendKey != null && !plannedDayForTask(moving).equals(plannedDayForTask(target))) {
-            toast("周六和周日的作业请分别排序");
+            toast("三天的作业请分别排序");
             return;
         }
         List<JSONObject> ordered = new ArrayList<>();
@@ -1471,11 +1474,22 @@ public class MainActivity extends Activity {
         boolean canArrangeOrder = confirmed && canEditList && allPending && (!weekendMode || planSaved);
         boolean sortingMode = canArrangeOrder && !orderSaved;
         boolean orderPendingWeekend = confirmed && weekendMode && !isFriday && planSaved && !orderSaved;
-        boolean questMode = confirmed && orderSaved && (!weekendMode || !isFriday && planSaved);
+        boolean questMode = confirmed && orderSaved && (!weekendMode || planSaved);
         List<Integer> questIndexes = new ArrayList<>();
         if (!questMode || !weekendMode) {
             for (int index = 0; index < tasks.length(); index++) questIndexes.add(index);
+        } else if (isFriday) {
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task != null && "friday".equals(plannedDayForTask(task))) questIndexes.add(index);
+            }
         } else if (currentDate.equals(addDays(weekendKey, 1))) {
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task != null && "friday".equals(plannedDayForTask(task))
+                        && (!"done".equals(task.optString("status"))
+                        || currentDate.equals(task.optString("completedDate")))) questIndexes.add(index);
+            }
             for (int index = 0; index < tasks.length(); index++) {
                 JSONObject task = tasks.optJSONObject(index);
                 if (task != null && "saturday".equals(plannedDayForTask(task))) questIndexes.add(index);
@@ -1483,7 +1497,8 @@ public class MainActivity extends Activity {
         } else {
             for (int index = 0; index < tasks.length(); index++) {
                 JSONObject task = tasks.optJSONObject(index);
-                if (task != null && "saturday".equals(plannedDayForTask(task))
+                if (task != null && ("friday".equals(plannedDayForTask(task))
+                        || "saturday".equals(plannedDayForTask(task)))
                         && (!"done".equals(task.optString("status"))
                         || currentDate.equals(task.optString("completedDate")))) questIndexes.add(index);
             }
@@ -1521,10 +1536,10 @@ public class MainActivity extends Activity {
         taskOrderButton.setBackground(rounded(sortingMode ? GREEN : GREEN_SOFT, 13,
                 sortingMode ? GREEN : Color.rgb(156, 188, 245), sortingMode ? 0 : 1));
         taskConfirmHintView.setText(sortingMode
-                ? weekendMode ? "分别排好周六、周日的顺序，确定后就按计划闯关。"
+                ? weekendMode ? "分别排好周五、周六、周日的顺序，确定后就按计划闯关。"
                     : "长按拖动作业，或使用箭头排好顺序，再确定开始。"
                 : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
-                : weekendMode && isFriday && orderSaved ? "周末完成日期和闯关顺序都安排好了。"
+                : weekendMode && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
                 : !canEditList
                 ? planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
                 : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
@@ -1533,7 +1548,7 @@ public class MainActivity extends Activity {
                     ? weekendMode ? "周末清单已全部完成并自动结算。"
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
                         ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
-                    : weekendMode ? "清单已确认；接下来给每项作业安排周六或周日。" : "清单已确认；一次只开始一项。"
+                    : weekendMode ? "清单已确认；接下来给每项作业安排周五、周六或周日。" : "清单已确认；一次只开始一项。"
                 : tasks.length() > 0 ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。");
 
         Result settlement = weekendMode ? null : resultFor(dailyRecord);
@@ -1577,7 +1592,8 @@ public class MainActivity extends Activity {
             taskSummaryView.setText(tasks.length() + " 关待安排");
             addOrderIntro();
             if (weekendMode) {
-                addSortableTaskGroup(tasks, "saturday", "周六闯关顺序", "先完成周六计划");
+                addSortableTaskGroup(tasks, "friday", "周五闯关顺序", "放学后先完成这一部分");
+                addSortableTaskGroup(tasks, "saturday", "周六闯关顺序", "完成周六计划");
                 addSortableTaskGroup(tasks, "sunday", "周日闯关顺序", "周日按这个顺序完成");
             } else {
                 addSortableTaskGroup(tasks, null, null, null);
@@ -1590,8 +1606,10 @@ public class MainActivity extends Activity {
                 for (int index = 0; index < tasks.length(); index++) {
                     JSONObject candidate = tasks.optJSONObject(index);
                     if (candidate == null || !"pending".equals(candidate.optString("status", "pending"))) continue;
-                    boolean canStart = !weekendMode || planSaved && !isFriday
-                            && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(candidate)));
+                    String candidateDay = plannedDayForTask(candidate);
+                    boolean canStart = !weekendMode || planSaved
+                            && (isFriday ? "friday".equals(candidateDay)
+                            : currentDate.equals(addDays(weekendKey, 1)) ? !"sunday".equals(candidateDay) : true);
                     if (canStart) { suggestedTaskIndex = index; break; }
                 }
             }
@@ -1838,9 +1856,11 @@ public class MainActivity extends Activity {
         if (task == null) return;
         final int taskIndex = index;
         String status = task.optString("status", "pending");
-        boolean canDoToday = !weekendMode || planSaved && !isFriday
-                && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(task)));
-        boolean plannedToday = weekendMode && !isFriday && currentDate.equals(plannedDateForTask(weekendKey, task));
+        String taskDay = plannedDayForTask(task);
+        boolean canDoToday = !weekendMode || planSaved
+                && (isFriday ? "friday".equals(taskDay)
+                : currentDate.equals(addDays(weekendKey, 1)) ? !"sunday".equals(taskDay) : true);
+        boolean plannedToday = weekendMode && currentDate.equals(plannedDateForTask(weekendKey, task));
         LinearLayout item = vertical();
         item.setPadding(dp(compact ? 10 : current ? 14 : 12), dp(compact ? 9 : current ? 13 : 11),
                 dp(compact ? 10 : current ? 14 : 12), dp(compact ? 9 : current ? 13 : 11));
@@ -1869,7 +1889,7 @@ public class MainActivity extends Activity {
         else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);
         else if ("done".equals(status)) meta = (hasText(task, "completedDate") ? formatShortDate(task.optString("completedDate")) + " " : "")
                 + task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
-        else if (weekendMode && planSaved && !isFriday && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
+        else if (weekendMode && planSaved && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
         metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
         taskCopy.addView(metaView);
@@ -1915,15 +1935,20 @@ public class MainActivity extends Activity {
         String saturday = addDays(key, 1);
         String sunday = addDays(key, 2);
         boolean executionStarted = false;
+        int fridayCount = 0;
         int saturdayCount = 0;
         int sundayCount = 0;
+        int fridayDone = 0;
         int saturdayDone = 0;
         int sundayDone = 0;
         for (int index = 0; index < tasks.length(); index++) {
             JSONObject task = tasks.optJSONObject(index);
             if (task == null) continue;
             if (!"pending".equals(task.optString("status", "pending"))) executionStarted = true;
-            if ("sunday".equals(plannedDayForTask(task))) {
+            if ("friday".equals(plannedDayForTask(task))) {
+                fridayCount++;
+                if ("done".equals(task.optString("status"))) fridayDone++;
+            } else if ("sunday".equals(plannedDayForTask(task))) {
                 sundayCount++;
                 if ("done".equals(task.optString("status"))) sundayDone++;
             } else {
@@ -1932,14 +1957,14 @@ public class MainActivity extends Activity {
             }
         }
 
-        weekendTaskPlannerKicker.setText(isFriday ? "周五安排" : "周五计划已自动带入");
+        weekendTaskPlannerKicker.setText(isFriday ? "周五安排与闯关" : "周五计划已自动带入");
         weekendTaskPlannerTitle.setText(isFriday ? "给每项作业安排完成日期"
                 : "今天按" + (currentDate.equals(saturday) ? "周六" : "周日") + "计划完成");
         weekendTaskPlannerHelp.setText(isFriday
-                ? "默认安排在周六；确实需要周日完成的，再改成周日。"
+                ? "默认安排在周六；挑一部分放到今天完成，其余再分到周末。"
                 : "这份清单来自 " + formatShortDate(key) + "（周五），今天不需要重新录入。");
         weekendTaskPlanSummary.setText(planSaved
-                ? "周六 " + saturdayCount + " 项 · 周日 " + sundayCount + " 项" : "尚未保存");
+                ? "周五 " + fridayCount + " 项 · 周六 " + saturdayCount + " 项 · 周日 " + sundayCount + " 项" : "尚未保存");
 
         weekendTaskPlanList.removeAllViews();
         if (isFriday && confirmed && tasks.length() > 0) {
@@ -1954,6 +1979,10 @@ public class MainActivity extends Activity {
                         + task.optString("title", "未命名作业"), 13, INK, true));
                 LinearLayout days = horizontal();
                 days.setPadding(0, dp(8), 0, 0);
+                Button fridayButton = planDayButton("周五", "friday".equals(plannedDayForTask(task)), executionStarted);
+                fridayButton.setOnClickListener(v -> selectWeekendTaskDay(taskIndex, "friday"));
+                days.addView(fridayButton, weightedFixed(1, dp(38)));
+                days.addView(spaceHorizontal(6));
                 Button saturdayButton = planDayButton("周六", "saturday".equals(plannedDayForTask(task)), executionStarted);
                 saturdayButton.setOnClickListener(v -> selectWeekendTaskDay(taskIndex, "saturday"));
                 days.addView(saturdayButton, weightedFixed(1, dp(38)));
@@ -1967,6 +1996,7 @@ public class MainActivity extends Activity {
                 weekendTaskPlanList.addView(row, rowParams);
             }
         } else if (!isFriday && planSaved) {
+            addWeekendPlanSummaryRow("周五计划", fridayDone + " / " + fridayCount + " 项完成", false);
             addWeekendPlanSummaryRow("周六计划", saturdayDone + " / " + saturdayCount + " 项完成", currentDate.equals(saturday));
             addWeekendPlanSummaryRow("周日计划", sundayDone + " / " + sundayCount + " 项完成", currentDate.equals(sunday));
         }
@@ -1979,17 +2009,17 @@ public class MainActivity extends Activity {
         } else if (!planSaved) {
             weekendTaskPlanHint.setText(isFriday ? "选好每项作业的完成日，再保存安排。" : "周五还没有保存周末安排。");
         } else if (executionStarted && isFriday) {
-            weekendTaskPlanHint.setText("周末已经开始执行，安排已锁定。");
+            weekendTaskPlanHint.setText("三天计划已经开始执行，安排已锁定。");
         } else if (isFriday && !taskOrderSaved()) {
-            weekendTaskPlanHint.setText("日期已安排，再回到上面排好周六、周日的闯关顺序。");
+            weekendTaskPlanHint.setText("日期已安排，再回到上面排好三天的闯关顺序。");
         } else if (isFriday) {
-            weekendTaskPlanHint.setText("周末日期和闯关顺序都安排好啦。");
+            weekendTaskPlanHint.setText("安排好啦，今天先完成周五的 " + fridayCount + " 项。");
         } else if (currentDate.equals(saturday)) {
             weekendTaskPlanHint.setText("今天优先完成周六的 " + saturdayCount + " 项。");
         } else if (currentDate.equals(sunday)) {
             weekendTaskPlanHint.setText("今天完成周日的 " + sundayCount + " 项，并补齐未完成项。");
         } else {
-            weekendTaskPlanHint.setText("安排保存后，周六和周日会自动显示。");
+            weekendTaskPlanHint.setText("安排保存后，三天会按计划显示。");
         }
 
         Result result = weekendResultFor(key, weekend);
@@ -2056,7 +2086,8 @@ public class MainActivity extends Activity {
         }
         JSONObject task = tasks.optJSONObject(index);
         if (task == null) return;
-        put(task, "plannedDay", "sunday".equals(plannedDay) ? "sunday" : "saturday");
+        put(task, "plannedDay", "friday".equals(plannedDay) ? "friday"
+                : "sunday".equals(plannedDay) ? "sunday" : "saturday");
         weekend.remove("planSaved");
         weekend.remove("planSavedAt");
         put(weekend, "orderSaved", false);
@@ -2092,7 +2123,7 @@ public class MainActivity extends Activity {
         weekend.remove("penaltyConfirmed");
         saveWeekends();
         renderAll();
-        toast("完成日期已保存，再给两天的作业排好顺序吧");
+        toast("完成日期已保存，再给三天的作业排好顺序吧");
     }
 
     private void toggleWeekendTaskPenalty() {
@@ -2181,9 +2212,14 @@ public class MainActivity extends Activity {
                     ? "请回到周五确定周末闯关顺序" : "请先确定闯关顺序");
             return;
         }
-        if (weekendKey != null && (!weekend.optBoolean("planSaved") || currentDate.equals(weekendKey))) {
-            toast(currentDate.equals(weekendKey)
-                    ? "请先安排好周六、周日，周末再开始作业" : "请先在周五保存周末安排");
+        if (weekendKey != null && !weekend.optBoolean("planSaved")) {
+            toast("请先在周五保存三天的作业安排");
+            return;
+        }
+        if (weekendKey != null && currentDate.equals(weekendKey)
+                && !"friday".equals(plannedDayForTask(task))
+                && !"undo".equals(action)) {
+            toast("这项安排在周末，今天先做周五计划");
             return;
         }
         if (weekendKey != null && currentDate.equals(addDays(weekendKey, 1))
@@ -2243,12 +2279,19 @@ public class MainActivity extends Activity {
                 for (int taskPosition = 0; taskPosition < tasks.length(); taskPosition++) {
                     JSONObject todayTask = tasks.optJSONObject(taskPosition);
                     if (todayTask == null) continue;
+                    String todayTaskDay = plannedDayForTask(todayTask);
                     boolean include = weekendKey == null
-                            || currentDate.equals(addDays(weekendKey, 1)) && "saturday".equals(plannedDayForTask(todayTask))
+                            || currentDate.equals(weekendKey) && "friday".equals(todayTaskDay)
+                            || currentDate.equals(addDays(weekendKey, 1))
+                            && ("saturday".equals(todayTaskDay)
+                            || "friday".equals(todayTaskDay)
+                            && (!"done".equals(todayTask.optString("status"))
+                            || currentDate.equals(todayTask.optString("completedDate"))))
                             || currentDate.equals(addDays(weekendKey, 2))
-                            && ("sunday".equals(plannedDayForTask(todayTask))
-                            || !"done".equals(todayTask.optString("status"))
-                            || currentDate.equals(todayTask.optString("completedDate")));
+                            && ("sunday".equals(todayTaskDay)
+                            || ("friday".equals(todayTaskDay) || "saturday".equals(todayTaskDay))
+                            && (!"done".equals(todayTask.optString("status"))
+                            || currentDate.equals(todayTask.optString("completedDate"))));
                     if (!include) continue;
                     todayTotal++;
                     if ("done".equals(todayTask.optString("status"))) todayDone++;
@@ -2425,7 +2468,7 @@ public class MainActivity extends Activity {
         weekendCard.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         weekendSpacer.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         viewModeView.setText(!weekendMode ? "平日记录"
-                : currentDate.equals(key) ? "周五录入与安排"
+                : currentDate.equals(key) ? "周五安排与闯关"
                 : currentDate.equals(addDays(key, 1)) ? "周六按计划完成" : "周日按计划完成");
         if (!weekendMode) return;
 
@@ -3031,7 +3074,7 @@ public class MainActivity extends Activity {
         } else if (weekend.optBoolean("penaltyConfirmed")) {
             status = "周日结束仍未完成";
         } else if (weekend.optBoolean("planSaved") && weekendOrderSaved(weekend)) {
-            status = "周五计划已完成，周末进行中";
+            status = "三天计划已制定，正在闯关";
         } else if (weekend.optBoolean("planSaved")) {
             status = "等待确定闯关顺序";
         } else {
