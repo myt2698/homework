@@ -140,26 +140,14 @@
         </div>
       </div>
 
-      <div class="weekend-task-planner" id="weekendTaskPlanner" hidden>
-        <div class="task-panel-heading">
-          <div>
-            <p class="section-kicker" id="weekendPlannerKicker">周五安排</p>
-            <h3 id="weekendPlannerTitle">给每项作业安排完成日期</h3>
-            <p id="weekendPlannerHelp">默认安排在周六；确实需要周日完成的，再改成周日。</p>
-          </div>
-          <strong id="weekendPlanSummary">尚未保存</strong>
-        </div>
-        <div class="weekend-task-plan-list" id="weekendTaskPlanList"></div>
-        <div class="task-list-footer">
-          <span id="weekendPlanHint">确认作业清单后再安排。</span>
-          <button class="primary-button compact-button" id="saveWeekendTaskPlanButton" type="button">保存周末安排</button>
-        </div>
-        <div class="day-result" id="weekendResult" hidden>
-          <div><span>周末结算</span><strong id="weekendResultLabel"></strong></div>
-          <b id="weekendResultAmount"></b>
-        </div>
-        <button class="text-button danger" id="weekendPenaltyButton" type="button" hidden>周日结束仍未完成</button>
-      </div>
+      <button class="weekend-plan-entry" id="weekendPlanEntry" type="button" hidden>
+        <span class="weekend-plan-entry-icon" aria-hidden="true">🗓️</span>
+        <span class="weekend-plan-entry-copy">
+          <strong id="weekendPlanEntryTitle">周五安排与闯关</strong>
+          <small id="weekendPlanEntryStatus">给作业选择周五、周六或周日</small>
+        </span>
+        <span class="weekend-plan-entry-arrow" aria-hidden="true">›</span>
+      </button>
 
       <div class="prep-grid sport-section">
         <div class="prep-check sport-check" id="sportCard">
@@ -208,6 +196,32 @@
 
     <footer>🌱 每天完成一点点，就会越来越厉害 · 数据只保存在当前浏览器中</footer>
   </main>
+
+  <div class="weekend-plan-modal" id="weekendPlanModal" role="dialog" aria-modal="true" aria-labelledby="weekendPlannerTitle" hidden>
+    <div class="weekend-plan-dialog">
+      <button class="focus-close" id="weekendPlanCloseButton" type="button" aria-label="关闭三天作业安排">×</button>
+      <div class="weekend-task-planner" id="weekendTaskPlanner" hidden>
+        <div class="task-panel-heading">
+          <div>
+            <p class="section-kicker" id="weekendPlannerKicker">周五安排</p>
+            <h3 id="weekendPlannerTitle">给每项作业安排完成日期</h3>
+            <p id="weekendPlannerHelp">默认安排在周六；挑一部分放到今天完成，其余再分到周末。</p>
+          </div>
+          <strong id="weekendPlanSummary">尚未保存</strong>
+        </div>
+        <div class="weekend-task-plan-list" id="weekendTaskPlanList"></div>
+        <div class="task-list-footer">
+          <span id="weekendPlanHint">确认作业清单后再安排。</span>
+          <button class="primary-button compact-button" id="saveWeekendTaskPlanButton" type="button">保存周末安排</button>
+        </div>
+        <div class="day-result" id="weekendResult" hidden>
+          <div><span>周末结算</span><strong id="weekendResultLabel"></strong></div>
+          <b id="weekendResultAmount"></b>
+        </div>
+        <button class="text-button danger" id="weekendPenaltyButton" type="button" hidden>周日结束仍未完成</button>
+      </div>
+    </div>
+  </div>
 
   <div class="focus-modal" id="focusModal" role="dialog" aria-modal="true" aria-labelledby="focusModalTitle" hidden>
     <div class="focus-dialog">

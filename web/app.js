@@ -44,6 +44,9 @@
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
     recordHeading: $("#recordHeading"),
+    weekendPlanEntry: $("#weekendPlanEntry"), weekendPlanEntryTitle: $("#weekendPlanEntryTitle"),
+    weekendPlanEntryStatus: $("#weekendPlanEntryStatus"), weekendPlanModal: $("#weekendPlanModal"),
+    weekendPlanCloseButton: $("#weekendPlanCloseButton"),
     weekendTaskPlanner: $("#weekendTaskPlanner"), weekendPlannerKicker: $("#weekendPlannerKicker"),
     weekendPlannerTitle: $("#weekendPlannerTitle"), weekendPlannerHelp: $("#weekendPlannerHelp"),
     weekendTaskPlanList: $("#weekendTaskPlanList"), weekendPlanSummary: $("#weekendPlanSummary"),
@@ -462,14 +465,30 @@
     button.setAttribute("aria-pressed", String(Boolean(selected)));
   }
 
+  function openWeekendPlanModal() {
+    if (elements.weekendPlanEntry.hidden) return;
+    elements.weekendPlanModal.hidden = false;
+    document.body.classList.add("modal-open");
+    elements.weekendPlanCloseButton.focus();
+  }
+
+  function closeWeekendPlanModal() {
+    elements.weekendPlanModal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
   function renderWeekend() {
     const date = elements.recordDate.value;
     const key = weekendKeyFor(date);
     const weekendMode = Boolean(key);
+    elements.weekendPlanEntry.hidden = !weekendMode;
     elements.weekendTaskPlanner.hidden = !weekendMode;
     elements.viewModeLabel.textContent = !weekendMode ? "平日记录"
-      : date === key ? "周五安排与闯关" : date === addDays(key, 1) ? "周六按计划完成" : "周日按计划完成";
-    if (!weekendMode) return;
+      : date === key ? "周五任务" : date === addDays(key, 1) ? "周六按计划完成" : "周日按计划完成";
+    if (!weekendMode) {
+      closeWeekendPlanModal();
+      return;
+    }
 
     const weekend = weekendForDate(date) || {};
     const tasks = tasksForDate(date);
@@ -481,6 +500,15 @@
     const saturdayTasks = tasks.filter((task) => plannedDayForTask(task) === "saturday");
     const sundayTasks = tasks.filter((task) => plannedDayForTask(task) === "sunday");
     const completed = (items) => items.filter((task) => task.status === "done").length;
+    const orderSaved = taskOrderSaved(date);
+
+    elements.weekendPlanEntryTitle.textContent = isFriday ? "周五安排与闯关" : "查看三天作业计划";
+    elements.weekendPlanEntryStatus.textContent = !weekend.confirmed
+      ? "确认作业清单后，再从这里开始安排"
+      : !weekend.planSaved ? "待分配到周五、周六或周日"
+        : !orderSaved ? "完成日已分配，接着安排闯关顺序"
+          : `周五 ${fridayTasks.length} 项 · 周六 ${saturdayTasks.length} 项 · 周日 ${sundayTasks.length} 项`;
+    elements.weekendPlanEntry.classList.toggle("needs-action", isFriday && weekend.confirmed && (!weekend.planSaved || !orderSaved));
 
     elements.weekendPlannerKicker.textContent = isFriday ? "周五安排与闯关" : "周五计划已自动带入";
     elements.weekendPlannerTitle.textContent = isFriday ? "给每项作业安排完成日期" : `今天按${date === saturday ? "周六" : "周日"}计划完成`;
@@ -522,7 +550,7 @@
       ? isFriday ? "先核对并确认上面的作业清单。" : "周五的作业清单还没有确认。"
       : !weekend.planSaved ? isFriday ? "选好每项作业的完成日，再保存安排。" : "周五还没有保存周末安排。"
         : executionStarted && isFriday ? "三天计划已经开始执行，安排已锁定。"
-          : isFriday && !taskOrderSaved(date) ? "日期已安排，再回到上面排好三天的闯关顺序。"
+          : isFriday && !orderSaved ? "日期已安排，关闭弹窗后排好三天的闯关顺序。"
             : isFriday ? `安排好啦，今天先完成周五的 ${fridayTasks.length} 项。`
           : date === saturday ? `今天优先完成周六的 ${saturdayTasks.length} 项。`
             : date === sunday ? `今天完成周日的 ${sundayTasks.length} 项，并补齐未完成项。` : "安排保存后，三天会按计划显示。";
@@ -581,7 +609,7 @@
       ? doneCount === tasks.length && tasks.length
         ? key ? "周末清单已全部完成并自动结算。"
           : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
-        : key ? "清单已确认；接下来给每项作业安排周五、周六或周日。" : "清单已确认；一次只开始一项。"
+        : key ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
       : tasks.length ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。";
     const questMode = confirmed && orderSaved && (!key || weekend.planSaved);
     const questTasks = !questMode ? tasks : !key ? tasks
@@ -1252,7 +1280,8 @@
     delete weekend.penaltyConfirmed;
     persist();
     render();
-    showToast("完成日期已保存，再给三天的作业排好顺序吧");
+    closeWeekendPlanModal();
+    showToast("完成日期已保存，接下来排好三天顺序吧");
   }
 
   function toggleWeekendPenalty() {
@@ -1283,6 +1312,14 @@
   });
   elements.recordDate.addEventListener("change", () => setRecordDate(elements.recordDate.value));
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
+  elements.weekendPlanEntry.addEventListener("click", openWeekendPlanModal);
+  elements.weekendPlanCloseButton.addEventListener("click", closeWeekendPlanModal);
+  elements.weekendPlanModal.addEventListener("click", (event) => {
+    if (event.target === elements.weekendPlanModal) closeWeekendPlanModal();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.weekendPlanModal.hidden) closeWeekendPlanModal();
+  });
   elements.weekendTaskPlanList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-plan-day]");
     if (button) selectWeekendTaskDay(button.dataset.taskId, button.dataset.planDay);

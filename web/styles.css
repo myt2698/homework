@@ -444,8 +444,57 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-buttons button.order-arrow { min-width: 31px; padding: 5px 8px; color: #5373a6; background: #fff; }
 .task-buttons button.order-arrow:disabled { opacity: .25; cursor: default; }
 
-.weekend-task-planner {
+.weekend-plan-entry {
+  display: flex;
+  width: 100%;
   margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid #bcd1f8;
+  border-radius: 16px;
+  align-items: center;
+  gap: 11px;
+  color: var(--ink);
+  background: linear-gradient(135deg, #f2f7ff, #fffaf0);
+  box-shadow: 0 6px 16px rgba(75,130,239,.08);
+  text-align: left;
+  cursor: pointer;
+}
+.weekend-plan-entry[hidden] { display: none; }
+.weekend-plan-entry:hover { border-color: #8fb2f3; transform: translateY(-1px); }
+.weekend-plan-entry.needs-action { border-color: var(--amber); background: linear-gradient(135deg, #fff6df, #fffdf7); }
+.weekend-plan-entry-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; place-items: center; background: #fff; font-size: 1.15rem; box-shadow: 0 3px 9px rgba(42,71,125,.09); }
+.weekend-plan-entry-copy { min-width: 0; flex: 1; }
+.weekend-plan-entry-copy strong, .weekend-plan-entry-copy small { display: block; }
+.weekend-plan-entry-copy strong { font-size: .88rem; }
+.weekend-plan-entry-copy small { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: .69rem; text-overflow: ellipsis; white-space: nowrap; }
+.weekend-plan-entry-arrow { color: #6588c9; font-size: 1.65rem; line-height: 1; }
+
+.weekend-plan-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  padding: 18px;
+  place-items: center;
+  background: rgba(36,50,74,.48);
+  backdrop-filter: blur(5px);
+}
+.weekend-plan-modal[hidden] { display: none; }
+.weekend-plan-dialog {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0,0,0,.28);
+}
+.weekend-plan-dialog .focus-close { z-index: 1; }
+.weekend-plan-dialog .weekend-task-planner { margin-top: 0; padding: 25px; border: 0; border-radius: 26px; }
+body.modal-open { overflow: hidden; }
+
+.weekend-task-planner {
   padding: 20px;
   border: 1px solid #f3d58e;
   border-radius: 22px;
@@ -642,7 +691,7 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   position: fixed;
   bottom: 26px;
   left: 50%;
-  z-index: 10;
+  z-index: 40;
   padding: 11px 17px;
   border-radius: 16px;
   color: #fff;
@@ -675,6 +724,9 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 
 @media (max-width: 500px) {
   .app-shell { width: min(100% - 16px, 440px); }
+  .weekend-plan-modal { padding: 8px; }
+  .weekend-plan-dialog { max-height: calc(100vh - 16px); border-radius: 20px; }
+  .weekend-plan-dialog .weekend-task-planner { padding: 22px 14px 16px; border-radius: 20px; }
   .card { padding: 20px 16px; border-radius: 19px; }
   .topbar { padding: 0 4px; }
   .icon-button > span:last-child { display: none; }

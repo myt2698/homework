@@ -175,6 +175,9 @@ public class MainActivity extends Activity {
     private LinearLayout taskSettlementPanel;
     private TextView taskSettlementLabel;
     private TextView taskSettlementAmount;
+    private LinearLayout weekendTaskPlanEntry;
+    private TextView weekendTaskPlanEntryTitle;
+    private TextView weekendTaskPlanEntryStatus;
     private LinearLayout weekendTaskPlanner;
     private TextView weekendTaskPlannerKicker;
     private TextView weekendTaskPlannerTitle;
@@ -216,6 +219,7 @@ public class MainActivity extends Activity {
     private TextView emptyHistoryView;
 
     private AlertDialog taskFocusDialog;
+    private AlertDialog weekendTaskPlanDialog;
     private TextView taskFocusElapsedView;
     private JSONObject taskFocusTask;
 
@@ -270,6 +274,7 @@ public class MainActivity extends Activity {
         timerHandler.removeCallbacks(timerTick);
         timerHandler.removeCallbacks(taskFocusTick);
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
+        if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
         super.onDestroy();
     }
 
@@ -621,7 +626,8 @@ public class MainActivity extends Activity {
         card.addView(buildTasksPanel(), matchWrap());
         card.addView(space(16));
 
-        card.addView(buildWeekendTaskPlanner(), matchWrap());
+        buildWeekendTaskPlanner();
+        card.addView(buildWeekendTaskPlanEntry(), matchWrap());
         card.addView(space(16));
 
         sportCard = buildSportCard();
@@ -924,6 +930,64 @@ public class MainActivity extends Activity {
         settlementParams.topMargin = dp(12);
         panel.addView(taskSettlementPanel, settlementParams);
         return panel;
+    }
+
+    private LinearLayout buildWeekendTaskPlanEntry() {
+        LinearLayout entry = horizontal();
+        entry.setGravity(Gravity.CENTER_VERTICAL);
+        entry.setPadding(dp(13), dp(11), dp(13), dp(11));
+        entry.setBackground(rounded(GREEN_SOFT, 16, Color.rgb(188, 209, 248), 1));
+        entry.setClickable(true);
+        entry.setFocusable(true);
+        entry.setOnClickListener(v -> showWeekendTaskPlanDialog());
+
+        TextView icon = text("🗓", 20, GREEN, true);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(rounded(Color.WHITE, 12, Color.WHITE, 0));
+        entry.addView(icon, fixed(dp(38), dp(38)));
+        entry.addView(spaceHorizontal(11));
+
+        LinearLayout copy = vertical();
+        weekendTaskPlanEntryTitle = text("周五安排与闯关", 14, INK, true);
+        copy.addView(weekendTaskPlanEntryTitle);
+        weekendTaskPlanEntryStatus = text("给作业选择周五、周六或周日", 10, MUTED, false);
+        weekendTaskPlanEntryStatus.setPadding(0, dp(3), 0, 0);
+        copy.addView(weekendTaskPlanEntryStatus);
+        entry.addView(copy, weightedWrap(1));
+
+        TextView arrow = text("›", 27, Color.rgb(101, 136, 201), false);
+        arrow.setGravity(Gravity.CENTER);
+        entry.addView(arrow, fixed(dp(24), dp(38)));
+        weekendTaskPlanEntry = entry;
+        return entry;
+    }
+
+    private void showWeekendTaskPlanDialog() {
+        if (weekendKeyFor(currentDate) == null || weekendTaskPlanner == null) return;
+        if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) return;
+        if (weekendTaskPlanner.getParent() instanceof ViewGroup) {
+            ((ViewGroup) weekendTaskPlanner.getParent()).removeView(weekendTaskPlanner);
+        }
+        weekendTaskPlanner.setVisibility(View.VISIBLE);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        LinearLayout wrapper = vertical();
+        wrapper.setPadding(dp(4), dp(4), dp(4), dp(4));
+        wrapper.addView(weekendTaskPlanner, matchWrap());
+        scroll.addView(wrapper, matchWrap());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(scroll)
+                .setNegativeButton("关闭", null)
+                .create();
+        weekendTaskPlanDialog = dialog;
+        dialog.setOnDismissListener(ignored -> {
+            if (weekendTaskPlanner.getParent() instanceof ViewGroup) {
+                ((ViewGroup) weekendTaskPlanner.getParent()).removeView(weekendTaskPlanner);
+            }
+            if (weekendTaskPlanDialog == dialog) weekendTaskPlanDialog = null;
+        });
+        dialog.show();
     }
 
     private LinearLayout buildWeekendTaskPlanner() {
@@ -1548,7 +1612,7 @@ public class MainActivity extends Activity {
                     ? weekendMode ? "周末清单已全部完成并自动结算。"
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
                         ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
-                    : weekendMode ? "清单已确认；接下来给每项作业安排周五、周六或周日。" : "清单已确认；一次只开始一项。"
+                    : weekendMode ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
                 : tasks.length() > 0 ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。");
 
         Result settlement = weekendMode ? null : resultFor(dailyRecord);
@@ -1923,14 +1987,19 @@ public class MainActivity extends Activity {
     private void renderWeekendTaskPlanner() {
         String key = weekendKeyFor(currentDate);
         boolean weekendMode = key != null;
+        weekendTaskPlanEntry.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         weekendTaskPlanner.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
-        if (!weekendMode) return;
+        if (!weekendMode) {
+            if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) weekendTaskPlanDialog.dismiss();
+            return;
+        }
 
         JSONObject weekend = weekendForDate(currentDate, false);
         if (weekend == null) weekend = new JSONObject();
         JSONArray tasks = taskArray(false);
         boolean confirmed = weekend.optBoolean("confirmed");
         boolean planSaved = weekend.optBoolean("planSaved");
+        boolean orderSaved = taskOrderSaved();
         boolean isFriday = currentDate.equals(key);
         String saturday = addDays(key, 1);
         String sunday = addDays(key, 2);
@@ -1956,6 +2025,16 @@ public class MainActivity extends Activity {
                 if ("done".equals(task.optString("status"))) saturdayDone++;
             }
         }
+
+        weekendTaskPlanEntryTitle.setText(isFriday ? "周五安排与闯关" : "查看三天作业计划");
+        weekendTaskPlanEntryStatus.setText(!confirmed
+                ? "确认作业清单后，再从这里开始安排"
+                : !planSaved ? "待分配到周五、周六或周日"
+                : !orderSaved ? "完成日已分配，接着安排闯关顺序"
+                : "周五 " + fridayCount + " 项 · 周六 " + saturdayCount + " 项 · 周日 " + sundayCount + " 项");
+        boolean needsAction = isFriday && confirmed && (!planSaved || !orderSaved);
+        weekendTaskPlanEntry.setBackground(rounded(needsAction ? AMBER_SOFT : GREEN_SOFT, 16,
+                needsAction ? AMBER : Color.rgb(188, 209, 248), 1));
 
         weekendTaskPlannerKicker.setText(isFriday ? "周五安排与闯关" : "周五计划已自动带入");
         weekendTaskPlannerTitle.setText(isFriday ? "给每项作业安排完成日期"
@@ -2021,7 +2100,7 @@ public class MainActivity extends Activity {
         } else if (executionStarted && isFriday) {
             weekendTaskPlanHint.setText("三天计划已经开始执行，安排已锁定。");
         } else if (isFriday && !taskOrderSaved()) {
-            weekendTaskPlanHint.setText("日期已安排，再回到上面排好三天的闯关顺序。");
+            weekendTaskPlanHint.setText("日期已安排，关闭弹窗后排好三天的闯关顺序。");
         } else if (isFriday) {
             weekendTaskPlanHint.setText("安排好啦，今天先完成周五的 " + fridayCount + " 项。");
         } else if (currentDate.equals(saturday)) {
@@ -2133,7 +2212,8 @@ public class MainActivity extends Activity {
         weekend.remove("penaltyConfirmed");
         saveWeekends();
         renderAll();
-        toast("完成日期已保存，再给三天的作业排好顺序吧");
+        if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) weekendTaskPlanDialog.dismiss();
+        toast("完成日期已保存，接下来排好三天顺序吧");
     }
 
     private void toggleWeekendTaskPenalty() {
@@ -2478,7 +2558,7 @@ public class MainActivity extends Activity {
         weekendCard.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         weekendSpacer.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         viewModeView.setText(!weekendMode ? "平日记录"
-                : currentDate.equals(key) ? "周五安排与闯关"
+                : currentDate.equals(key) ? "周五任务"
                 : currentDate.equals(addDays(key, 1)) ? "周六按计划完成" : "周日按计划完成");
         if (!weekendMode) return;
 
