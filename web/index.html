@@ -17,10 +17,16 @@
           <h1>作业小账本</h1>
         </div>
       </div>
-      <button class="icon-button" id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsPanel">
-        <span aria-hidden="true">⚙</span>
-        <span>设置</span>
-      </button>
+      <div class="topbar-actions">
+        <button class="icon-button dictation-top-entry" id="openDictationButton" type="button">
+          <span aria-hidden="true">🔊</span>
+          <span>听写</span>
+        </button>
+        <button class="icon-button" id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsPanel">
+          <span aria-hidden="true">⚙</span>
+          <span>设置</span>
+        </button>
+      </div>
     </header>
 
     <section class="settings-panel" id="settingsPanel" hidden>
@@ -198,6 +204,66 @@
         <span aria-hidden="true">✓</span>
         <p>新的成长旅程要开始啦</p>
         <small>完成第一份作业清单后，这里会留下你的进步。</small>
+      </div>
+    </section>
+  </section>
+
+  <section class="app-shell dictation-page" id="dictationPage" aria-labelledby="dictationPageTitle" hidden>
+    <header class="history-page-header">
+      <button class="history-back-button" id="closeDictationButton" type="button" aria-label="返回今日任务">‹</button>
+      <div>
+        <p class="eyebrow">🔊 四上语文词语表</p>
+        <h1 id="dictationPageTitle">听写练习</h1>
+        <p class="hero-cheer">选好课程，放下手机，认真听写吧。</p>
+      </div>
+    </header>
+
+    <section class="card dictation-card">
+      <div class="dictation-lesson-row">
+        <label for="dictationLessonSelect">
+          <span>选择课程</span>
+          <select id="dictationLessonSelect"></select>
+        </label>
+        <strong id="dictationLessonCount">0 个词语</strong>
+      </div>
+
+      <div class="dictation-word-bank" id="dictationWordBank">
+        <div class="dictation-section-heading">
+          <div>
+            <p class="section-kicker">本课词语</p>
+            <h2 id="dictationLessonTitle">第1课</h2>
+          </div>
+          <small>内置词语不可删除，自行添加的词语可以移除</small>
+        </div>
+        <div class="dictation-words" id="dictationWords"></div>
+        <div class="dictation-add-row">
+          <input id="dictationWordInput" type="text" maxlength="200" placeholder="添加词语，多个词语可用空格或顿号分开">
+          <button class="secondary-button" id="addDictationWordsButton" type="button">添加词语</button>
+        </div>
+      </div>
+
+      <div class="dictation-hidden-words" id="dictationHiddenWords" hidden>
+        <span aria-hidden="true">🙈</span>
+        <strong>词语已经藏起来了</strong>
+        <small>专心听，不偷看，写完后再核对。</small>
+      </div>
+
+      <div class="dictation-practice">
+        <div class="dictation-practice-copy">
+          <p class="section-kicker">听写进度</p>
+          <h2 id="dictationStatus">准备好后开始听写</h2>
+          <p id="dictationTimingHint">每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。</p>
+        </div>
+        <div class="dictation-progress-row">
+          <div class="dictation-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="dictationProgress">
+            <i id="dictationProgressFill"></i>
+          </div>
+          <strong id="dictationProgressText">0 / 0</strong>
+        </div>
+        <div class="dictation-actions">
+          <button class="primary-button" id="startDictationButton" type="button">开始听写</button>
+          <button class="secondary-button danger-action" id="stopDictationButton" type="button" hidden>停止听写</button>
+        </div>
       </div>
     </section>
   </section>

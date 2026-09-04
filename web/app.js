@@ -11,6 +11,29 @@
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
   const SPORTS = ["跳绳", "仰卧起坐", "50米跑", "踢毽子", "坐位体前屈"];
   const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
+  const DICTATION_LESSONS = [
+    { id: "lesson-1", label: "第1课", words: "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波".split(" ") },
+    { id: "lesson-2", label: "第2课", words: "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡".split(" ") },
+    { id: "lesson-4", label: "第4课", words: "暖洋洋 舒适 揭晓 身份 暖和 的确 曾经 打滚 水沟 注视".split(" ") },
+    { id: "lesson-5", label: "第5课", words: "蚊子 即使 问题 绳子 苍蝇 证明 相互 配合 研究 类似 能够".split(" ") },
+    { id: "lesson-6", label: "第6课", words: "帽子 脑袋 舒服 假如 设法 懂事 一溜烟 各式各样 摆放 玻璃".split(" ") },
+    { id: "garden-2", label: "语文园地二", words: "提纲 生锈 泡沫 综合 氧气 错账 矿物 俱乐部".split(" ") },
+    { id: "lesson-9", label: "第9课", words: "爬山虎 操场 嫩绿 新鲜 均匀 空隙 叶柄 触角 弯曲 痕迹 瞧不起 牢固".split(" ") },
+    { id: "lesson-10", label: "第10课", words: "住宅 选择 住址 大厅 柔弱 平坦 光滑 修理 重要 增长".split(" ") },
+    { id: "lesson-11", label: "第11课", words: "宇宙 黑乎乎 翻身 下降 精疲力竭 飘动 照耀 四肢 奔流不息 茂盛 整个".split(" ") },
+    { id: "lesson-13", label: "第13课", words: "喷射 气急败坏 严厉 立即 执行 敬佩 坚定 忍受 遭受 尽管 屈服 肝脏 获得".split(" ") },
+    { id: "garden-4", label: "语文园地四", words: "花卉 玫瑰 牡丹 花蕾 茉莉 海棠".split(" ") },
+    { id: "lesson-15", label: "第15课", words: "麻雀 悄悄 猛烈 无可奈何 身躯 掩护 紧张 浑身 搏斗 庞大 强大 力量 勇气".split(" ") },
+    { id: "lesson-16", label: "第16课", words: "石级 发颤 年纪 奋力 猴子 纪念 笑呵呵 鼓舞".split(" ") },
+    { id: "lesson-17", label: "第17课", words: "崇山峻岭 盘旋 扩建 修筑 平整 打仗 自然 当地 耗费 大量 智慧 工程 奇迹".split(" ") },
+    { id: "lesson-18", label: "第18课", words: "柱子 栏杆 人物 神清气爽 建筑 耸立 半山腰 金碧辉煌 镜子 隐隐约约 游人 狮子 姿态".split(" ") },
+    { id: "garden-5", label: "语文园地五", words: "陵寝 景观 丝绸".split(" ") },
+    { id: "lesson-20", label: "第20课", words: "虽然 拳头 故意 神气 忙乱 锤子 助威 胳膊 纷纷 可笑 无缘无故".split(" ") },
+    { id: "lesson-21", label: "第21课", words: "文艺 表演 角色 排练 主意 通情达理 充分 提示 演技 撤换 等候 哄堂大笑 垂头丧气".split(" ") },
+    { id: "garden-6", label: "语文园地六", words: "韭菜 芥菜 辣椒 红薯 莲藕 芋头".split(" ") },
+    { id: "lesson-24", label: "第24课", words: "主席 举行 心情 补充 激动 状态 奉献 运动员 训练 建设 勤劳 邀请".split(" ") },
+    { id: "lesson-25", label: "第25课", words: "崛起 严肃 干脆 默默 若有所思 清晰 离开 随便 忘怀 非凡 惩处 训斥 燃烧 响亮".split(" ") }
+  ];
   const $ = (selector) => document.querySelector(selector);
   const todayIso = () => {
     const now = new Date();
@@ -21,7 +44,7 @@
     const now = new Date();
     return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   };
-  const defaultState = () => ({ startDate: todayIso(), records: {}, weekends: {} });
+  const defaultState = () => ({ startDate: todayIso(), records: {}, weekends: {}, dictationCustom: {} });
 
   function loadState() {
     try {
@@ -31,7 +54,8 @@
       return {
         startDate: parsedStart > todayIso() ? todayIso() : parsedStart,
         records: parsed.records && typeof parsed.records === "object" ? parsed.records : {},
-        weekends: parsed.weekends && typeof parsed.weekends === "object" ? parsed.weekends : {}
+        weekends: parsed.weekends && typeof parsed.weekends === "object" ? parsed.weekends : {},
+        dictationCustom: parsed.dictationCustom && typeof parsed.dictationCustom === "object" ? parsed.dictationCustom : {}
       };
     } catch (_) {
       return defaultState();
@@ -41,8 +65,17 @@
   let state = loadState();
   let toastTimer = null;
   const elements = {
-    mainPage: $("#mainPage"), historyPage: $("#historyPage"),
+    mainPage: $("#mainPage"), historyPage: $("#historyPage"), dictationPage: $("#dictationPage"),
     openHistoryButton: $("#openHistoryButton"), closeHistoryButton: $("#closeHistoryButton"),
+    openDictationButton: $("#openDictationButton"), closeDictationButton: $("#closeDictationButton"),
+    dictationLessonSelect: $("#dictationLessonSelect"), dictationLessonCount: $("#dictationLessonCount"),
+    dictationLessonTitle: $("#dictationLessonTitle"), dictationWordBank: $("#dictationWordBank"),
+    dictationWords: $("#dictationWords"), dictationWordInput: $("#dictationWordInput"),
+    addDictationWordsButton: $("#addDictationWordsButton"), dictationHiddenWords: $("#dictationHiddenWords"),
+    dictationStatus: $("#dictationStatus"), dictationTimingHint: $("#dictationTimingHint"),
+    dictationProgress: $("#dictationProgress"), dictationProgressFill: $("#dictationProgressFill"),
+    dictationProgressText: $("#dictationProgressText"), startDictationButton: $("#startDictationButton"),
+    stopDictationButton: $("#stopDictationButton"),
     settingsButton: $("#settingsButton"), settingsPanel: $("#settingsPanel"),
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
@@ -92,6 +125,8 @@
   let taskListExpanded = false;
   let completedTasksExpanded = false;
   let pointerTaskDrag = null;
+  let selectedDictationLesson = DICTATION_LESSONS[0].id;
+  let dictationSession = null;
 
   function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -498,17 +533,171 @@
   }
 
   function openHistoryPage() {
+    stopDictation(false, false);
     closeTaskEntryModal();
     closeWeekendPlanModal();
     closeFocusModal();
     renderHistory();
     elements.mainPage.hidden = true;
+    elements.dictationPage.hidden = true;
     elements.historyPage.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function closeHistoryPage() {
     elements.historyPage.hidden = true;
+    elements.mainPage.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function dictationLesson() {
+    return DICTATION_LESSONS.find((lesson) => lesson.id === selectedDictationLesson) || DICTATION_LESSONS[0];
+  }
+
+  function customDictationWords(lessonId = selectedDictationLesson) {
+    const words = state.dictationCustom[lessonId];
+    return Array.isArray(words) ? words.filter((word) => typeof word === "string" && word.trim()) : [];
+  }
+
+  function dictationWordsForLesson(lesson = dictationLesson()) {
+    return [...lesson.words, ...customDictationWords(lesson.id)];
+  }
+
+  function setDictationProgress(completed, total, current = null) {
+    const percent = total ? Math.round(completed / total * 100) : 0;
+    elements.dictationProgress.setAttribute("aria-valuenow", String(percent));
+    elements.dictationProgressFill.style.width = `${percent}%`;
+    elements.dictationProgressText.textContent = current === null ? `${completed} / ${total}` : `${current} / ${total}`;
+  }
+
+  function renderDictation() {
+    const lesson = dictationLesson();
+    const custom = customDictationWords(lesson.id);
+    const words = [...lesson.words, ...custom];
+    elements.dictationLessonSelect.value = lesson.id;
+    elements.dictationLessonTitle.textContent = lesson.label;
+    elements.dictationLessonCount.textContent = `${words.length} 个词语`;
+    const builtInHtml = lesson.words.map((word) => `<span class="dictation-word">${escapeHtml(word)}</span>`).join("");
+    const customHtml = custom.map((word, index) => `<span class="dictation-word custom">${escapeHtml(word)}<button type="button" data-custom-word-index="${index}" aria-label="删除${escapeHtml(word)}">×</button></span>`).join("");
+    elements.dictationWords.innerHTML = builtInHtml + customHtml;
+    const running = Boolean(dictationSession?.running);
+    elements.dictationLessonSelect.disabled = running;
+    elements.dictationWordBank.hidden = running;
+    elements.dictationHiddenWords.hidden = !running;
+    elements.startDictationButton.hidden = running;
+    elements.stopDictationButton.hidden = !running;
+    if (!running && !elements.dictationStatus.dataset.result) {
+      elements.dictationStatus.textContent = "准备好后开始听写";
+      elements.dictationTimingHint.textContent = "每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。";
+      setDictationProgress(0, words.length);
+    }
+  }
+
+  function stopDictation(completed = false, notify = true) {
+    const session = dictationSession;
+    if (!session) {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      return;
+    }
+    if (session?.timer) clearTimeout(session.timer);
+    if (session) session.running = false;
+    dictationSession = null;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (!elements.dictationStatus) return;
+    const total = session?.words.length || dictationWordsForLesson().length;
+    elements.dictationStatus.dataset.result = "true";
+    elements.dictationStatus.textContent = completed ? `听写完成，共 ${total} 个词语！` : "听写已停止";
+    elements.dictationTimingHint.textContent = completed ? "太棒了，现在可以打开词语表自己核对。" : "可以重新选择课程，准备好后再次开始。";
+    setDictationProgress(completed ? total : session?.index || 0, total);
+    renderDictation();
+    if (notify && completed) showToast("听写完成，认真核对一下吧");
+  }
+
+  function speakCurrentDictationWord() {
+    const session = dictationSession;
+    if (!session?.running) return;
+    const word = session.words[session.index];
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.82;
+    utterance.pitch = 1;
+    const repeatNumber = session.repeat + 1;
+    elements.dictationStatus.textContent = `第 ${session.index + 1} 个词语 · 正在朗读第 ${repeatNumber} 遍`;
+    elements.dictationTimingHint.textContent = repeatNumber === 1
+      ? "听清楚，1秒后会再读一遍。"
+      : session.index + 1 >= session.words.length
+        ? "这是最后一个词，写完就可以核对啦。"
+        : "写下这个词，2秒后进入下一个。";
+    setDictationProgress(session.index, session.words.length, session.index + 1);
+    utterance.onend = () => {
+      if (dictationSession !== session || !session.running) return;
+      if (session.repeat === 0) {
+        session.repeat = 1;
+        elements.dictationStatus.textContent = `第 ${session.index + 1} 个词语 · 1秒后再读一遍`;
+        session.timer = setTimeout(speakCurrentDictationWord, 1000);
+        return;
+      }
+      if (session.index + 1 >= session.words.length) {
+        stopDictation(true);
+        return;
+      }
+      session.index += 1;
+      session.repeat = 0;
+      elements.dictationStatus.textContent = `已完成 ${session.index} 个 · 2秒后下一个词语`;
+      setDictationProgress(session.index, session.words.length);
+      session.timer = setTimeout(speakCurrentDictationWord, 2000);
+    };
+    utterance.onerror = () => {
+      if (dictationSession !== session || !session.running) return;
+      stopDictation(false, false);
+      showToast("朗读服务暂时不可用，请检查系统语音设置");
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startDictation() {
+    if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") {
+      return showToast("当前浏览器不支持语音朗读，请换用 Chrome 或 Edge");
+    }
+    const words = dictationWordsForLesson();
+    if (!words.length) return showToast("请先添加听写词语");
+    stopDictation(false, false);
+    delete elements.dictationStatus.dataset.result;
+    dictationSession = { words, index: 0, repeat: 0, timer: null, running: true };
+    window.speechSynthesis.cancel();
+    renderDictation();
+    speakCurrentDictationWord();
+  }
+
+  function addDictationWords() {
+    const lesson = dictationLesson();
+    const entered = elements.dictationWordInput.value.trim().split(/[\s,，、;；]+/).filter(Boolean);
+    if (!entered.length) return showToast("请先输入要添加的词语");
+    const existing = new Set(dictationWordsForLesson(lesson));
+    const additions = entered.filter((word) => !existing.has(word) && (existing.add(word), true));
+    if (!additions.length) return showToast("这些词语已经在本课词语表中");
+    state.dictationCustom[lesson.id] = customDictationWords(lesson.id).concat(additions);
+    elements.dictationWordInput.value = "";
+    persist();
+    delete elements.dictationStatus.dataset.result;
+    renderDictation();
+    showToast(`已添加 ${additions.length} 个词语`);
+  }
+
+  function openDictationPage() {
+    closeTaskEntryModal();
+    closeWeekendPlanModal();
+    closeFocusModal();
+    elements.historyPage.hidden = true;
+    elements.mainPage.hidden = true;
+    elements.dictationPage.hidden = false;
+    renderDictation();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeDictationPage() {
+    stopDictation(false, false);
+    elements.dictationPage.hidden = true;
     elements.mainPage.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1403,6 +1592,31 @@
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
   elements.openHistoryButton.addEventListener("click", openHistoryPage);
   elements.closeHistoryButton.addEventListener("click", closeHistoryPage);
+  elements.openDictationButton.addEventListener("click", openDictationPage);
+  elements.closeDictationButton.addEventListener("click", closeDictationPage);
+  elements.dictationLessonSelect.addEventListener("change", () => {
+    stopDictation(false, false);
+    selectedDictationLesson = elements.dictationLessonSelect.value;
+    delete elements.dictationStatus.dataset.result;
+    renderDictation();
+  });
+  elements.addDictationWordsButton.addEventListener("click", addDictationWords);
+  elements.dictationWordInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") addDictationWords();
+  });
+  elements.dictationWords.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-custom-word-index]");
+    if (!button) return;
+    const custom = customDictationWords();
+    custom.splice(Number(button.dataset.customWordIndex), 1);
+    state.dictationCustom[selectedDictationLesson] = custom;
+    persist();
+    delete elements.dictationStatus.dataset.result;
+    renderDictation();
+    showToast("已移除自定义词语");
+  });
+  elements.startDictationButton.addEventListener("click", startDictation);
+  elements.stopDictationButton.addEventListener("click", () => stopDictation(false));
   elements.taskEntryLauncher.addEventListener("click", openTaskEntryModal);
   elements.taskEntryCloseButton.addEventListener("click", closeTaskEntryModal);
   elements.taskEntryModal.addEventListener("click", (event) => {
@@ -1417,6 +1631,7 @@
     if (event.key !== "Escape") return;
     if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
+    else if (!elements.dictationPage.hidden) closeDictationPage();
     else if (!elements.historyPage.hidden) closeHistoryPage();
   });
   elements.weekendTaskPlanList.addEventListener("click", (event) => {
@@ -1540,7 +1755,10 @@
   });
 
   elements.recordDate.value = todayIso() < state.startDate ? state.startDate : todayIso();
+  elements.dictationLessonSelect.innerHTML = DICTATION_LESSONS
+    .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);
+  renderDictation();
   render();
   setInterval(() => {
     updateFocusModal();

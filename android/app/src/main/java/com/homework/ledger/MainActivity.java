@@ -18,6 +18,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.RecognizerIntent;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
@@ -59,9 +61,33 @@ public class MainActivity extends Activity {
     private static final String KEY_START_DATE = "start_date";
     private static final String KEY_RECORDS = "records";
     private static final String KEY_WEEKENDS = "weekends";
+    private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
     private static final String[] SPORTS = {"跳绳", "仰卧起坐", "50米跑", "踢毽子", "坐位体前屈"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
+    private static final String[][] DICTATION_LESSONS = {
+            {"lesson-1", "第1课", "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波"},
+            {"lesson-2", "第2课", "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡"},
+            {"lesson-4", "第4课", "暖洋洋 舒适 揭晓 身份 暖和 的确 曾经 打滚 水沟 注视"},
+            {"lesson-5", "第5课", "蚊子 即使 问题 绳子 苍蝇 证明 相互 配合 研究 类似 能够"},
+            {"lesson-6", "第6课", "帽子 脑袋 舒服 假如 设法 懂事 一溜烟 各式各样 摆放 玻璃"},
+            {"garden-2", "语文园地二", "提纲 生锈 泡沫 综合 氧气 错账 矿物 俱乐部"},
+            {"lesson-9", "第9课", "爬山虎 操场 嫩绿 新鲜 均匀 空隙 叶柄 触角 弯曲 痕迹 瞧不起 牢固"},
+            {"lesson-10", "第10课", "住宅 选择 住址 大厅 柔弱 平坦 光滑 修理 重要 增长"},
+            {"lesson-11", "第11课", "宇宙 黑乎乎 翻身 下降 精疲力竭 飘动 照耀 四肢 奔流不息 茂盛 整个"},
+            {"lesson-13", "第13课", "喷射 气急败坏 严厉 立即 执行 敬佩 坚定 忍受 遭受 尽管 屈服 肝脏 获得"},
+            {"garden-4", "语文园地四", "花卉 玫瑰 牡丹 花蕾 茉莉 海棠"},
+            {"lesson-15", "第15课", "麻雀 悄悄 猛烈 无可奈何 身躯 掩护 紧张 浑身 搏斗 庞大 强大 力量 勇气"},
+            {"lesson-16", "第16课", "石级 发颤 年纪 奋力 猴子 纪念 笑呵呵 鼓舞"},
+            {"lesson-17", "第17课", "崇山峻岭 盘旋 扩建 修筑 平整 打仗 自然 当地 耗费 大量 智慧 工程 奇迹"},
+            {"lesson-18", "第18课", "柱子 栏杆 人物 神清气爽 建筑 耸立 半山腰 金碧辉煌 镜子 隐隐约约 游人 狮子 姿态"},
+            {"garden-5", "语文园地五", "陵寝 景观 丝绸"},
+            {"lesson-20", "第20课", "虽然 拳头 故意 神气 忙乱 锤子 助威 胳膊 纷纷 可笑 无缘无故"},
+            {"lesson-21", "第21课", "文艺 表演 角色 排练 主意 通情达理 充分 提示 演技 撤换 等候 哄堂大笑 垂头丧气"},
+            {"garden-6", "语文园地六", "韭菜 芥菜 辣椒 红薯 莲藕 芋头"},
+            {"lesson-24", "第24课", "主席 举行 心情 补充 激动 状态 奉献 运动员 训练 建设 勤劳 邀请"},
+            {"lesson-25", "第25课", "崛起 严肃 干脆 默默 若有所思 清晰 离开 随便 忘怀 非凡 惩处 训斥 燃烧 响亮"}
+    };
     private static final int VOICE_TASK_REQUEST = 201;
     private static final Pattern SUBJECT_PATTERN = Pattern.compile("^(语文|数学|英语|科学|道法|体育|音乐|美术|其他)[\\s：:、，,-]*(.*)$");
     private static final Pattern SUBJECT_ANYWHERE_PATTERN = Pattern.compile("(语文|数学|英语|科学|道法|体育|音乐|美术|其他)(?:作业)?");
@@ -95,11 +121,35 @@ public class MainActivity extends Activity {
     private SharedPreferences preferences;
     private JSONObject records;
     private JSONObject weekends;
+    private JSONObject dictationCustomWords;
     private String startDate;
     private String currentDate;
     private boolean loadingNote;
     private View mainPageView;
     private View historyPageView;
+    private View dictationPageView;
+
+    private Button dictationLessonButton;
+    private TextView dictationLessonCountView;
+    private TextView dictationLessonTitleView;
+    private LinearLayout dictationWordBank;
+    private LinearLayout dictationWordsContainer;
+    private EditText dictationWordInput;
+    private LinearLayout dictationHiddenWords;
+    private TextView dictationStatusView;
+    private TextView dictationTimingView;
+    private ProgressBar dictationProgressBar;
+    private TextView dictationProgressTextView;
+    private Button startDictationButton;
+    private Button stopDictationButton;
+    private int selectedDictationLessonIndex;
+    private TextToSpeech textToSpeech;
+    private boolean dictationTtsReady;
+    private boolean dictationRunning;
+    private List<String> activeDictationWords = new ArrayList<>();
+    private int activeDictationIndex;
+    private int activeDictationRepeat;
+    private String activeDictationUtteranceId;
 
     private TextView balanceView;
     private TextView periodView;
@@ -235,6 +285,7 @@ public class MainActivity extends Activity {
     private JSONObject taskFocusTask;
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
+    private final Runnable dictationNextWord = this::speakCurrentDictationWord;
     private final Runnable timerTick = new Runnable() {
         @Override
         public void run() {
@@ -273,9 +324,11 @@ public class MainActivity extends Activity {
         if (startDate.compareTo(todayIso()) > 0) startDate = todayIso();
         records = readRecords();
         weekends = readJson(KEY_WEEKENDS);
+        dictationCustomWords = readJson(KEY_DICTATION_CUSTOM);
         currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
 
         setContentView(buildScreen());
+        initializeTextToSpeech();
         renderAll();
         timerHandler.postDelayed(timerTick, 30000);
     }
@@ -287,11 +340,17 @@ public class MainActivity extends Activity {
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
         if (taskEntryDialog != null) taskEntryDialog.dismiss();
         if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
+        stopDictation(false, false);
+        if (textToSpeech != null) textToSpeech.shutdown();
         super.onDestroy();
     }
 
     @Override
     public void onBackPressed() {
+        if (dictationPageView != null && dictationPageView.getVisibility() == View.VISIBLE) {
+            showMainPage();
+            return;
+        }
         if (historyPageView != null && historyPageView.getVisibility() == View.VISIBLE) {
             showMainPage();
             return;
@@ -347,10 +406,14 @@ public class MainActivity extends Activity {
         mainPageView = scrollView;
         historyPageView = buildHistoryPage();
         historyPageView.setVisibility(View.GONE);
+        dictationPageView = buildDictationPage();
+        dictationPageView.setVisibility(View.GONE);
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         root.addView(mainPageView, pageParams);
         root.addView(historyPageView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(dictationPageView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return root;
     }
@@ -364,6 +427,10 @@ public class MainActivity extends Activity {
         titles.addView(eyebrow);
         titles.addView(text("🌟 作业小账本", 28, GREEN_DARK, true));
         row.addView(titles, weightedWrap(1));
+        Button dictation = smallButton("🔊 听写");
+        dictation.setOnClickListener(v -> showDictationPage());
+        row.addView(dictation);
+        row.addView(spaceHorizontal(6));
         Button settings = smallButton("设置");
         settings.setOnClickListener(v -> showStartDatePicker());
         row.addView(settings);
@@ -2755,6 +2822,416 @@ public class MainActivity extends Activity {
         return new TextView[]{dot, time, labelView};
     }
 
+    private View buildDictationPage() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(PAGE);
+        LinearLayout content = vertical();
+        content.setPadding(dp(16), dp(22), dp(16), dp(28));
+        scroll.addView(content, matchWrap());
+
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        Button back = new Button(this);
+        back.setText("‹");
+        back.setTextSize(26);
+        back.setTextColor(GREEN);
+        back.setAllCaps(false);
+        back.setMinHeight(0);
+        back.setMinimumHeight(0);
+        back.setBackground(rounded(Color.WHITE, 15, LINE, 1));
+        back.setOnClickListener(v -> showMainPage());
+        header.addView(back, fixed(dp(44), dp(44)));
+        header.addView(spaceHorizontal(13));
+        LinearLayout headerCopy = vertical();
+        headerCopy.addView(text("🔊 四上语文词语表", 10, GREEN, true));
+        headerCopy.addView(text("听写练习", 25, GREEN_DARK, true));
+        TextView cheer = text("选好课程，放下手机，认真听写吧。", 10, MUTED, false);
+        cheer.setPadding(0, dp(3), 0, 0);
+        headerCopy.addView(cheer);
+        header.addView(headerCopy, weightedWrap(1));
+        content.addView(header, matchWrap());
+        content.addView(space(16));
+
+        LinearLayout card = card();
+        LinearLayout lessonRow = horizontal();
+        lessonRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout lessonCopy = vertical();
+        lessonCopy.addView(text("选择课程", 10, MUTED, true));
+        dictationLessonButton = new Button(this);
+        dictationLessonButton.setText(DICTATION_LESSONS[0][1] + "  ▾");
+        dictationLessonButton.setTextSize(14);
+        dictationLessonButton.setTextColor(INK);
+        dictationLessonButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        dictationLessonButton.setAllCaps(false);
+        dictationLessonButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        dictationLessonButton.setPadding(dp(12), 0, dp(12), 0);
+        dictationLessonButton.setBackground(rounded(Color.WHITE, 11, LINE, 1));
+        dictationLessonButton.setOnClickListener(v -> showDictationLessonPicker());
+        LinearLayout.LayoutParams lessonButtonParams = matchFixed(dp(44));
+        lessonButtonParams.topMargin = dp(6);
+        lessonCopy.addView(dictationLessonButton, lessonButtonParams);
+        lessonRow.addView(lessonCopy, weightedWrap(1));
+        lessonRow.addView(spaceHorizontal(10));
+        dictationLessonCountView = text("0 个词语", 11, GREEN, true);
+        dictationLessonCountView.setPadding(dp(9), dp(6), dp(9), dp(6));
+        dictationLessonCountView.setBackground(rounded(GREEN_SOFT, 18, GREEN_SOFT, 0));
+        lessonRow.addView(dictationLessonCountView);
+        card.addView(lessonRow, matchWrap());
+
+        dictationWordBank = vertical();
+        dictationWordBank.setPadding(dp(15), dp(15), dp(15), dp(15));
+        dictationWordBank.setBackground(rounded(Color.rgb(248, 251, 255), 17, LINE, 1));
+        TextView bankKicker = text("本课词语", 10, GREEN, true);
+        bankKicker.setLetterSpacing(0.1f);
+        dictationWordBank.addView(bankKicker);
+        dictationLessonTitleView = text("第1课", 18, INK, true);
+        dictationWordBank.addView(dictationLessonTitleView);
+        TextView bankHelp = text("内置词语不可删除，自行添加的词语可以移除", 9, MUTED, false);
+        bankHelp.setPadding(0, dp(4), 0, dp(8));
+        dictationWordBank.addView(bankHelp);
+        dictationWordsContainer = vertical();
+        dictationWordBank.addView(dictationWordsContainer, matchWrap());
+
+        LinearLayout addRow = horizontal();
+        addRow.setGravity(Gravity.CENTER_VERTICAL);
+        dictationWordInput = new EditText(this);
+        dictationWordInput.setTextSize(13);
+        dictationWordInput.setTextColor(INK);
+        dictationWordInput.setHintTextColor(Color.rgb(150, 158, 172));
+        dictationWordInput.setHint("多个词语用空格或顿号分开");
+        dictationWordInput.setSingleLine(true);
+        dictationWordInput.setPadding(dp(11), 0, dp(11), 0);
+        dictationWordInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
+        addRow.addView(dictationWordInput, weightedFixed(1, dp(43)));
+        addRow.addView(spaceHorizontal(7));
+        Button addWords = smallButton("添加");
+        addWords.setOnClickListener(v -> addCustomDictationWords());
+        addRow.addView(addWords, fixed(dp(68), dp(43)));
+        LinearLayout.LayoutParams addRowParams = matchWrap();
+        addRowParams.topMargin = dp(11);
+        dictationWordBank.addView(addRow, addRowParams);
+        LinearLayout.LayoutParams bankParams = matchWrap();
+        bankParams.topMargin = dp(16);
+        card.addView(dictationWordBank, bankParams);
+
+        dictationHiddenWords = vertical();
+        dictationHiddenWords.setGravity(Gravity.CENTER);
+        dictationHiddenWords.setPadding(dp(18), dp(28), dp(18), dp(28));
+        dictationHiddenWords.setBackground(rounded(Color.rgb(242, 247, 255), 17, Color.rgb(188, 209, 248), 1));
+        TextView hiddenIcon = text("🙈", 34, INK, false);
+        hiddenIcon.setGravity(Gravity.CENTER);
+        dictationHiddenWords.addView(hiddenIcon);
+        TextView hiddenTitle = text("词语已经藏起来了", 16, INK, true);
+        hiddenTitle.setGravity(Gravity.CENTER);
+        hiddenTitle.setPadding(0, dp(7), 0, 0);
+        dictationHiddenWords.addView(hiddenTitle);
+        TextView hiddenHelp = text("专心听，不偷看，写完后再核对。", 10, MUTED, false);
+        hiddenHelp.setGravity(Gravity.CENTER);
+        hiddenHelp.setPadding(0, dp(4), 0, 0);
+        dictationHiddenWords.addView(hiddenHelp);
+        LinearLayout.LayoutParams hiddenParams = matchFixed(dp(170));
+        hiddenParams.topMargin = dp(16);
+        card.addView(dictationHiddenWords, hiddenParams);
+
+        LinearLayout practice = vertical();
+        practice.setPadding(dp(16), dp(16), dp(16), dp(16));
+        practice.setBackground(rounded(Color.rgb(237, 244, 255), 17, Color.rgb(191, 212, 251), 1));
+        TextView practiceKicker = text("听写进度", 10, GREEN, true);
+        practiceKicker.setLetterSpacing(0.1f);
+        practice.addView(practiceKicker);
+        dictationStatusView = text("准备好后开始听写", 17, INK, true);
+        practice.addView(dictationStatusView);
+        dictationTimingView = text("每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。", 10, MUTED, false);
+        dictationTimingView.setPadding(0, dp(5), 0, 0);
+        practice.addView(dictationTimingView);
+        LinearLayout progressRow = horizontal();
+        progressRow.setGravity(Gravity.CENTER_VERTICAL);
+        dictationProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        dictationProgressBar.setMax(100);
+        dictationProgressBar.setProgressTintList(ColorStateList.valueOf(GREEN));
+        dictationProgressBar.setProgressBackgroundTintList(ColorStateList.valueOf(Color.rgb(220, 232, 251)));
+        progressRow.addView(dictationProgressBar, weightedFixed(1, dp(10)));
+        progressRow.addView(spaceHorizontal(10));
+        dictationProgressTextView = text("0 / 0", 12, GREEN, true);
+        dictationProgressTextView.setGravity(Gravity.END);
+        progressRow.addView(dictationProgressTextView, fixed(dp(62), dp(30)));
+        LinearLayout.LayoutParams progressParams = matchWrap();
+        progressParams.topMargin = dp(12);
+        practice.addView(progressRow, progressParams);
+        LinearLayout actions = horizontal();
+        startDictationButton = new Button(this);
+        startDictationButton.setText("开始听写");
+        startDictationButton.setTextSize(13);
+        startDictationButton.setTextColor(Color.WHITE);
+        startDictationButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        startDictationButton.setAllCaps(false);
+        startDictationButton.setBackground(rounded(GREEN, 12, GREEN, 0));
+        startDictationButton.setOnClickListener(v -> startDictation());
+        actions.addView(startDictationButton, weightedFixed(1, dp(45)));
+        actions.addView(spaceHorizontal(7));
+        stopDictationButton = new Button(this);
+        stopDictationButton.setText("停止听写");
+        stopDictationButton.setTextSize(13);
+        stopDictationButton.setTextColor(RED);
+        stopDictationButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        stopDictationButton.setAllCaps(false);
+        stopDictationButton.setBackground(rounded(RED_SOFT, 12, Color.rgb(219, 175, 169), 1));
+        stopDictationButton.setOnClickListener(v -> stopDictation(false, true));
+        actions.addView(stopDictationButton, weightedFixed(1, dp(45)));
+        LinearLayout.LayoutParams actionsParams = matchWrap();
+        actionsParams.topMargin = dp(12);
+        practice.addView(actions, actionsParams);
+        LinearLayout.LayoutParams practiceParams = matchWrap();
+        practiceParams.topMargin = dp(16);
+        card.addView(practice, practiceParams);
+
+        content.addView(card, matchWrap());
+        renderDictationPage();
+        return scroll;
+    }
+
+    private String selectedDictationLessonId() {
+        return DICTATION_LESSONS[selectedDictationLessonIndex][0];
+    }
+
+    private JSONArray customWordsForSelectedLesson() {
+        JSONArray words = dictationCustomWords.optJSONArray(selectedDictationLessonId());
+        return words == null ? new JSONArray() : words;
+    }
+
+    private List<String> dictationWordsForSelectedLesson() {
+        List<String> words = new ArrayList<>();
+        Collections.addAll(words, DICTATION_LESSONS[selectedDictationLessonIndex][2].split(" "));
+        JSONArray custom = customWordsForSelectedLesson();
+        for (int index = 0; index < custom.length(); index++) {
+            String word = custom.optString(index, "").trim();
+            if (!word.isEmpty() && !words.contains(word)) words.add(word);
+        }
+        return words;
+    }
+
+    private void addDictationWordRow(String word, int number, boolean custom, int customIndex) {
+        LinearLayout row = horizontal();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(10), dp(7), dp(9), dp(7));
+        row.setBackground(rounded(custom ? Color.rgb(240, 251, 247) : Color.WHITE, 12,
+                custom ? Color.rgb(168, 220, 201) : Color.rgb(199, 216, 245), 1));
+        TextView badge = text(String.valueOf(number), 10, custom ? Color.rgb(55, 126, 104) : GREEN, true);
+        badge.setGravity(Gravity.CENTER);
+        row.addView(badge, fixed(dp(27), dp(30)));
+        TextView wordView = text(word + (custom ? "  ·  自定义" : ""), 13, INK, true);
+        row.addView(wordView, weightedWrap(1));
+        if (custom) {
+            Button remove = textButton("删除");
+            remove.setTextColor(Color.rgb(55, 126, 104));
+            remove.setOnClickListener(v -> removeCustomDictationWord(customIndex));
+            row.addView(remove, fixed(dp(58), dp(36)));
+        }
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(6);
+        dictationWordsContainer.addView(row, params);
+    }
+
+    private void renderDictationPage() {
+        if (dictationLessonButton == null) return;
+        String[] lesson = DICTATION_LESSONS[selectedDictationLessonIndex];
+        List<String> allWords = dictationWordsForSelectedLesson();
+        JSONArray custom = customWordsForSelectedLesson();
+        dictationLessonButton.setText(lesson[1] + "  ▾");
+        dictationLessonButton.setEnabled(!dictationRunning);
+        dictationLessonTitleView.setText(lesson[1]);
+        dictationLessonCountView.setText(allWords.size() + " 个词语");
+        dictationWordsContainer.removeAllViews();
+        String[] builtIn = lesson[2].split(" ");
+        for (int index = 0; index < builtIn.length; index++) {
+            addDictationWordRow(builtIn[index], index + 1, false, -1);
+        }
+        for (int index = 0; index < custom.length(); index++) {
+            String word = custom.optString(index, "").trim();
+            if (!word.isEmpty()) addDictationWordRow(word, builtIn.length + index + 1, true, index);
+        }
+        dictationWordBank.setVisibility(dictationRunning ? View.GONE : View.VISIBLE);
+        dictationHiddenWords.setVisibility(dictationRunning ? View.VISIBLE : View.GONE);
+        startDictationButton.setVisibility(dictationRunning ? View.GONE : View.VISIBLE);
+        stopDictationButton.setVisibility(dictationRunning ? View.VISIBLE : View.GONE);
+        if (!dictationRunning) {
+            dictationStatusView.setText("准备好后开始听写");
+            dictationTimingView.setText("每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。");
+            setDictationProgress(0, allWords.size(), -1);
+        }
+    }
+
+    private void showDictationLessonPicker() {
+        if (dictationRunning) return;
+        String[] labels = new String[DICTATION_LESSONS.length];
+        for (int index = 0; index < DICTATION_LESSONS.length; index++) labels[index] = DICTATION_LESSONS[index][1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("选择听写课程")
+                .setSingleChoiceItems(labels, selectedDictationLessonIndex, null)
+                .setNegativeButton("取消", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getListView().setOnItemClickListener((parent, view, position, id) -> {
+            selectedDictationLessonIndex = position;
+            renderDictationPage();
+            dialog.dismiss();
+        }));
+        dialog.show();
+    }
+
+    private void addCustomDictationWords() {
+        String value = dictationWordInput.getText().toString().trim();
+        if (value.isEmpty()) {
+            toast("请先输入要添加的词语");
+            return;
+        }
+        List<String> allWords = dictationWordsForSelectedLesson();
+        JSONArray custom = customWordsForSelectedLesson();
+        int added = 0;
+        for (String raw : value.split("[\\s,，、;；]+")) {
+            String word = raw.trim();
+            if (word.isEmpty() || allWords.contains(word)) continue;
+            custom.put(word);
+            allWords.add(word);
+            added++;
+        }
+        if (added == 0) {
+            toast("这些词语已经在本课词语表中");
+            return;
+        }
+        put(dictationCustomWords, selectedDictationLessonId(), custom);
+        preferences.edit().putString(KEY_DICTATION_CUSTOM, dictationCustomWords.toString()).apply();
+        dictationWordInput.setText("");
+        renderDictationPage();
+        toast("已添加 " + added + " 个词语");
+    }
+
+    private void removeCustomDictationWord(int customIndex) {
+        JSONArray custom = customWordsForSelectedLesson();
+        if (customIndex < 0 || customIndex >= custom.length()) return;
+        custom.remove(customIndex);
+        if (custom.length() == 0) dictationCustomWords.remove(selectedDictationLessonId());
+        else put(dictationCustomWords, selectedDictationLessonId(), custom);
+        preferences.edit().putString(KEY_DICTATION_CUSTOM, dictationCustomWords.toString()).apply();
+        renderDictationPage();
+        toast("已移除自定义词语");
+    }
+
+    private void initializeTextToSpeech() {
+        textToSpeech = new TextToSpeech(this, status -> {
+            if (status != TextToSpeech.SUCCESS || textToSpeech == null) return;
+            int language = textToSpeech.setLanguage(Locale.CHINA);
+            dictationTtsReady = language != TextToSpeech.LANG_MISSING_DATA
+                    && language != TextToSpeech.LANG_NOT_SUPPORTED;
+            textToSpeech.setSpeechRate(0.82f);
+            textToSpeech.setPitch(1f);
+            textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override public void onStart(String utteranceId) { }
+                @Override public void onDone(String utteranceId) {
+                    runOnUiThread(() -> handleDictationUtteranceDone(utteranceId));
+                }
+                @Override public void onError(String utteranceId) {
+                    runOnUiThread(() -> {
+                        if (!dictationRunning || !utteranceId.equals(activeDictationUtteranceId)) return;
+                        stopDictation(false, false);
+                        toast("朗读服务暂时不可用，请检查系统语音设置");
+                    });
+                }
+            });
+        });
+    }
+
+    private void setDictationProgress(int completed, int total, int current) {
+        int percent = total == 0 ? 0 : Math.round(completed * 100f / total);
+        dictationProgressBar.setProgress(percent);
+        dictationProgressTextView.setText((current < 0 ? completed : current) + " / " + total);
+    }
+
+    private void startDictation() {
+        if (!dictationTtsReady || textToSpeech == null) {
+            toast("系统语音服务正在准备，稍后再试");
+            return;
+        }
+        List<String> words = dictationWordsForSelectedLesson();
+        if (words.isEmpty()) {
+            toast("请先添加听写词语");
+            return;
+        }
+        stopDictation(false, false);
+        activeDictationWords = new ArrayList<>(words);
+        activeDictationIndex = 0;
+        activeDictationRepeat = 0;
+        dictationRunning = true;
+        renderDictationPage();
+        speakCurrentDictationWord();
+    }
+
+    private void speakCurrentDictationWord() {
+        if (!dictationRunning || textToSpeech == null || activeDictationIndex >= activeDictationWords.size()) return;
+        String word = activeDictationWords.get(activeDictationIndex);
+        int repeatNumber = activeDictationRepeat + 1;
+        dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在朗读第 " + repeatNumber + " 遍");
+        dictationTimingView.setText(repeatNumber == 1
+                ? "听清楚，1秒后会再读一遍。"
+                : activeDictationIndex + 1 >= activeDictationWords.size()
+                ? "这是最后一个词，写完就可以核对啦。"
+                : "写下这个词，2秒后进入下一个。");
+        setDictationProgress(activeDictationIndex, activeDictationWords.size(), activeDictationIndex + 1);
+        activeDictationUtteranceId = "dictation-" + System.nanoTime();
+        int result = textToSpeech.speak(word, TextToSpeech.QUEUE_FLUSH, null, activeDictationUtteranceId);
+        if (result == TextToSpeech.ERROR) {
+            stopDictation(false, false);
+            toast("朗读服务暂时不可用，请检查系统语音设置");
+        }
+    }
+
+    private void handleDictationUtteranceDone(String utteranceId) {
+        if (!dictationRunning || !utteranceId.equals(activeDictationUtteranceId)) return;
+        timerHandler.removeCallbacks(dictationNextWord);
+        if (activeDictationRepeat == 0) {
+            activeDictationRepeat = 1;
+            dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 1秒后再读一遍");
+            timerHandler.postDelayed(dictationNextWord, 1000);
+            return;
+        }
+        if (activeDictationIndex + 1 >= activeDictationWords.size()) {
+            stopDictation(true, true);
+            return;
+        }
+        activeDictationIndex++;
+        activeDictationRepeat = 0;
+        dictationStatusView.setText("已完成 " + activeDictationIndex + " 个 · 2秒后下一个词语");
+        setDictationProgress(activeDictationIndex, activeDictationWords.size(), -1);
+        timerHandler.postDelayed(dictationNextWord, 2000);
+    }
+
+    private void stopDictation(boolean completed, boolean notify) {
+        if (!dictationRunning && activeDictationWords.isEmpty()) return;
+        int total = activeDictationWords.size();
+        int completedCount = completed ? total : activeDictationIndex;
+        dictationRunning = false;
+        timerHandler.removeCallbacks(dictationNextWord);
+        if (textToSpeech != null) textToSpeech.stop();
+        renderDictationPage();
+        dictationStatusView.setText(completed ? "听写完成，共 " + total + " 个词语！" : "听写已停止");
+        dictationTimingView.setText(completed ? "太棒了，现在可以打开词语表自己核对。" : "可以重新选择课程，准备好后再次开始。");
+        setDictationProgress(completedCount, total, -1);
+        activeDictationWords.clear();
+        activeDictationUtteranceId = null;
+        if (completed && notify) toast("听写完成，认真核对一下吧");
+    }
+
+    private void showDictationPage() {
+        dismissTaskEntryDialog();
+        dismissTaskFocusDialog();
+        if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) weekendTaskPlanDialog.dismiss();
+        mainPageView.setVisibility(View.GONE);
+        historyPageView.setVisibility(View.GONE);
+        dictationPageView.setVisibility(View.VISIBLE);
+        renderDictationPage();
+        if (dictationPageView instanceof ScrollView) ((ScrollView) dictationPageView).scrollTo(0, 0);
+    }
+
     private View buildHistoryPage() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -2794,14 +3271,18 @@ public class MainActivity extends Activity {
     }
 
     private void showHistoryPage() {
+        stopDictation(false, false);
         renderHistoryAndSummary();
         mainPageView.setVisibility(View.GONE);
+        dictationPageView.setVisibility(View.GONE);
         historyPageView.setVisibility(View.VISIBLE);
         if (historyPageView instanceof ScrollView) ((ScrollView) historyPageView).scrollTo(0, 0);
     }
 
     private void showMainPage() {
+        stopDictation(false, false);
         historyPageView.setVisibility(View.GONE);
+        dictationPageView.setVisibility(View.GONE);
         mainPageView.setVisibility(View.VISIBLE);
         if (mainPageView instanceof ScrollView) ((ScrollView) mainPageView).scrollTo(0, 0);
     }
