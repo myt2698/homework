@@ -371,7 +371,7 @@
       + activeWeekends.filter(([, weekend]) => weekend.penaltyConfirmed && !weekend.allDoneDate).length * 0.5;
     elements.balance.textContent = total < 0 ? `− ¥ ${Math.abs(total).toFixed(2)}` : `¥ ${total.toFixed(2)}`;
     elements.balance.style.color = total < 0 ? "#ffd5ce" : "#f9fff9";
-    elements.periodLabel.textContent = `统计开始于 ${formatDate(state.startDate)}`;
+    elements.periodLabel.textContent = `从 ${formatDate(state.startDate)} 开始记录成长`;
     elements.recordDays.textContent = String(completed.length);
     elements.rewardDays.textContent = String(completed.filter((result) => result.amount > 0).length);
     elements.deductionTotal.textContent = `¥${deductions.toFixed(2)}`;
@@ -600,7 +600,7 @@
     const record = currentRecord() || {};
     const weekendMode = Boolean(weekendKeyFor(date));
     elements.recordHeading.textContent = date === todayIso()
-      ? "今天的准备与作业"
+      ? "今天也一起加油吧！"
       : `${formatDate(date)}的记录`;
     const key = weekendKeyFor(date);
     elements.ledgerButton.hidden = Boolean(key && date !== key);

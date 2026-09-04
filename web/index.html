@@ -3,16 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f4ed">
+  <meta name="theme-color" content="#f4f8ff">
   <title>作业小账本</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">HOMEWORK LEDGER</p>
-        <h1>作业小账本</h1>
+      <div class="brand">
+        <span class="brand-mascot" aria-hidden="true">🌟</span>
+        <div>
+          <p class="eyebrow">每天进步一点点</p>
+          <h1>作业小账本</h1>
+          <p class="hero-cheer">认真完成，也别忘了开心和休息呀！</p>
+        </div>
       </div>
       <button class="icon-button" id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsPanel">
         <span aria-hidden="true">⚙</span>
@@ -34,22 +38,22 @@
 
     <section class="summary-card" aria-labelledby="balanceLabel">
       <div class="summary-main">
-        <p id="balanceLabel">当前累计</p>
+        <p id="balanceLabel">我的成长能量 ⭐</p>
         <p class="balance" id="balance">¥ 0.00</p>
         <p class="period" id="periodLabel">从今天开始</p>
       </div>
       <div class="summary-stats">
         <div>
           <strong id="recordDays">0</strong>
-          <span>完成天数</span>
+          <span>认真完成</span>
         </div>
         <div>
           <strong id="rewardDays">0</strong>
-          <span>奖励天数</span>
+          <span>收获奖励</span>
         </div>
         <div>
           <strong id="deductionTotal">¥0.00</strong>
-          <span>累计扣款</span>
+          <span>需要加油</span>
         </div>
       </div>
     </section>
@@ -68,7 +72,7 @@
     <section class="card record-card">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">今日流程</p>
+          <p class="section-kicker">🚀 今日小目标</p>
           <h2 id="recordHeading">今天进行到哪里了？</h2>
         </div>
       </div>
@@ -86,9 +90,9 @@
       <div class="task-panel" id="taskPanel">
         <div class="task-panel-heading">
           <div>
-            <p class="section-kicker">作业清单</p>
-            <h3>先收齐，再一项一项做</h3>
-            <p>确认后每次只能进行一项，单项速度不参与奖罚。</p>
+            <p class="section-kicker">📚 作业清单</p>
+            <h3>选一项，轻松开始吧</h3>
+            <p>一次专心做一项，每完成一项都很棒！</p>
           </div>
           <strong id="taskSummary">0 项</strong>
         </div>
@@ -112,7 +116,7 @@
         </div>
 
         <div class="active-task-banner" id="activeTaskBanner" hidden>
-          <span>现在只做这一项</span>
+          <span>✨ 正在专心完成</span>
           <strong id="activeTaskTitle"></strong>
           <small id="activeTaskTime"></small>
         </div>
@@ -187,19 +191,19 @@
     <section class="card history-card">
       <div class="section-heading compact">
         <div>
-          <p class="section-kicker">历史记录</p>
-          <h2>最近的表现</h2>
+          <p class="section-kicker">🌈 成长足迹</p>
+          <h2>看看最近的进步</h2>
         </div>
       </div>
       <div id="historyList" class="history-list"></div>
       <div id="emptyState" class="empty-state">
         <span aria-hidden="true">✓</span>
-        <p>还没有记录</p>
-        <small>完成第一份作业清单后，这里会出现记录。</small>
+        <p>新的成长旅程要开始啦</p>
+        <small>完成第一份作业清单后，这里会留下你的进步。</small>
       </div>
     </section>
 
-    <footer>数据只保存在当前浏览器中，不会上传。</footer>
+    <footer>🌱 每天完成一点点，就会越来越厉害 · 数据只保存在当前浏览器中</footer>
   </main>
 
   <div class="focus-modal" id="focusModal" role="dialog" aria-modal="true" aria-labelledby="focusModalTitle" hidden>

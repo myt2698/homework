@@ -63,18 +63,18 @@ public class MainActivity extends Activity {
             "(^|[\\s；;])(?:（\\s*(\\d{1,2})\\s*）|\\(?(\\d{1,2})\\s*[.．、)])\\s*",
             Pattern.MULTILINE);
 
-    private static final int PAGE = Color.rgb(247, 244, 237);
-    private static final int SURFACE = Color.rgb(255, 253, 249);
-    private static final int INK = Color.rgb(37, 39, 33);
-    private static final int MUTED = Color.rgb(115, 117, 104);
-    private static final int LINE = Color.rgb(231, 225, 214);
-    private static final int GREEN = Color.rgb(47, 109, 85);
-    private static final int GREEN_DARK = Color.rgb(39, 95, 75);
-    private static final int GREEN_SOFT = Color.rgb(232, 242, 235);
-    private static final int AMBER = Color.rgb(155, 100, 42);
-    private static final int AMBER_SOFT = Color.rgb(248, 236, 217);
-    private static final int RED = Color.rgb(169, 70, 63);
-    private static final int RED_SOFT = Color.rgb(248, 231, 228);
+    private static final int PAGE = Color.rgb(244, 248, 255);
+    private static final int SURFACE = Color.WHITE;
+    private static final int INK = Color.rgb(36, 50, 74);
+    private static final int MUTED = Color.rgb(104, 119, 146);
+    private static final int LINE = Color.rgb(220, 231, 245);
+    private static final int GREEN = Color.rgb(75, 130, 239);
+    private static final int GREEN_DARK = Color.rgb(52, 120, 229);
+    private static final int GREEN_SOFT = Color.rgb(234, 242, 255);
+    private static final int AMBER = Color.rgb(238, 155, 33);
+    private static final int AMBER_SOFT = Color.rgb(255, 242, 207);
+    private static final int RED = Color.rgb(221, 88, 104);
+    private static final int RED_SOFT = Color.rgb(255, 235, 238);
 
     private static final class Result {
         final String label;
@@ -305,7 +305,7 @@ public class MainActivity extends Activity {
         content.addView(buildHistoryCard());
         content.addView(space(16));
 
-        TextView footer = text("数据只保存在这台手机中，不会上传。", 11, MUTED, false);
+        TextView footer = text("🌱 每天完成一点点，就会越来越厉害\n数据只保存在这台手机中", 11, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         content.addView(footer, matchWrap());
         return scrollView;
@@ -315,10 +315,13 @@ public class MainActivity extends Activity {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout titles = vertical();
-        TextView eyebrow = text("HOMEWORK LEDGER", 10, GREEN, true);
+        TextView eyebrow = text("每天进步一点点", 10, GREEN, true);
         eyebrow.setLetterSpacing(0.12f);
         titles.addView(eyebrow);
-        titles.addView(text("作业小账本", 28, INK, true));
+        titles.addView(text("🌟 作业小账本", 28, GREEN_DARK, true));
+        TextView cheer = text("认真完成，也别忘了开心和休息呀！", 10, MUTED, false);
+        cheer.setPadding(0, dp(3), 0, 0);
+        titles.addView(cheer);
         row.addView(titles, weightedWrap(1));
         Button settings = smallButton("设置");
         settings.setOnClickListener(v -> showStartDatePicker());
@@ -330,7 +333,7 @@ public class MainActivity extends Activity {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(14), dp(11), dp(12), dp(11));
-        row.setBackground(rounded(SURFACE, 15, LINE, 1));
+        row.setBackground(rounded(SURFACE, 19, LINE, 1));
         LinearLayout copy = vertical();
         copy.addView(text("当前查看", 10, MUTED, false));
         viewModeView = text("平日记录", 13, INK, true);
@@ -349,8 +352,8 @@ public class MainActivity extends Activity {
     private View buildSummaryCard() {
         LinearLayout card = vertical();
         card.setPadding(dp(24), dp(26), dp(24), dp(22));
-        card.setBackground(rounded(GREEN_DARK, 24, GREEN_DARK, 0));
-        card.addView(text("当前累计", 14, Color.argb(195, 255, 255, 255), false));
+        card.setBackground(rounded(GREEN_DARK, 28, GREEN_DARK, 0));
+        card.addView(text("我的成长能量 ⭐", 14, Color.argb(215, 255, 255, 255), true));
         balanceView = text("¥ 0.00", 44, Color.WHITE, true);
         card.addView(balanceView);
         periodView = text("从今天开始", 12, Color.argb(170, 255, 255, 255), false);
@@ -358,9 +361,9 @@ public class MainActivity extends Activity {
         card.addView(space(24));
 
         LinearLayout stats = horizontal();
-        completedDaysView = addStat(stats, "0", "完成天数");
-        rewardDaysView = addStat(stats, "0", "奖励天数");
-        deductionView = addStat(stats, "¥0.00", "累计扣款");
+        completedDaysView = addStat(stats, "0", "认真完成");
+        rewardDaysView = addStat(stats, "0", "收获奖励");
+        deductionView = addStat(stats, "¥0.00", "需要加油");
         card.addView(stats, matchWrap());
         return card;
     }
@@ -588,7 +591,7 @@ public class MainActivity extends Activity {
 
     private View buildProcessCard() {
         LinearLayout card = card();
-        TextView kicker = text("今日流程", 10, GREEN, true);
+        TextView kicker = text("🚀 今日小目标", 10, GREEN, true);
         kicker.setLetterSpacing(0.12f);
         card.addView(kicker);
         recordHeadingView = text("今天进行到哪里了？", 21, INK, true);
@@ -724,8 +727,8 @@ public class MainActivity extends Activity {
         TextView kicker = text("作业清单", 10, GREEN, true);
         kicker.setLetterSpacing(0.1f);
         copy.addView(kicker);
-        copy.addView(text("先收齐，再一项一项做", 17, INK, true));
-        TextView tip = text("确认后每次只能进行一项，单项速度不参与奖罚。", 10, MUTED, false);
+        copy.addView(text("选一项，轻松开始吧", 17, INK, true));
+        TextView tip = text("一次专心做一项，每完成一项都很棒！", 10, MUTED, false);
         tip.setPadding(0, dp(4), 0, 0);
         copy.addView(tip);
         head.addView(copy, weightedWrap(1));
@@ -764,7 +767,7 @@ public class MainActivity extends Activity {
         voice.setTextColor(GREEN);
         voice.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         voice.setAllCaps(false);
-        voice.setBackground(rounded(GREEN_SOFT, 11, Color.rgb(155, 189, 171), 1));
+        voice.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
         voice.setOnClickListener(v -> startVoiceTaskInput());
         taskEntryPanel.addView(voice, matchFixed(dp(46)));
         TextView voiceTip = text("可以连续说：语文……，数学……，英语……", 10, MUTED, false);
@@ -811,7 +814,7 @@ public class MainActivity extends Activity {
         activeTaskPanel = vertical();
         activeTaskPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
         activeTaskPanel.setBackground(rounded(GREEN, 14, GREEN, 0));
-        activeTaskPanel.addView(text("现在只做这一项", 10, Color.argb(190, 255, 255, 255), false));
+        activeTaskPanel.addView(text("✨ 正在专心完成", 10, Color.argb(210, 255, 255, 255), true));
         activeTaskTitleView = text("", 16, Color.WHITE, true);
         activeTaskTitleView.setPadding(0, dp(3), 0, 0);
         activeTaskPanel.addView(activeTaskTitleView);
@@ -844,7 +847,7 @@ public class MainActivity extends Activity {
         taskConfirmButton.setTextColor(GREEN);
         taskConfirmButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         taskConfirmButton.setAllCaps(false);
-        taskConfirmButton.setBackground(rounded(GREEN_SOFT, 11, Color.rgb(155, 189, 171), 1));
+        taskConfirmButton.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
         taskConfirmButton.setOnClickListener(v -> toggleTaskListConfirmation());
         panel.addView(taskConfirmButton, matchFixed(dp(43)));
 
@@ -1163,7 +1166,7 @@ public class MainActivity extends Activity {
         TextView started = text("开始时间  " + task.optString("startedAt", "--:--"), 12, MUTED, false);
         started.setGravity(Gravity.CENTER);
         content.addView(started);
-        TextView reminder = text("现在只做这一项，认真完成后再看下一项。", 11, MUTED, false);
+        TextView reminder = text("专心完成这一项，你已经开始得很棒啦！", 11, MUTED, false);
         reminder.setGravity(Gravity.CENTER);
         reminder.setPadding(0, dp(16), 0, dp(4));
         content.addView(reminder);
@@ -1533,7 +1536,7 @@ public class MainActivity extends Activity {
     private void addWeekendPlanSummaryRow(String title, String status, boolean today) {
         LinearLayout row = vertical();
         row.setPadding(dp(12), dp(10), dp(12), dp(10));
-        row.setBackground(rounded(today ? GREEN_SOFT : Color.WHITE, 13, today ? Color.rgb(155, 189, 171) : LINE, 1));
+        row.setBackground(rounded(today ? GREEN_SOFT : Color.WHITE, 15, today ? Color.rgb(156, 188, 245) : LINE, 1));
         row.addView(text(title, 13, INK, true));
         TextView statusView = text(status, 10, MUTED, false);
         statusView.setPadding(0, dp(3), 0, 0);
@@ -1876,15 +1879,15 @@ public class MainActivity extends Activity {
 
     private View buildHistoryCard() {
         LinearLayout card = card();
-        TextView kicker = text("历史记录", 10, GREEN, true);
+        TextView kicker = text("🌈 成长足迹", 10, GREEN, true);
         kicker.setLetterSpacing(0.12f);
         card.addView(kicker);
-        TextView title = text("最近的表现", 21, INK, true);
+        TextView title = text("看看最近的进步", 21, INK, true);
         title.setPadding(0, dp(3), 0, dp(8));
         card.addView(title);
         historyList = vertical();
         card.addView(historyList, matchWrap());
-        emptyHistoryView = text("✓\n还没有记录\n完成第一份作业清单后会显示在这里。", 13, MUTED, false);
+        emptyHistoryView = text("🌟\n新的成长旅程要开始啦\n完成第一份作业后，这里会留下你的进步。", 13, MUTED, false);
         emptyHistoryView.setGravity(Gravity.CENTER);
         emptyHistoryView.setLineSpacing(dp(4), 1f);
         emptyHistoryView.setPadding(dp(6), dp(28), dp(6), dp(20));
@@ -2114,7 +2117,7 @@ public class MainActivity extends Activity {
         button.setMinHeight(0);
         button.setMinimumHeight(0);
         int fill = primary ? GREEN : danger ? RED_SOFT : GREEN_SOFT;
-        int stroke = primary ? GREEN : danger ? Color.rgb(219, 175, 169) : Color.rgb(155, 189, 171);
+        int stroke = primary ? GREEN : danger ? Color.rgb(238, 166, 176) : Color.rgb(156, 188, 245);
         button.setBackground(rounded(fill, 11, stroke, 1));
         button.setOnClickListener(v -> runnable.run());
         LinearLayout.LayoutParams params = matchFixed(dp(44));
@@ -2124,14 +2127,14 @@ public class MainActivity extends Activity {
 
     private void styleWeekendCheck(LinearLayout card, TextView check, boolean selected) {
         card.setBackground(rounded(selected ? GREEN_SOFT : Color.WHITE, 14,
-                selected ? Color.rgb(155, 189, 171) : LINE, 1));
+                selected ? Color.rgb(156, 188, 245) : LINE, 1));
         check.setTextColor(selected ? Color.WHITE : Color.TRANSPARENT);
         check.setBackground(rounded(selected ? GREEN : PAGE, 18, selected ? GREEN : LINE, 1));
     }
 
     private void styleMilestone(LinearLayout card, TextView badge, boolean done, boolean failed) {
         int fill = failed ? RED_SOFT : done ? GREEN_SOFT : PAGE;
-        int stroke = failed ? Color.rgb(219, 175, 169) : done ? Color.rgb(155, 189, 171) : LINE;
+        int stroke = failed ? Color.rgb(238, 166, 176) : done ? Color.rgb(156, 188, 245) : LINE;
         int accent = failed ? RED : done ? GREEN : MUTED;
         card.setBackground(rounded(fill, 13, stroke, 1));
         badge.setTextColor(done || failed ? Color.WHITE : MUTED);
@@ -2283,7 +2286,7 @@ public class MainActivity extends Activity {
         boolean tasksConfirmed = taskListConfirmed();
         boolean tasksDone = allTasksDone();
         recordHeadingView.setText(currentDate.equals(todayIso())
-                ? "今天的准备与作业" : formatShortDate(currentDate) + "的记录");
+                ? "今天也一起加油吧！" : formatShortDate(currentDate) + "的记录");
         finishLabelView.setText(weekendMode ? "结束今日时段" : "全部完成");
         startLabelView.setText(weekendMode ? "开始本段作业" : "开始饭前作业");
         dinnerLabelView.setText(weekendMode ? "暂停休息" : "吃饭暂停");
@@ -2292,7 +2295,7 @@ public class MainActivity extends Activity {
         List<String> selectedSports = sportActivities(record);
         boolean sportDone = !selectedSports.isEmpty();
         sportCard.setBackground(rounded(sportDone ? GREEN_SOFT : Color.WHITE, 15,
-                sportDone ? Color.rgb(155, 189, 171) : LINE, 1));
+                sportDone ? Color.rgb(156, 188, 245) : LINE, 1));
         sportCheckView.setTextColor(sportDone ? Color.WHITE : Color.TRANSPARENT);
         sportCheckView.setBackground(rounded(sportDone ? GREEN : PAGE, 20, sportDone ? GREEN : LINE, 1));
         sportStatusView.setText(sportDone
@@ -2427,7 +2430,7 @@ public class MainActivity extends Activity {
                 ? String.format(Locale.CHINA, "− ¥ %.2f", Math.abs(total))
                 : String.format(Locale.CHINA, "¥ %.2f", total));
         balanceView.setTextColor(total < 0 ? Color.rgb(255, 213, 206) : Color.WHITE);
-        periodView.setText("统计开始于 " + formatShortDate(startDate));
+        periodView.setText("从 " + formatShortDate(startDate) + " 开始记录成长");
         completedDaysView.setText(String.valueOf(completed));
         rewardDaysView.setText(String.valueOf(rewarded));
         deductionView.setText(String.format(Locale.CHINA, "¥%.2f", deductions));
@@ -2984,7 +2987,7 @@ public class MainActivity extends Activity {
     }
 
     private void stylePrep(LinearLayout card, TextView check, boolean selected) {
-        card.setBackground(rounded(selected ? GREEN_SOFT : Color.WHITE, 15, selected ? Color.rgb(155, 189, 171) : LINE, 1));
+        card.setBackground(rounded(selected ? GREEN_SOFT : Color.WHITE, 17, selected ? Color.rgb(156, 188, 245) : LINE, 1));
         check.setTextColor(selected ? Color.WHITE : Color.TRANSPARENT);
         check.setBackground(rounded(selected ? GREEN : PAGE, 20, selected ? GREEN : LINE, 1));
     }
@@ -3003,7 +3006,7 @@ public class MainActivity extends Activity {
         button.setAllCaps(false);
         button.setMinHeight(0);
         button.setMinimumHeight(0);
-        button.setBackground(rounded(primary ? GREEN : GREEN_SOFT, 12, primary ? GREEN : Color.rgb(155, 189, 171), 1));
+        button.setBackground(rounded(primary ? GREEN : GREEN_SOFT, 15, primary ? GREEN : Color.rgb(156, 188, 245), 1));
         button.setOnClickListener(v -> runnable.run());
         LinearLayout.LayoutParams params = weightedFixed(1, dp(46));
         if (actionContainer.getChildCount() > 0) params.leftMargin = dp(9);
@@ -3045,7 +3048,7 @@ public class MainActivity extends Activity {
     private LinearLayout card() {
         LinearLayout card = vertical();
         card.setPadding(dp(18), dp(22), dp(18), dp(20));
-        card.setBackground(rounded(SURFACE, 22, LINE, 1));
+        card.setBackground(rounded(SURFACE, 26, LINE, 1));
         return card;
     }
     private LinearLayout vertical() {
