@@ -1972,11 +1972,21 @@ public class MainActivity extends Activity {
                 JSONObject task = tasks.optJSONObject(index);
                 if (task == null) continue;
                 final int taskIndex = index;
+                String subjectName = task.optString("subject", "其他");
+                int subjectColor = taskSubjectColor(subjectName);
                 LinearLayout row = vertical();
                 row.setPadding(dp(12), dp(10), dp(12), dp(10));
-                row.setBackground(rounded(Color.WHITE, 13, LINE, 1));
-                row.addView(text(task.optString("subject", "其他") + " · "
-                        + task.optString("title", "未命名作业"), 13, INK, true));
+                row.setBackground(rounded(taskSubjectSoftColor(subjectName), 13, subjectColor, 1));
+                LinearLayout titleRow = horizontal();
+                titleRow.setGravity(Gravity.CENTER_VERTICAL);
+                TextView subjectBadge = text(subjectName, 10, Color.WHITE, true);
+                subjectBadge.setGravity(Gravity.CENTER);
+                subjectBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
+                subjectBadge.setBackground(rounded(subjectColor, 16, subjectColor, 0));
+                titleRow.addView(subjectBadge);
+                titleRow.addView(spaceHorizontal(7));
+                titleRow.addView(text(task.optString("title", "未命名作业"), 13, INK, true), weightedWrap(1));
+                row.addView(titleRow, matchWrap());
                 LinearLayout days = horizontal();
                 days.setPadding(0, dp(8), 0, 0);
                 Button fridayButton = planDayButton("周五", "friday".equals(plannedDayForTask(task)), executionStarted);

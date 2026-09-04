@@ -494,8 +494,9 @@
       elements.weekendTaskPlanList.innerHTML = tasks.map((task) => {
         const day = plannedDayForTask(task);
         const disabled = executionStarted ? " disabled" : "";
-        return `<div class="weekend-plan-row">
-          <div class="weekend-plan-copy"><strong>${escapeHtml(`${task.subject || "其他"} · ${task.title || "未命名作业"}`)}</strong><small>选择计划完成日</small></div>
+        const subject = task.subject || "其他";
+        return `<div class="weekend-plan-row" data-subject="${escapeHtml(subject)}">
+          <div class="weekend-plan-copy"><strong><span class="subject-badge">${escapeHtml(subject)}</span>${escapeHtml(task.title || "未命名作业")}</strong><small>选择计划完成日</small></div>
           <div class="plan-day-tabs" role="group" aria-label="${escapeHtml(task.title || "作业")}计划日期">
             <button type="button" data-plan-day="friday" data-task-id="${escapeHtml(String(task.id))}" aria-pressed="${day === "friday"}"${disabled}>周五</button>
             <button type="button" data-plan-day="saturday" data-task-id="${escapeHtml(String(task.id))}" aria-pressed="${day === "saturday"}"${disabled}>周六</button>
