@@ -23,7 +23,7 @@
     { id: "lesson-11", label: "第11课", words: "宇宙 黑乎乎 翻身 下降 精疲力竭 飘动 照耀 四肢 奔流不息 茂盛 整个".split(" ") },
     { id: "lesson-13", label: "第13课", words: "喷射 气急败坏 严厉 立即 执行 敬佩 坚定 忍受 遭受 尽管 屈服 肝脏 获得".split(" ") },
     { id: "garden-4", label: "语文园地四", words: "花卉 玫瑰 牡丹 花蕾 茉莉 海棠".split(" ") },
-    { id: "lesson-15", label: "第15课", words: "麻雀 悄悄 猛烈 无可奈何 身躯 掩护 紧张 浑身 搏斗 庞大 强大 力量 勇气".split(" ") },
+    { id: "lesson-15", label: "第15课", words: "麻雀 悄悄 猛烈 无可奈何 身躯 掩护 紧张 浑身 牺牲 庞大 强大 力量 勇气".split(" ") },
     { id: "lesson-16", label: "第16课", words: "石级 发颤 年纪 奋力 猴子 纪念 笑呵呵 鼓舞".split(" ") },
     { id: "lesson-17", label: "第17课", words: "崇山峻岭 盘旋 扩建 修筑 平整 打仗 自然 当地 耗费 大量 智慧 工程 奇迹".split(" ") },
     { id: "lesson-18", label: "第18课", words: "柱子 栏杆 人物 神清气爽 建筑 耸立 半山腰 金碧辉煌 镜子 隐隐约约 游人 狮子 姿态".split(" ") },
