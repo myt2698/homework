@@ -81,7 +81,7 @@
   let focusModalTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
-  let draggingTaskId = null;
+  let pointerTaskDrag = null;
 
   function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -634,7 +634,7 @@
       } else if (!confirmed && canEditList) {
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");
       }
-      const meta = options.sortable ? "长按拖动，或用右侧箭头调整"
+      const meta = options.sortable ? "按住左侧手柄拖动，或用右侧箭头调整"
         : status === "done"
         ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · 用时 ${taskDurationLabel(task)}`
         : status === "active" ? `正在进行 · ${taskDurationLabel(task)}`
@@ -643,10 +643,10 @@
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && !isFriday && plannedDateForTask(key, task) === date;
       const sortAttributes = options.sortable
-        ? ` sortable" draggable="true" data-sort-task-id="${escapeHtml(String(task.id))}` : "";
+        ? ` sortable" data-sort-task-id="${escapeHtml(String(task.id))}` : "";
       return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${sortAttributes}" data-subject="${escapeHtml(task.subject || "其他")}">
         <div class="task-main-row">
-          ${options.sortable ? `<span class="drag-handle" aria-hidden="true">⠿</span><span class="order-number">${options.orderNumber}</span>` : ""}
+          ${options.sortable ? `<button class="drag-handle" type="button" data-drag-handle aria-label="按住拖动作业排序" title="按住拖动">⠿</button><span class="order-number">${options.orderNumber}</span>` : ""}
           <div class="task-copy">
             <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${planBadge}
             <small class="task-meta">${escapeHtml(meta)}</small>
@@ -1023,6 +1023,22 @@
     if (target) reorderTask(task.id, target.id);
   }
 
+  function saveTaskOrderFromDom() {
+    const orderedIds = [...elements.taskList.querySelectorAll("[data-sort-task-id]")]
+      .map((card) => card.dataset.sortTaskId);
+    const tasks = tasksForDate();
+    if (orderedIds.length !== tasks.length) return renderTasks();
+    const byId = new Map(tasks.map((task) => [String(task.id), task]));
+    const orderedTasks = orderedIds.map((id) => byId.get(String(id))).filter(Boolean);
+    if (orderedTasks.length !== tasks.length) return renderTasks();
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    owner.tasks = orderedTasks;
+    owner.orderSaved = false;
+    delete owner.orderSavedAt;
+    persist();
+    render();
+  }
+
   function performTaskAction(action, id) {
     const task = taskById(id);
     if (!task) return;
@@ -1283,32 +1299,45 @@
     const button = event.target.closest("button[data-task-action]");
     if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
   });
-  elements.taskList.addEventListener("dragstart", (event) => {
-    const card = event.target.closest("[data-sort-task-id]");
-    if (!card) return;
-    draggingTaskId = card.dataset.sortTaskId;
+  elements.taskList.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest("[data-drag-handle]");
+    const card = handle?.closest("[data-sort-task-id]");
+    if (!handle || !card || event.button !== 0) return;
+    event.preventDefault();
+    pointerTaskDrag = {
+      pointerId: event.pointerId,
+      handle,
+      card,
+      group: card.closest(".order-group"),
+      moved: false
+    };
     card.classList.add("dragging");
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", draggingTaskId);
+    try { handle.setPointerCapture(event.pointerId); } catch (_) { /* 浏览器可能不支持捕获，窗口监听仍可工作 */ }
   });
-  elements.taskList.addEventListener("dragover", (event) => {
-    const card = event.target.closest("[data-sort-task-id]");
-    if (!card || !draggingTaskId || card.dataset.sortTaskId === draggingTaskId) return;
+  window.addEventListener("pointermove", (event) => {
+    if (!pointerTaskDrag || event.pointerId !== pointerTaskDrag.pointerId) return;
     event.preventDefault();
-    elements.taskList.querySelectorAll(".drag-over").forEach((item) => item.classList.remove("drag-over"));
-    card.classList.add("drag-over");
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-sort-task-id]");
+    if (!target || target === pointerTaskDrag.card || target.closest(".order-group") !== pointerTaskDrag.group) return;
+    const rect = target.getBoundingClientRect();
+    if (event.clientY < rect.top + rect.height / 2) target.before(pointerTaskDrag.card);
+    else target.after(pointerTaskDrag.card);
+    pointerTaskDrag.moved = true;
+    [...pointerTaskDrag.group.querySelectorAll(".order-number")]
+      .forEach((number, index) => { number.textContent = String(index + 1); });
+  }, { passive: false });
+  window.addEventListener("pointerup", (event) => {
+    if (!pointerTaskDrag || event.pointerId !== pointerTaskDrag.pointerId) return;
+    const drag = pointerTaskDrag;
+    pointerTaskDrag = null;
+    try { drag.handle.releasePointerCapture(event.pointerId); } catch (_) { /* 已自动释放 */ }
+    drag.card.classList.remove("dragging");
+    if (drag.moved) saveTaskOrderFromDom();
   });
-  elements.taskList.addEventListener("drop", (event) => {
-    const card = event.target.closest("[data-sort-task-id]");
-    if (!card || !draggingTaskId) return;
-    event.preventDefault();
-    const sourceId = draggingTaskId;
-    draggingTaskId = null;
-    reorderTask(sourceId, card.dataset.sortTaskId);
-  });
-  elements.taskList.addEventListener("dragend", () => {
-    draggingTaskId = null;
-    elements.taskList.querySelectorAll(".dragging, .drag-over").forEach((item) => item.classList.remove("dragging", "drag-over"));
+  window.addEventListener("pointercancel", (event) => {
+    if (!pointerTaskDrag || event.pointerId !== pointerTaskDrag.pointerId) return;
+    pointerTaskDrag = null;
+    renderTasks();
   });
   elements.focusCloseButton.addEventListener("click", closeFocusModal);
   elements.focusPauseButton.addEventListener("click", () => {
