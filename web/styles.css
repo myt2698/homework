@@ -400,6 +400,7 @@ input:focus { border-color: #82a993; box-shadow: 0 0 0 3px rgba(47, 109, 85, 0.1
 }
 .task-plan-badge { margin-left: 6px; padding: 3px 7px; border-radius: 999px; color: #76541f; background: var(--amber-soft); font-size: .66rem; font-weight: 750; vertical-align: middle; }
 .sport-section { margin-top: 16px; }
+.habit-check { min-height: 70px; }
 
 .session-panel {
   margin-top: 16px;

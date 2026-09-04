@@ -138,6 +138,12 @@ public class MainActivity extends Activity {
     private TextView sportCheckView;
     private TextView sportStatusView;
     private final List<Button> sportButtons = new ArrayList<>();
+    private LinearLayout readingCard;
+    private TextView readingCheckView;
+    private TextView readingStatusView;
+    private LinearLayout choresCard;
+    private TextView choresCheckView;
+    private TextView choresStatusView;
     private LinearLayout ledgerCard;
     private TextView ledgerCheckView;
     private TextView ledgerStatusView;
@@ -601,6 +607,14 @@ public class MainActivity extends Activity {
 
         sportCard = buildSportCard();
         card.addView(sportCard, matchWrap());
+        card.addView(space(9));
+        LinearLayout habitRow = horizontal();
+        readingCard = dailyHabitCard("阅读打卡", "完成阅读后打卡", "readingDone", "readingAt", true);
+        habitRow.addView(readingCard, weightedFixed(1, dp(76)));
+        habitRow.addView(spaceHorizontal(8));
+        choresCard = dailyHabitCard("家务打卡", "做完家务后打卡", "choresDone", "choresAt", false);
+        habitRow.addView(choresCard, weightedFixed(1, dp(76)));
+        card.addView(habitRow, matchFixed(dp(76)));
 
         LinearLayout session = vertical();
         session.setPadding(dp(16), dp(19), dp(16), dp(17));
@@ -1814,6 +1828,36 @@ public class MainActivity extends Activity {
         return item;
     }
 
+    private LinearLayout dailyHabitCard(String title, String subtitle, String field,
+                                        String timeField, boolean reading) {
+        LinearLayout item = horizontal();
+        item.setGravity(Gravity.CENTER_VERTICAL);
+        item.setPadding(dp(11), dp(9), dp(10), dp(9));
+        item.setClickable(true);
+        item.setFocusable(true);
+        TextView check = text("✓", 15, Color.TRANSPARENT, true);
+        check.setGravity(Gravity.CENTER);
+        check.setBackground(rounded(PAGE, 18, LINE, 1));
+        item.addView(check, fixed(dp(30), dp(30)));
+        item.addView(spaceHorizontal(8));
+        LinearLayout copy = vertical();
+        copy.addView(text(title, 12, INK, true));
+        TextView status = text(subtitle, 9, MUTED, false);
+        status.setPadding(0, dp(2), 0, 0);
+        copy.addView(status);
+        item.addView(copy, weightedWrap(1));
+        if (reading) {
+            readingCheckView = check;
+            readingStatusView = status;
+        } else {
+            choresCheckView = check;
+            choresStatusView = status;
+        }
+        item.setOnClickListener(v -> togglePrep(field, timeField,
+                reading ? "阅读打卡状态已更新" : "家务打卡状态已更新"));
+        return item;
+    }
+
     private TextView[] timelineRow(String label) {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.TOP);
@@ -2262,6 +2306,14 @@ public class MainActivity extends Activity {
             button.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
             button.setBackground(rounded(selected ? GREEN : Color.WHITE, 18, selected ? GREEN : LINE, 1));
         }
+        boolean readingDone = record.optBoolean("readingDone", false);
+        boolean choresDone = record.optBoolean("choresDone", false);
+        stylePrep(readingCard, readingCheckView, readingDone);
+        stylePrep(choresCard, choresCheckView, choresDone);
+        readingStatusView.setText(readingDone
+                ? fallbackTime(record, "readingAt") + " 完成阅读" : "完成阅读后打卡");
+        choresStatusView.setText(choresDone
+                ? fallbackTime(record, "choresAt") + " 完成家务" : "做完家务后打卡");
         stylePrep(ledgerCard, ledgerCheckView, record.optBoolean("ledgerConfirmed", false));
         String weekendKey = weekendKeyFor(currentDate);
         ledgerCard.setVisibility(weekendKey != null && !currentDate.equals(weekendKey) ? View.GONE : View.VISIBLE);
@@ -2488,6 +2540,9 @@ public class MainActivity extends Activity {
         if (hasText(record, "dinnerTime")) return record.optString("dinnerTime") + " 吃饭暂停";
         if (hasText(record, "startTime")) return record.optString("startTime") + " 开始，进行中";
         if (record.optBoolean("ledgerConfirmed")) return "成长记录册已补全";
+        if (record.optBoolean("readingDone") && record.optBoolean("choresDone")) return "阅读和家务已打卡";
+        if (record.optBoolean("readingDone")) return "阅读已打卡";
+        if (record.optBoolean("choresDone")) return "家务已打卡";
         if (!sportActivities(record).isEmpty()) return "运动已打卡 " + sportActivities(record).size() + " 项";
         if (taskCount(record) > 0) return "作业清单已录入";
         return "尚未开始";
@@ -2790,7 +2845,8 @@ public class MainActivity extends Activity {
         if (record == null) return false;
         if (record.optBoolean("ropeDone")
                 || (record.optJSONArray("sportActivities") != null && record.optJSONArray("sportActivities").length() > 0)
-                || record.optBoolean("ledgerConfirmed")) return true;
+                || record.optBoolean("ledgerConfirmed") || record.optBoolean("readingDone")
+                || record.optBoolean("choresDone")) return true;
         if (record.optBoolean("tasksConfirmed") || taskCount(record) > 0) return true;
         if (hasText(record, "note") || hasText(record, "ruleId")) return true;
         for (String key : TIME_KEYS) if (hasText(record, key)) return true;
