@@ -59,6 +59,9 @@ public class MainActivity extends Activity {
     private static final int VOICE_TASK_REQUEST = 201;
     private static final Pattern SUBJECT_PATTERN = Pattern.compile("^(语文|数学|英语|科学|道法|体育|音乐|美术|其他)[\\s：:、，,-]*(.*)$");
     private static final Pattern SUBJECT_ANYWHERE_PATTERN = Pattern.compile("(语文|数学|英语|科学|道法|体育|音乐|美术|其他)(?:作业)?");
+    private static final Pattern NUMBERED_TASK_PATTERN = Pattern.compile(
+            "(^|[\\s；;])(?:（\\s*(\\d{1,2})\\s*）|\\(?(\\d{1,2})\\s*[.．、)])\\s*",
+            Pattern.MULTILINE);
 
     private static final int PAGE = Color.rgb(247, 244, 237);
     private static final int SURFACE = Color.rgb(255, 253, 249);
@@ -758,7 +761,7 @@ public class MainActivity extends Activity {
         taskDraftInput.setTextSize(14);
         taskDraftInput.setTextColor(INK);
         taskDraftInput.setHintTextColor(Color.rgb(160, 159, 150));
-        taskDraftInput.setHint("例如：语文 背诵第3课；数学 口算；英语 朗读课文");
+        taskDraftInput.setHint("例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文");
         taskDraftInput.setGravity(Gravity.TOP | Gravity.START);
         taskDraftInput.setMinLines(3);
         taskDraftInput.setMaxLines(6);
@@ -922,15 +925,48 @@ public class MainActivity extends Activity {
             button.setBackground(rounded(selected ? GREEN : Color.WHITE, 10, selected ? GREEN : LINE, 1));
         }
         if (taskDraftInput != null) {
-            taskDraftInput.setHint("例如：" + subject + " 背诵第3课；练习册第12页");
+            taskDraftInput.setHint("例如：1. " + subject + "背诵第3课  2. 练习册第12页  3. 阅读课文");
         }
+    }
+
+    private List<String> numberedTaskParts(String value) {
+        List<Integer> starts = new ArrayList<>();
+        List<Integer> ends = new ArrayList<>();
+        List<Integer> numbers = new ArrayList<>();
+        Matcher matcher = NUMBERED_TASK_PATTERN.matcher(value);
+        while (matcher.find()) {
+            starts.add(matcher.start());
+            ends.add(matcher.end());
+            numbers.add(Integer.parseInt(matcher.group(2) != null ? matcher.group(2) : matcher.group(3)));
+        }
+        int first = -1;
+        for (int index = 0; index < numbers.size(); index++) {
+            if (numbers.get(index) == 1) {
+                first = index;
+                break;
+            }
+        }
+        if (first < 0) return null;
+        int count = 1;
+        while (first + count < numbers.size() && numbers.get(first + count) == count + 1) count++;
+        List<String> parts = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            int markerIndex = first + index;
+            int end = index + 1 < count ? starts.get(markerIndex + 1) : value.length();
+            String part = value.substring(ends.get(markerIndex), end).trim();
+            if (!part.isEmpty()) parts.add(part);
+        }
+        return parts;
     }
 
     private List<JSONObject> parseTaskDraft(String value) {
         List<JSONObject> parsed = new ArrayList<>();
-        String normalized = SUBJECT_ANYWHERE_PATTERN.matcher(value).replaceAll("\n$1：");
+        List<String> numbered = numberedTaskParts(value);
+        String normalized = numbered == null
+                ? SUBJECT_ANYWHERE_PATTERN.matcher(value).replaceAll("\n$1：") : null;
+        String[] taskParts = numbered == null ? normalized.split("[\\n；;]+") : numbered.toArray(new String[0]);
         String currentSubject = selectedTaskSubject;
-        for (String rawPart : normalized.split("[\\n；;。]+")) {
+        for (String rawPart : taskParts) {
             String part = rawPart.trim().replaceAll("[，,\\s]+$", "");
             if (part.isEmpty()) continue;
             Matcher matcher = SUBJECT_PATTERN.matcher(part);

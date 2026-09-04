@@ -225,13 +225,33 @@
   }
 
   const SUBJECT_PATTERN = "语文|数学|英语|科学|道法|体育|音乐|美术|其他";
+  function numberedTaskParts(value) {
+    const marker = /(^|[\s；;])(?:（\s*(\d{1,2})\s*）|\(?(\d{1,2})\s*[.．、)])\s*/gm;
+    const matches = [...value.matchAll(marker)].map((match) => ({
+      index: match.index,
+      end: match.index + match[0].length,
+      number: Number(match[2] || match[3])
+    }));
+    const first = matches.findIndex((match) => match.number === 1);
+    if (first < 0) return null;
+    const sequence = [matches[first]];
+    for (let index = first + 1; index < matches.length; index += 1) {
+      if (matches[index].number !== sequence.length + 1) break;
+      sequence.push(matches[index]);
+    }
+    return sequence.map((match, index) => value
+      .slice(match.end, index + 1 < sequence.length ? sequence[index + 1].index : value.length)
+      .trim()).filter(Boolean);
+  }
   function parseTaskDraft(value, defaultSubject = selectedTaskSubject) {
-    const normalized = value
+    const numbered = numberedTaskParts(value);
+    const normalized = numbered ? null : value
       .replace(new RegExp(`(${SUBJECT_PATTERN})(?:作业)?`, "g"), "\n$1：")
       .replace(/[，,](?=\s*(?:语文|数学|英语|科学|道法|体育|音乐|美术|其他))/g, "\n");
+    const parts = numbered || normalized.split(/[\n；;]+/);
     let currentSubject = defaultSubject;
-    return normalized.split(/[\n；;。]+/).map((part) => part.trim().replace(/[，,\s]+$/, "")).filter(Boolean).map((part) => {
-      const match = part.match(new RegExp(`^(${SUBJECT_PATTERN})[\s：:、，,-]*(.*)$`));
+    return parts.map((part) => part.trim().replace(/[，,\s]+$/, "")).filter(Boolean).map((part) => {
+      const match = part.match(new RegExp(`^(${SUBJECT_PATTERN})[\\s：:、，,-]*(.*)$`));
       if (match) {
         currentSubject = match[1];
         return { subject: currentSubject, title: match[2].trim() };
@@ -902,7 +922,7 @@
       button.setAttribute("aria-checked", String(button.dataset.subject === subject));
     });
     elements.addTasksButton.textContent = `生成${subject}清单`;
-    elements.taskDraft.placeholder = `例如：${subject} 背诵第3课；练习册第12页`;
+    elements.taskDraft.placeholder = `例如：1. ${subject}背诵第3课  2. 练习册第12页  3. 阅读课文`;
   }
 
   function toggleVoiceInput() {
