@@ -63,6 +63,8 @@
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryCloseButton: $("#taskEntryCloseButton"),
     taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
+    taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
+    taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
@@ -70,7 +72,7 @@
     taskOrderButton: $("#taskOrderButton"),
     activeTaskBanner: $("#activeTaskBanner"), activeTaskTitle: $("#activeTaskTitle"),
     activeTaskTime: $("#activeTaskTime"), taskList: $("#taskList"),
-    emptyTaskList: $("#emptyTaskList"), taskConfirmHint: $("#taskConfirmHint"),
+    emptyTaskList: $("#emptyTaskList"), taskListFooter: $("#taskListFooter"), taskConfirmHint: $("#taskConfirmHint"),
     confirmTaskListButton: $("#confirmTaskListButton"), dayResult: $("#dayResult"),
     focusModal: $("#focusModal"), focusCloseButton: $("#focusCloseButton"),
     focusModalSubject: $("#focusModalSubject"), focusModalTitle: $("#focusModalTitle"),
@@ -649,15 +651,16 @@
       : "选择科目，语音或文字录入";
     elements.taskEntryLauncherStatus.textContent = entryStatus;
     elements.taskEntryModalStatus.textContent = tasks.length
-      ? `已经录入 ${tasks.length} 项。可以继续录下一科，关闭后再统一核对清单。`
-      : "先选择科目，再用语音或文字录入。";
+      ? `已经录入 ${tasks.length} 项。可以继续录下一科，下方核对无误后直接确认。`
+      : "先选择科目，再用语音或文字录入；下方统一核对并确认。";
     if (!canEnterTasks) closeTaskEntryModal();
-    elements.emptyTaskList.hidden = tasks.length > 0;
+    elements.emptyTaskList.hidden = tasks.length > 0 || canEnterTasks;
     elements.emptyTaskList.textContent = key && !isFriday
       ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
       : ledgerReady ? "还没有作业，点击“录入作业”开始。" : "先核对钉钉和成长记录册，再录入作业。";
-    elements.confirmTaskListButton.hidden = tasks.length === 0 || !canEditList || (confirmed && !allPending);
-    elements.confirmTaskListButton.textContent = confirmed ? "修改作业清单" : "确认作业清单";
+    elements.taskListFooter.hidden = !confirmed;
+    elements.confirmTaskListButton.hidden = !confirmed || !canEditList || !allPending;
+    elements.confirmTaskListButton.textContent = "修改作业清单";
     elements.taskOrderButton.hidden = !canArrangeOrder;
     elements.taskOrderButton.textContent = sortingMode ? "确定顺序，开始闯关" : "调整闯关顺序";
     elements.taskOrderButton.className = sortingMode
@@ -695,15 +698,20 @@
     const questRemaining = questTasks.filter((task) => task.status !== "done");
     const progressTotal = questMode ? questTasks.length : tasks.length;
     const progressDone = questMode ? questDone.length : doneCount;
-    elements.taskPanelTitle.textContent = sortingMode ? "安排你的闯关顺序"
+    elements.taskPanelTitle.textContent = !confirmed
+      ? ledgerReady ? tasks.length ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
+      : sortingMode ? "安排你的闯关顺序"
       : orderPendingWeekend ? "还差一步：确定顺序"
         : questMode ? "今天一关一关来" : "选一项，轻松开始吧";
-    elements.taskPanelHelp.textContent = sortingMode
+    elements.taskPanelHelp.textContent = !confirmed
+      ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "先确认钉钉和成长记录册中的完整内容。"
+      : sortingMode
       ? "这是你的计划，想先做哪一项由你决定。"
       : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
         : questMode ? "不用一次想完，只看眼前这一项。"
           : "一次专心做一项，每完成一项都很棒！";
-    elements.taskSummary.textContent = progressTotal ? `${progressDone} / ${progressTotal} 项完成` : "0 项";
+    elements.taskSummary.textContent = !confirmed && tasks.length
+      ? `${tasks.length} 项待确认` : progressTotal ? `${progressDone} / ${progressTotal} 项完成` : "0 项";
     elements.activeTaskBanner.hidden = !active || questMode;
     if (active) {
       elements.activeTaskTitle.textContent = `${active.subject} · ${active.title}`;
@@ -764,6 +772,17 @@
       </article>`;
     };
 
+    const pendingTasks = pendingTaskOrder(tasks);
+    elements.taskEntryPendingSection.hidden = confirmed || !canEditList || pendingTasks.length === 0;
+    elements.taskEntryPendingSummary.textContent = `${pendingTasks.length} 项`;
+    elements.taskEntryPendingList.innerHTML = confirmed ? ""
+      : pendingTasks.map((task) => taskCard(task)).join("");
+
+    if (!confirmed) {
+      elements.taskList.innerHTML = "";
+      return;
+    }
+
     if (sortingMode) {
       const groupHtml = (label, groupTasks, help) => groupTasks.length ? `<section class="order-group">
         ${label ? `<div class="order-group-title"><strong>${label}</strong><small>${help}</small></div>` : ""}
@@ -782,8 +801,7 @@
     }
 
     if (!questMode) {
-      const displayedTasks = confirmed ? tasks : pendingTaskOrder(tasks);
-      elements.taskList.innerHTML = displayedTasks.map((task) => taskCard(task, { allowActions: !orderPendingWeekend })).join("");
+      elements.taskList.innerHTML = tasks.map((task) => taskCard(task, { allowActions: !orderPendingWeekend })).join("");
       return;
     }
 
@@ -1073,6 +1091,7 @@
     completedTasksExpanded = false;
     persist();
     render();
+    if (confirmed) openTaskEntryModal();
     showToast(confirmed ? "可以修改作业清单了" : `清单已确认，共 ${tasks.length} 项`);
   }
 
@@ -1420,6 +1439,11 @@
   });
   elements.addTasksButton.addEventListener("click", addTasksFromDraft);
   elements.clearTaskDraftButton.addEventListener("click", () => { elements.taskDraft.value = ""; });
+  elements.taskEntryConfirmButton.addEventListener("click", toggleTaskListConfirmation);
+  elements.taskEntryPendingList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-task-action]");
+    if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
+  });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
   elements.taskList.addEventListener("click", (event) => {

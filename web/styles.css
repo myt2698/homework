@@ -373,6 +373,17 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 }
 .task-entry textarea:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
 .task-entry-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.task-entry-pending { margin-top: 16px; padding: 14px; border: 1px solid #c9daf7; border-radius: 15px; background: #fff; }
+.task-entry-pending[hidden] { display: none; }
+.task-entry-pending-heading, .task-entry-confirm-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.task-entry-pending-heading > div { min-width: 0; }
+.task-entry-pending-heading strong, .task-entry-pending-heading small { display: block; }
+.task-entry-pending-heading strong { font-size: .9rem; }
+.task-entry-pending-heading small { margin-top: 3px; color: var(--muted); font-size: .69rem; }
+.task-entry-pending-heading b { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: .72rem; }
+.task-entry-pending-list { margin-top: 12px; }
+.task-entry-confirm-row { margin-top: 13px; }
+.task-entry-confirm-row > span { color: var(--muted); font-size: .68rem; line-height: 1.45; }
 .task-list { display: grid; gap: 9px; margin-top: 14px; }
 .quest-progress {
   padding: 15px 16px;
@@ -469,6 +480,7 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .empty-task-list { margin-top: 14px; padding: 17px; border: 1px dashed #cfc6b7; border-radius: 12px; color: var(--muted); background: #fbf8f2; font-size: .75rem; text-align: center; }
 .empty-task-list[hidden] { display: none; }
 .task-list-footer { margin-top: 14px; }
+.task-list-footer[hidden] { display: none; }
 .task-list-footer > span { color: var(--muted); font-size: .7rem; }
 .task-footer-actions { display: flex; flex: 0 0 auto; gap: 7px; align-items: center; }
 .task-footer-actions .primary-button { min-width: 0; }
@@ -837,8 +849,9 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .weekend-plan, .weekend-progress { padding: 16px 14px; }
   .task-panel { padding: 17px 14px; }
   .voice-entry-row, .task-list-footer { align-items: stretch; flex-direction: column; }
+  .task-entry-confirm-row { align-items: stretch; flex-direction: column; }
   .voice-entry-row small { text-align: left; }
-  .voice-button, .task-list-footer button { width: 100%; }
+  .voice-button, .task-list-footer button, .task-entry-confirm-row button { width: 100%; }
   .task-footer-actions { width: 100%; flex-direction: column; }
   .quest-section-title { align-items: flex-start; flex-direction: column; gap: 2px; }
   .quest-current-card { padding: 14px 12px; }

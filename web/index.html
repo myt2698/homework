@@ -119,7 +119,7 @@
 
         <div class="task-list" id="taskList"></div>
         <div class="empty-task-list" id="emptyTaskList">还没有作业，点击“录入作业”开始。</div>
-        <div class="task-list-footer">
+        <div class="task-list-footer" id="taskListFooter">
           <span id="taskConfirmHint">录入后先核对，避免漏掉作业。</span>
           <div class="task-footer-actions">
             <button class="primary-button compact-button" id="taskOrderButton" type="button" hidden>确定顺序，开始闯关</button>
@@ -206,8 +206,8 @@
     <div class="task-entry-dialog">
       <button class="focus-close" id="taskEntryCloseButton" type="button" aria-label="关闭作业录入">×</button>
       <p class="section-kicker">每日录入作业</p>
-      <h2 id="taskEntryModalTitle">把今天的作业一次录完整</h2>
-      <p class="task-entry-dialog-status" id="taskEntryModalStatus">先选择科目，再用语音或文字录入。</p>
+      <h2 id="taskEntryModalTitle">录入并确认今天的作业</h2>
+      <p class="task-entry-dialog-status" id="taskEntryModalStatus">先选择科目，再用语音或文字录入；下方统一核对并确认。</p>
       <div class="task-entry" id="taskEntry">
         <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
           <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
@@ -224,6 +224,20 @@
           <button class="primary-button compact-button" id="addTasksButton" type="button">生成作业清单</button>
           <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
         </div>
+        <section class="task-entry-pending" id="taskEntryPendingSection" aria-labelledby="taskEntryPendingTitle" hidden>
+          <div class="task-entry-pending-heading">
+            <div>
+              <strong id="taskEntryPendingTitle">待确认作业清单</strong>
+              <small>按科目核对，确认没有遗漏再开始闯关</small>
+            </div>
+            <b id="taskEntryPendingSummary">0 项</b>
+          </div>
+          <div class="task-list task-entry-pending-list" id="taskEntryPendingList"></div>
+          <div class="task-entry-confirm-row">
+            <span>语文、数学、英语、科学，同科按录入顺序排列。</span>
+            <button class="primary-button compact-button" id="taskEntryConfirmButton" type="button">确认作业清单</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>

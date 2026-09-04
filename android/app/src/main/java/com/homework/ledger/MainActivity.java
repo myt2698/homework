@@ -160,6 +160,10 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryLauncher;
     private TextView taskEntryLauncherStatus;
     private TextView taskEntryDialogStatus;
+    private LinearLayout taskEntryPendingPanel;
+    private TextView taskEntryPendingSummary;
+    private LinearLayout taskEntryPendingList;
+    private Button taskEntryConfirmButton;
     private EditText taskDraftInput;
     private TextView taskSummaryView;
     private TextView taskPanelTitleView;
@@ -839,6 +843,43 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams entryActionParams = matchWrap();
         entryActionParams.topMargin = dp(9);
         taskEntryPanel.addView(entryActions, entryActionParams);
+
+        taskEntryPendingPanel = vertical();
+        taskEntryPendingPanel.setPadding(dp(12), dp(12), dp(12), dp(12));
+        taskEntryPendingPanel.setBackground(rounded(Color.WHITE, 13, Color.rgb(201, 218, 247), 1));
+        LinearLayout pendingHead = horizontal();
+        pendingHead.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout pendingCopy = vertical();
+        pendingCopy.addView(text("待确认作业清单", 14, INK, true));
+        TextView pendingHelp = text("按科目核对，确认没有遗漏再开始闯关", 9, MUTED, false);
+        pendingHelp.setPadding(0, dp(3), 0, 0);
+        pendingCopy.addView(pendingHelp);
+        pendingHead.addView(pendingCopy, weightedWrap(1));
+        taskEntryPendingSummary = text("0 项", 10, GREEN, true);
+        taskEntryPendingSummary.setPadding(dp(8), dp(4), dp(8), dp(4));
+        taskEntryPendingSummary.setBackground(rounded(GREEN_SOFT, 16, GREEN_SOFT, 0));
+        pendingHead.addView(taskEntryPendingSummary);
+        taskEntryPendingPanel.addView(pendingHead, matchWrap());
+        taskEntryPendingList = vertical();
+        LinearLayout.LayoutParams pendingListParams = matchWrap();
+        pendingListParams.topMargin = dp(5);
+        taskEntryPendingPanel.addView(taskEntryPendingList, pendingListParams);
+        TextView pendingHint = text("语文、数学、英语、科学，同科按录入顺序排列。", 9, MUTED, false);
+        pendingHint.setPadding(0, dp(10), 0, dp(7));
+        taskEntryPendingPanel.addView(pendingHint);
+        taskEntryConfirmButton = new Button(this);
+        taskEntryConfirmButton.setText("确认作业清单");
+        taskEntryConfirmButton.setTextSize(12);
+        taskEntryConfirmButton.setTextColor(Color.WHITE);
+        taskEntryConfirmButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        taskEntryConfirmButton.setAllCaps(false);
+        taskEntryConfirmButton.setBackground(rounded(GREEN, 11, GREEN, 0));
+        taskEntryConfirmButton.setOnClickListener(v -> toggleTaskListConfirmation());
+        taskEntryPendingPanel.addView(taskEntryConfirmButton, matchFixed(dp(43)));
+        LinearLayout.LayoutParams pendingParams = matchWrap();
+        pendingParams.topMargin = dp(14);
+        taskEntryPanel.addView(taskEntryPendingPanel, pendingParams);
+
         LinearLayout.LayoutParams entryParams = matchWrap();
         entryParams.topMargin = dp(13);
         panel.addView(buildTaskEntryLauncher(), entryParams);
@@ -984,8 +1025,8 @@ public class MainActivity extends Activity {
         TextView kicker = text("每日录入作业", 10, GREEN, true);
         kicker.setLetterSpacing(0.1f);
         content.addView(kicker);
-        content.addView(text("把今天的作业一次录完整", 18, INK, true));
-        taskEntryDialogStatus = text("先选择科目，再用语音或文字录入。", 10, MUTED, false);
+        content.addView(text("录入并确认今天的作业", 18, INK, true));
+        taskEntryDialogStatus = text("先选择科目，再用语音或文字录入；下方统一核对并确认。", 10, MUTED, false);
         taskEntryDialogStatus.setPadding(0, dp(5), 0, 0);
         content.addView(taskEntryDialogStatus);
         LinearLayout.LayoutParams entryParams = matchWrap();
@@ -1563,6 +1604,7 @@ public class MainActivity extends Activity {
         completedTasksExpanded = false;
         saveTaskData();
         renderAll();
+        if (confirmed) showTaskEntryDialog();
         toast(confirmed ? "可以修改作业清单了" : "清单已确认，共 " + tasks.length() + " 项");
     }
 
@@ -1722,11 +1764,17 @@ public class MainActivity extends Activity {
         }
         int progressTotal = questMode ? questIndexes.size() : tasks.length();
         int progressDone = questMode ? questDoneCount : allDoneCount;
-        taskSummaryView.setText(progressTotal == 0 ? "0 项" : progressDone + " / " + progressTotal + " 项完成");
-        taskPanelTitleView.setText(sortingMode ? "安排你的闯关顺序"
+        taskSummaryView.setText(!confirmed && tasks.length() > 0
+                ? tasks.length() + " 项待确认"
+                : progressTotal == 0 ? "0 项" : progressDone + " / " + progressTotal + " 项完成");
+        taskPanelTitleView.setText(!confirmed
+                ? ledgerReady ? tasks.length() > 0 ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
+                : sortingMode ? "安排你的闯关顺序"
                 : orderPendingWeekend ? "还差一步：确定顺序"
                 : questMode ? "今天一关一关来" : "选一项，轻松开始吧");
-        taskPanelHelpView.setText(sortingMode ? "这是你的计划，想先做哪一项由你决定。"
+        taskPanelHelpView.setText(!confirmed
+                ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "先确认钉钉和成长记录册中的完整内容。"
+                : sortingMode ? "这是你的计划，想先做哪一项由你决定。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : questMode ? "不用一次想完，只看眼前这一项。" : "一次专心做一项，每完成一项都很棒！");
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
@@ -1738,23 +1786,32 @@ public class MainActivity extends Activity {
         taskEntryLauncherStatus.setText(entryStatus);
         if (taskEntryDialogStatus != null) {
             taskEntryDialogStatus.setText(tasks.length() > 0
-                    ? "已经录入 " + tasks.length() + " 项。可以继续录下一科，关闭后再统一核对清单。"
-                    : "先选择科目，再用语音或文字录入。");
+                    ? "已经录入 " + tasks.length() + " 项。可以继续录下一科，下方核对无误后直接确认。"
+                    : "先选择科目，再用语音或文字录入；下方统一核对并确认。");
         }
         if (!canEnterTasks) dismissTaskEntryDialog();
-        emptyTaskView.setVisibility(tasks.length() == 0 ? View.VISIBLE : View.GONE);
+        taskEntryPendingPanel.setVisibility(canEnterTasks && tasks.length() > 0 ? View.VISIBLE : View.GONE);
+        taskEntryPendingSummary.setText(tasks.length() + " 项");
+        taskEntryPendingList.removeAllViews();
+        if (!confirmed) {
+            for (int index = 0; index < tasks.length(); index++) {
+                addTaskCard(taskEntryPendingList, tasks, index, false, canEditList, weekendMode, isFriday,
+                        planSaved, weekendKey, false, false, false, true);
+            }
+        }
+        emptyTaskView.setVisibility(tasks.length() == 0 && !canEnterTasks ? View.VISIBLE : View.GONE);
         emptyTaskView.setText(weekendMode && !isFriday
                 ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
                 : ledgerReady ? "还没有作业，点击“录入作业”开始。"
                 : "先核对钉钉和成长记录册，再录入作业。");
-        taskConfirmButton.setVisibility(tasks.length() == 0 || !canEditList || confirmed && !allPending
-                ? View.GONE : View.VISIBLE);
-        taskConfirmButton.setText(confirmed ? "修改作业清单" : "确认作业清单");
+        taskConfirmButton.setVisibility(confirmed && canEditList && allPending ? View.VISIBLE : View.GONE);
+        taskConfirmButton.setText("修改作业清单");
         taskOrderButton.setVisibility(canArrangeOrder ? View.VISIBLE : View.GONE);
         taskOrderButton.setText(sortingMode ? "确定顺序，开始闯关" : "调整闯关顺序");
         taskOrderButton.setTextColor(sortingMode ? Color.WHITE : GREEN);
         taskOrderButton.setBackground(rounded(sortingMode ? GREEN : GREEN_SOFT, 13,
                 sortingMode ? GREEN : Color.rgb(156, 188, 245), sortingMode ? 0 : 1));
+        taskConfirmHintView.setVisibility(confirmed ? View.VISIBLE : View.GONE);
         taskConfirmHintView.setText(sortingMode
                 ? weekendMode ? "分别排好周五、周六、周日的顺序，确定后就按计划闯关。"
                     : "长按拖动作业，或使用箭头排好顺序，再确定开始。"
@@ -1808,6 +1865,7 @@ public class MainActivity extends Activity {
         }
 
         taskListContainer.removeAllViews();
+        if (!confirmed) return;
         if (sortingMode) {
             taskSummaryView.setText(tasks.length() + " 关待安排");
             addOrderIntro();
@@ -2072,6 +2130,13 @@ public class MainActivity extends Activity {
     private void addTaskCard(JSONArray tasks, int index, boolean confirmed, boolean canEditList,
                              boolean weekendMode, boolean isFriday, boolean planSaved, String weekendKey,
                              boolean suggested, boolean current, boolean compact, boolean allowActions) {
+        addTaskCard(taskListContainer, tasks, index, confirmed, canEditList, weekendMode, isFriday,
+                planSaved, weekendKey, suggested, current, compact, allowActions);
+    }
+
+    private void addTaskCard(LinearLayout target, JSONArray tasks, int index, boolean confirmed, boolean canEditList,
+                             boolean weekendMode, boolean isFriday, boolean planSaved, String weekendKey,
+                             boolean suggested, boolean current, boolean compact, boolean allowActions) {
         JSONObject task = tasks.optJSONObject(index);
         if (task == null) return;
         final int taskIndex = index;
@@ -2137,7 +2202,7 @@ public class MainActivity extends Activity {
         item.addView(mainRow, matchWrap());
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(current ? 7 : 8);
-        taskListContainer.addView(item, params);
+        target.addView(item, params);
     }
 
     private void renderWeekendTaskPlanner() {
