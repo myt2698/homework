@@ -570,6 +570,10 @@
     elements.dictationProgressText.textContent = current === null ? `${completed} / ${total}` : `${current} / ${total}`;
   }
 
+  function dictationWordGapMs(word) {
+    return [...String(word).replace(/\s/g, "")].length === 4 ? 3000 : 2000;
+  }
+
   function renderDictation() {
     const lesson = dictationLesson();
     const custom = customDictationWords(lesson.id);
@@ -588,7 +592,7 @@
     elements.stopDictationButton.hidden = !running;
     if (!running && !elements.dictationStatus.dataset.result) {
       elements.dictationStatus.textContent = "准备好后开始听写";
-      elements.dictationTimingHint.textContent = "每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。";
+      elements.dictationTimingHint.textContent = "第一遍正常语速，第二遍稍慢；两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
       setDictationProgress(0, words.length);
     }
   }
@@ -619,15 +623,16 @@
     const word = session.words[session.index];
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = "zh-CN";
-    utterance.rate = 0.82;
-    utterance.pitch = 1;
     const repeatNumber = session.repeat + 1;
+    const nextWordGap = dictationWordGapMs(word);
+    utterance.rate = repeatNumber === 1 ? 1 : 0.82;
+    utterance.pitch = 1;
     elements.dictationStatus.textContent = `第 ${session.index + 1} 个词语 · 正在朗读第 ${repeatNumber} 遍`;
     elements.dictationTimingHint.textContent = repeatNumber === 1
       ? "听清楚，1秒后会再读一遍。"
       : session.index + 1 >= session.words.length
         ? "这是最后一个词，写完就可以核对啦。"
-        : "写下这个词，2秒后进入下一个。";
+        : `写下这个词，${nextWordGap / 1000}秒后进入下一个。`;
     setDictationProgress(session.index, session.words.length, session.index + 1);
     utterance.onend = () => {
       if (dictationSession !== session || !session.running) return;
@@ -643,9 +648,9 @@
       }
       session.index += 1;
       session.repeat = 0;
-      elements.dictationStatus.textContent = `已完成 ${session.index} 个 · 2秒后下一个词语`;
+      elements.dictationStatus.textContent = `已完成 ${session.index} 个 · ${nextWordGap / 1000}秒后下一个词语`;
       setDictationProgress(session.index, session.words.length);
-      session.timer = setTimeout(speakCurrentDictationWord, 2000);
+      session.timer = setTimeout(speakCurrentDictationWord, nextWordGap);
     };
     utterance.onerror = () => {
       if (dictationSession !== session || !session.running) return;

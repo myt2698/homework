@@ -2942,7 +2942,7 @@ public class MainActivity extends Activity {
         practice.addView(practiceKicker);
         dictationStatusView = text("准备好后开始听写", 17, INK, true);
         practice.addView(dictationStatusView);
-        dictationTimingView = text("每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。", 10, MUTED, false);
+        dictationTimingView = text("第一遍正常语速，第二遍稍慢；两遍间隔1秒，四字词后停3秒，其余词语停2秒。", 10, MUTED, false);
         dictationTimingView.setPadding(0, dp(5), 0, 0);
         practice.addView(dictationTimingView);
         LinearLayout progressRow = horizontal();
@@ -3057,7 +3057,7 @@ public class MainActivity extends Activity {
         stopDictationButton.setVisibility(dictationRunning ? View.VISIBLE : View.GONE);
         if (!dictationRunning) {
             dictationStatusView.setText("准备好后开始听写");
-            dictationTimingView.setText("每个词语读两遍，两遍间隔1秒；下一个词语间隔2秒。");
+            dictationTimingView.setText("第一遍正常语速，第二遍稍慢；两遍间隔1秒，四字词后停3秒，其余词语停2秒。");
             setDictationProgress(0, allWords.size(), -1);
         }
     }
@@ -3123,7 +3123,7 @@ public class MainActivity extends Activity {
             int language = textToSpeech.setLanguage(Locale.CHINA);
             dictationTtsReady = language != TextToSpeech.LANG_MISSING_DATA
                     && language != TextToSpeech.LANG_NOT_SUPPORTED;
-            textToSpeech.setSpeechRate(0.82f);
+            textToSpeech.setSpeechRate(1f);
             textToSpeech.setPitch(1f);
             textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String utteranceId) { }
@@ -3170,12 +3170,14 @@ public class MainActivity extends Activity {
         if (!dictationRunning || textToSpeech == null || activeDictationIndex >= activeDictationWords.size()) return;
         String word = activeDictationWords.get(activeDictationIndex);
         int repeatNumber = activeDictationRepeat + 1;
+        int nextWordGap = dictationWordGapMs(word);
+        textToSpeech.setSpeechRate(repeatNumber == 1 ? 1f : 0.82f);
         dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在朗读第 " + repeatNumber + " 遍");
         dictationTimingView.setText(repeatNumber == 1
                 ? "听清楚，1秒后会再读一遍。"
                 : activeDictationIndex + 1 >= activeDictationWords.size()
                 ? "这是最后一个词，写完就可以核对啦。"
-                : "写下这个词，2秒后进入下一个。");
+                : "写下这个词，" + (nextWordGap / 1000) + "秒后进入下一个。");
         setDictationProgress(activeDictationIndex, activeDictationWords.size(), activeDictationIndex + 1);
         activeDictationUtteranceId = "dictation-" + System.nanoTime();
         int result = textToSpeech.speak(word, TextToSpeech.QUEUE_FLUSH, null, activeDictationUtteranceId);
@@ -3198,11 +3200,17 @@ public class MainActivity extends Activity {
             stopDictation(true, true);
             return;
         }
+        int nextWordGap = dictationWordGapMs(activeDictationWords.get(activeDictationIndex));
         activeDictationIndex++;
         activeDictationRepeat = 0;
-        dictationStatusView.setText("已完成 " + activeDictationIndex + " 个 · 2秒后下一个词语");
+        dictationStatusView.setText("已完成 " + activeDictationIndex + " 个 · " + (nextWordGap / 1000) + "秒后下一个词语");
         setDictationProgress(activeDictationIndex, activeDictationWords.size(), -1);
-        timerHandler.postDelayed(dictationNextWord, 2000);
+        timerHandler.postDelayed(dictationNextWord, nextWordGap);
+    }
+
+    private int dictationWordGapMs(String word) {
+        String normalized = word.trim();
+        return normalized.codePointCount(0, normalized.length()) == 4 ? 3000 : 2000;
     }
 
     private void stopDictation(boolean completed, boolean notify) {
