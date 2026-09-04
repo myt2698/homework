@@ -65,63 +65,6 @@
       </div>
     </section>
 
-    <section class="card weekend-card" id="weekendCard" hidden>
-      <div class="section-heading compact">
-        <div>
-          <p class="section-kicker">周末任务包</p>
-          <h2>先安排，再按计划完成</h2>
-          <p class="weekend-range" id="weekendRange"></p>
-        </div>
-        <span class="mode-badge">周五至周日共用</span>
-      </div>
-
-      <div class="prep-grid weekend-checks">
-        <button class="prep-check" id="weekendConfirmedButton" type="button" aria-pressed="false">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span><strong>周末作业已全部确认</strong><small id="weekendConfirmedStatus">已核对钉钉和成长记录册</small></span>
-        </button>
-        <button class="prep-check" id="dailySeparatedButton" type="button" aria-pressed="false">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span><strong>已区分每日任务</strong><small>阅读、跳绳等不计入一次性作业</small></span>
-        </button>
-        <button class="prep-check" id="specialSeparatedButton" type="button" aria-pressed="false">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span><strong>已区分特殊任务</strong><small>必须周日完成的任务单独安排</small></span>
-        </button>
-      </div>
-
-      <div class="weekend-plan">
-        <div class="weekend-plan-heading">
-          <div><h3>时间安排</h3><p>结合下面的作业清单，估算三个时段的分钟数。</p></div>
-          <strong id="weekendPlannedTotal">共 0 分钟</strong>
-        </div>
-        <div class="plan-fields">
-          <label>周五完成<input id="fridayPlanMinutes" type="number" min="0" max="300" step="5" inputmode="numeric" placeholder="40"></label>
-          <label>周六上午<input id="saturdayMorningMinutes" type="number" min="0" max="300" step="5" inputmode="numeric" placeholder="90"></label>
-          <label>周六下午<input id="saturdayAfternoonMinutes" type="number" min="0" max="300" step="5" inputmode="numeric" placeholder="60"></label>
-          <label>周六目标时间<input id="saturdayTargetTime" type="time" value="18:00"></label>
-        </div>
-        <button class="primary-button compact-button" id="saveWeekendPlanButton" type="button">保存周末计划</button>
-      </div>
-
-      <div class="weekend-progress">
-        <div class="weekend-progress-heading">
-          <div><p class="section-kicker">执行进度</p><h3 id="weekendStatus">等待制定计划</h3></div>
-          <div class="focus-total"><span>累计有效作业</span><strong id="weekendActualMinutes">0 分钟</strong></div>
-        </div>
-        <div class="milestone-list">
-          <div class="milestone" id="fridayMilestone"><span>1</span><div><strong>完成周五安排</strong><small id="fridayMilestoneStatus">奖励部分 ¥0.50</small></div></div>
-          <div class="milestone" id="saturdayMorningMilestone"><span>2</span><div><strong>完成周六上午安排</strong><small id="saturdayMorningMilestoneStatus">按自己制定的计划执行</small></div></div>
-          <div class="milestone" id="saturdayMilestone"><span>3</span><div><strong>周六完成学校作业</strong><small id="saturdayMilestoneStatus">目标时间前奖励部分 ¥1.00</small></div></div>
-        </div>
-        <div class="session-actions" id="weekendActions"></div>
-        <div class="day-result" id="weekendResult" hidden>
-          <div><span>周末结算</span><strong id="weekendResultLabel"></strong></div>
-          <b id="weekendResultAmount"></b>
-        </div>
-      </div>
-    </section>
-
     <section class="card record-card">
       <div class="section-heading">
         <div>
@@ -130,26 +73,12 @@
         </div>
       </div>
 
-      <div class="prep-grid">
-        <div class="prep-check sport-check" id="sportCard">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span class="sport-copy">
-            <strong>运动打卡</strong>
-            <small id="sportStatus">选择今天完成的运动</small>
-          </span>
-          <div class="sport-options" id="sportOptions" aria-label="运动项目">
-            <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
-            <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
-            <button type="button" data-sport="50米跑" aria-pressed="false">50米跑</button>
-            <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
-            <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
-          </div>
-        </div>
+      <div class="prep-grid single">
         <button class="prep-check" id="ledgerButton" type="button" aria-pressed="false">
           <span class="check-mark" aria-hidden="true">✓</span>
           <span>
-            <strong>成长记录册已补全</strong>
-            <small id="ledgerStatus">已核对钉钉全部作业</small>
+            <strong>已核对钉钉和成长记录册</strong>
+            <small id="ledgerStatus">先确定今天全部作业，再录入清单</small>
           </span>
         </button>
       </div>
@@ -204,10 +133,43 @@
         </div>
       </div>
 
-      <label class="note-field" for="note">
-        <span>备注 <em>选填</em></span>
-        <input id="note" type="text" maxlength="60" placeholder="例如：今天没有提醒，自己完成">
-      </label>
+      <div class="weekend-task-planner" id="weekendTaskPlanner" hidden>
+        <div class="task-panel-heading">
+          <div>
+            <p class="section-kicker" id="weekendPlannerKicker">周五安排</p>
+            <h3 id="weekendPlannerTitle">给每项作业安排完成日期</h3>
+            <p id="weekendPlannerHelp">默认安排在周六；确实需要周日完成的，再改成周日。</p>
+          </div>
+          <strong id="weekendPlanSummary">尚未保存</strong>
+        </div>
+        <div class="weekend-task-plan-list" id="weekendTaskPlanList"></div>
+        <div class="task-list-footer">
+          <span id="weekendPlanHint">确认作业清单后再安排。</span>
+          <button class="primary-button compact-button" id="saveWeekendTaskPlanButton" type="button">保存周末安排</button>
+        </div>
+        <div class="day-result" id="weekendResult" hidden>
+          <div><span>周末结算</span><strong id="weekendResultLabel"></strong></div>
+          <b id="weekendResultAmount"></b>
+        </div>
+        <button class="text-button danger" id="weekendPenaltyButton" type="button" hidden>周日结束仍未完成</button>
+      </div>
+
+      <div class="prep-grid single sport-section">
+        <div class="prep-check sport-check" id="sportCard">
+          <span class="check-mark" aria-hidden="true">✓</span>
+          <span class="sport-copy">
+            <strong>运动打卡</strong>
+            <small id="sportStatus">选择今天完成的运动</small>
+          </span>
+          <div class="sport-options" id="sportOptions" aria-label="运动项目">
+            <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
+            <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
+            <button type="button" data-sport="50米跑" aria-pressed="false">50米跑</button>
+            <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
+            <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
+          </div>
+        </div>
+      </div>
 
       <div class="record-actions">
         <button class="text-button danger" id="resetDayButton" type="button">清除当天记录</button>

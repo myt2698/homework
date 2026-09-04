@@ -43,18 +43,12 @@
     settingsButton: $("#settingsButton"), settingsPanel: $("#settingsPanel"),
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
-    weekendCard: $("#weekendCard"), weekendRange: $("#weekendRange"), recordHeading: $("#recordHeading"),
-    weekendConfirmedButton: $("#weekendConfirmedButton"), weekendConfirmedStatus: $("#weekendConfirmedStatus"),
-    dailySeparatedButton: $("#dailySeparatedButton"), specialSeparatedButton: $("#specialSeparatedButton"),
-    fridayPlanMinutes: $("#fridayPlanMinutes"), saturdayMorningMinutes: $("#saturdayMorningMinutes"),
-    saturdayAfternoonMinutes: $("#saturdayAfternoonMinutes"), saturdayTargetTime: $("#saturdayTargetTime"),
-    weekendPlannedTotal: $("#weekendPlannedTotal"), saveWeekendPlanButton: $("#saveWeekendPlanButton"),
-    weekendStatus: $("#weekendStatus"), weekendActualMinutes: $("#weekendActualMinutes"),
-    fridayMilestone: $("#fridayMilestone"), fridayMilestoneStatus: $("#fridayMilestoneStatus"),
-    saturdayMorningMilestone: $("#saturdayMorningMilestone"),
-    saturdayMorningMilestoneStatus: $("#saturdayMorningMilestoneStatus"),
-    saturdayMilestone: $("#saturdayMilestone"), saturdayMilestoneStatus: $("#saturdayMilestoneStatus"),
-    weekendActions: $("#weekendActions"), weekendResult: $("#weekendResult"),
+    recordHeading: $("#recordHeading"),
+    weekendTaskPlanner: $("#weekendTaskPlanner"), weekendPlannerKicker: $("#weekendPlannerKicker"),
+    weekendPlannerTitle: $("#weekendPlannerTitle"), weekendPlannerHelp: $("#weekendPlannerHelp"),
+    weekendTaskPlanList: $("#weekendTaskPlanList"), weekendPlanSummary: $("#weekendPlanSummary"),
+    weekendPlanHint: $("#weekendPlanHint"), saveWeekendTaskPlanButton: $("#saveWeekendTaskPlanButton"),
+    weekendPenaltyButton: $("#weekendPenaltyButton"), weekendResult: $("#weekendResult"),
     weekendResultLabel: $("#weekendResultLabel"), weekendResultAmount: $("#weekendResultAmount"),
     sportCard: $("#sportCard"), sportStatus: $("#sportStatus"), sportOptions: $("#sportOptions"),
     ledgerButton: $("#ledgerButton"), ledgerStatus: $("#ledgerStatus"),
@@ -70,7 +64,7 @@
     focusModalSubject: $("#focusModalSubject"), focusModalTitle: $("#focusModalTitle"),
     focusModalElapsed: $("#focusModalElapsed"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
-    resultLabel: $("#resultLabel"), resultAmount: $("#resultAmount"), note: $("#note"),
+    resultLabel: $("#resultLabel"), resultAmount: $("#resultAmount"),
     resetDayButton: $("#resetDayButton"), historyList: $("#historyList"),
     emptyState: $("#emptyState"), balance: $("#balance"), periodLabel: $("#periodLabel"),
     recordDays: $("#recordDays"), rewardDays: $("#rewardDays"),
@@ -169,6 +163,15 @@
   function allTasksDone(date = elements.recordDate.value) {
     const tasks = tasksForDate(date);
     return tasks.length > 0 && tasks.every((task) => task.status === "done");
+  }
+  function plannedDayForTask(task) {
+    return task?.plannedDay === "sunday" ? "sunday" : "saturday";
+  }
+  function plannedDayLabel(task) {
+    return plannedDayForTask(task) === "sunday" ? "周日" : "周六";
+  }
+  function plannedDateForTask(key, task) {
+    return addDays(key, plannedDayForTask(task) === "sunday" ? 2 : 1);
   }
   function taskElapsedMs(task, live = true) {
     const saved = Number(task?.elapsedMs || 0);
@@ -278,28 +281,19 @@
   }
   function weekendResultFor(key, weekend) {
     if (!weekend) return null;
-    const fridayPart = weekend.fridayDone ? 0.5 : 0;
+    const planningPart = weekend.planSaved ? 0.5 : 0;
     if (weekend.penaltyConfirmed && !weekend.allDoneDate) {
-      return { label: "周日结束仍未完成", amount: fridayPart - 0.5 };
+      return { label: "周日结束仍未完成", amount: planningPart - 0.5 };
     }
     if (!weekend.allDoneDate) return null;
-    const saturday = addDays(key, 1);
-    const target = weekend.targetTime || "18:00";
-    let finishPart = 0;
-    let label = "周日完成";
-    if (weekend.allDoneDate < saturday) {
-      finishPart = 1;
-      label = "周五提前全部完成";
-    } else if (weekend.allDoneDate === saturday) {
-      if ((weekend.allDoneTime || "23:59") <= target) {
-        finishPart = 1;
-        label = `${target} 目标前完成`;
-      } else {
-        finishPart = 0.5;
-        label = `${target} 目标后完成`;
-      }
-    }
-    return { label, amount: fridayPart + finishPart };
+    const tasks = Array.isArray(weekend.tasks) ? weekend.tasks : [];
+    const followedPlan = tasks.length
+      ? tasks.every((task) => task.status === "done" && (task.completedDate || weekend.allDoneDate) <= plannedDateForTask(key, task))
+      : weekend.allDoneDate <= addDays(key, 1);
+    return {
+      label: followedPlan ? "按周五计划完成" : "全部完成，但晚于计划",
+      amount: planningPart + (followedPlan ? 1 : 0.5)
+    };
   }
   function weekendActualMinutes(key) {
     const weekendTasks = Array.isArray(state.weekends[key]?.tasks) ? state.weekends[key].tasks : [];
@@ -396,10 +390,10 @@
         ? latestStatus(entry.record)
         : entry.weekend.allDoneDate
           ? `${formatDate(entry.weekend.allDoneDate)} ${entry.weekend.allDoneTime || ""} 全部完成`
-          : entry.weekend.penaltyConfirmed ? "周日结束仍未完成" : entry.weekend.fridayDone ? "周五安排已完成，周末进行中" : "周末计划进行中";
+          : entry.weekend.penaltyConfirmed ? "周日结束仍未完成" : entry.weekend.planSaved ? "周五安排已保存，周末进行中" : "等待周五安排";
       const subStatus = entry.type === "daily"
         ? entry.record.note || (result ? result.label : "流程尚未完成")
-        : result ? result.label : "等待周六完成学校作业";
+        : result ? result.label : "按周五清单安排周六、周日";
       item.innerHTML = `
         <div class="history-date"><strong>${formatDate(date)}${entry.type === "weekend" ? "周末" : ""}</strong><span>${weekday(date)}</span></div>
         <div class="history-detail">
@@ -426,50 +420,63 @@
     button.setAttribute("aria-pressed", String(Boolean(selected)));
   }
 
-  function weekendAction(label, action, style = "primary") {
-    const className = style === "primary" ? "primary-button" : style === "danger" ? "secondary-button danger-action" : "secondary-button";
-    return `<button class="${className}" type="button" data-weekend-action="${action}">${label}</button>`;
-  }
-
   function renderWeekend() {
     const date = elements.recordDate.value;
     const key = weekendKeyFor(date);
     const weekendMode = Boolean(key);
-    elements.weekendCard.hidden = !weekendMode;
-    elements.viewModeLabel.textContent = weekendMode ? "周末计划与今日执行" : "平日记录";
+    elements.weekendTaskPlanner.hidden = !weekendMode;
+    elements.viewModeLabel.textContent = !weekendMode ? "平日记录"
+      : date === key ? "周五录入与安排" : date === addDays(key, 1) ? "周六按计划完成" : "周日按计划完成";
     if (!weekendMode) return;
 
     const weekend = weekendForDate(date) || {};
+    const tasks = tasksForDate(date);
     const saturday = addDays(key, 1);
     const sunday = addDays(key, 2);
-    elements.weekendRange.textContent = `${formatDate(key)}（周五）— ${formatDate(sunday)}（周日）`;
-    setPrepState(elements.weekendConfirmedButton, weekend.confirmed);
-    setPrepState(elements.dailySeparatedButton, weekend.dailySeparated);
-    setPrepState(elements.specialSeparatedButton, weekend.specialSeparated);
-    elements.weekendConfirmedStatus.textContent = weekend.confirmed
-      ? `${weekend.confirmedAt || "已"} 确认全部作业` : "已核对钉钉和成长记录册";
+    const isFriday = date === key;
+    const executionStarted = tasks.some((task) => (task.status || "pending") !== "pending");
+    const saturdayTasks = tasks.filter((task) => plannedDayForTask(task) === "saturday");
+    const sundayTasks = tasks.filter((task) => plannedDayForTask(task) === "sunday");
+    const completed = (items) => items.filter((task) => task.status === "done").length;
 
-    elements.fridayPlanMinutes.value = weekend.fridayMinutes ?? "";
-    elements.saturdayMorningMinutes.value = weekend.saturdayMorningMinutes ?? "";
-    elements.saturdayAfternoonMinutes.value = weekend.saturdayAfternoonMinutes ?? "";
-    elements.saturdayTargetTime.value = weekend.targetTime || "18:00";
-    const planned = Number(weekend.fridayMinutes || 0) + Number(weekend.saturdayMorningMinutes || 0)
-      + Number(weekend.saturdayAfternoonMinutes || 0);
-    elements.weekendPlannedTotal.textContent = `共 ${planned} 分钟`;
-    elements.saveWeekendPlanButton.textContent = weekend.planSaved ? "更新周末计划" : "保存周末计划";
-    elements.weekendActualMinutes.textContent = `${weekendActualMinutes(key)} 分钟`;
+    elements.weekendPlannerKicker.textContent = isFriday ? "周五安排" : "周五计划已自动带入";
+    elements.weekendPlannerTitle.textContent = isFriday ? "给每项作业安排完成日期" : `今天按${date === saturday ? "周六" : "周日"}计划完成`;
+    elements.weekendPlannerHelp.textContent = isFriday
+      ? "默认安排在周六；确实需要周日完成的，再改成周日。"
+      : `这份清单来自 ${formatDate(key)}（周五），今天不需要重新录入。`;
+    elements.weekendPlanSummary.textContent = weekend.planSaved
+      ? `周六 ${saturdayTasks.length} 项 · 周日 ${sundayTasks.length} 项` : "尚未保存";
 
-    elements.fridayMilestone.className = `milestone${weekend.fridayDone ? " done" : ""}`;
-    elements.fridayMilestoneStatus.textContent = weekend.fridayDone
-      ? `${weekend.fridayDoneAt || "已"} 完成，获得 ¥0.50 部分` : "完成计划中的周五部分，可得 ¥0.50";
-    elements.saturdayMorningMilestone.className = `milestone${weekend.saturdayMorningDone ? " done" : ""}`;
-    elements.saturdayMorningMilestoneStatus.textContent = weekend.saturdayMorningDone
-      ? `${weekend.saturdayMorningDoneAt || "已"} 按计划完成` : "按自己制定的上午计划执行";
-    const allDone = Boolean(weekend.allDoneDate);
-    elements.saturdayMilestone.className = `milestone${allDone ? " done" : weekend.penaltyConfirmed ? " failed" : ""}`;
-    elements.saturdayMilestoneStatus.textContent = allDone
-      ? `${formatDate(weekend.allDoneDate)} ${weekend.allDoneTime || ""} 全部完成`
-      : weekend.penaltyConfirmed ? "周日结束仍未完成，扣 ¥0.50" : `${weekend.targetTime || "18:00"} 前完成，可得 ¥1.00`;
+    if (isFriday && weekend.confirmed && tasks.length) {
+      elements.weekendTaskPlanList.innerHTML = tasks.map((task) => {
+        const day = plannedDayForTask(task);
+        const disabled = executionStarted ? " disabled" : "";
+        return `<div class="weekend-plan-row">
+          <div class="weekend-plan-copy"><strong>${escapeHtml(`${task.subject || "其他"} · ${task.title || "未命名作业"}`)}</strong><small>选择计划完成日</small></div>
+          <div class="plan-day-tabs" role="group" aria-label="${escapeHtml(task.title || "作业")}计划日期">
+            <button type="button" data-plan-day="saturday" data-task-id="${escapeHtml(String(task.id))}" aria-pressed="${day === "saturday"}"${disabled}>周六</button>
+            <button type="button" data-plan-day="sunday" data-task-id="${escapeHtml(String(task.id))}" aria-pressed="${day === "sunday"}"${disabled}>周日</button>
+          </div>
+        </div>`;
+      }).join("");
+    } else if (!isFriday && weekend.planSaved) {
+      elements.weekendTaskPlanList.innerHTML = `<div class="weekend-plan-row${date === saturday ? " today" : ""}">
+          <div class="weekend-plan-copy"><strong>周六计划</strong><small>已完成 ${completed(saturdayTasks)} / ${saturdayTasks.length} 项</small></div><span class="plan-day-badge">${saturdayTasks.length} 项</span>
+        </div><div class="weekend-plan-row${date === sunday ? " today" : ""}">
+          <div class="weekend-plan-copy"><strong>周日计划</strong><small>已完成 ${completed(sundayTasks)} / ${sundayTasks.length} 项</small></div><span class="plan-day-badge">${sundayTasks.length} 项</span>
+        </div>`;
+    } else {
+      elements.weekendTaskPlanList.innerHTML = "";
+    }
+
+    elements.saveWeekendTaskPlanButton.hidden = !isFriday || !weekend.confirmed || !tasks.length || executionStarted;
+    elements.saveWeekendTaskPlanButton.textContent = weekend.planSaved ? "更新周末安排" : "保存周末安排";
+    elements.weekendPlanHint.textContent = !weekend.confirmed
+      ? isFriday ? "先核对并确认上面的作业清单。" : "周五的作业清单还没有确认。"
+      : !weekend.planSaved ? isFriday ? "选好每项作业的完成日，再保存安排。" : "周五还没有保存周末安排。"
+        : executionStarted && isFriday ? "周末已经开始执行，安排已锁定。"
+          : date === saturday ? `今天优先完成周六的 ${saturdayTasks.length} 项。`
+            : date === sunday ? `今天完成周日的 ${sundayTasks.length} 项，并补齐未完成项。` : "安排保存后，周六和周日会自动显示。";
 
     const result = weekendResultFor(key, weekend);
     elements.weekendResult.hidden = !result;
@@ -478,34 +485,8 @@
       elements.weekendResultAmount.textContent = amountText(result.amount);
       elements.weekendResult.className = `day-result${result.amount < 0 ? " negative" : result.amount === 0 ? " neutral" : ""}`;
     }
-
-    if (!weekend.planSaved) elements.weekendStatus.textContent = "等待制定计划";
-    else if (result) elements.weekendStatus.textContent = "本周末已结算";
-    else if (date === key) elements.weekendStatus.textContent = "执行周五安排";
-    else if (date === saturday) elements.weekendStatus.textContent = "周六完成学校作业";
-    else elements.weekendStatus.textContent = "周日缓冲与收尾";
-
-    let actions = "";
-    if (weekend.planSaved && weekend.confirmed) {
-      if (!weekend.fridayDone) actions += weekendAction(date === key ? "完成周五安排" : "补记周五安排已完成", "friday-done", "secondary");
-      else actions += weekendAction("撤销周五完成", "undo-friday", "secondary");
-      if (date >= saturday && !weekend.saturdayMorningDone && !weekend.allDoneDate) {
-        actions += weekendAction("完成周六上午安排", "saturday-morning", "secondary");
-      } else if (weekend.saturdayMorningDone && !weekend.allDoneDate) {
-        actions += weekendAction("撤销上午完成", "undo-saturday-morning", "secondary");
-      }
-      if (!weekend.allDoneDate && !weekend.penaltyConfirmed && (date >= saturday || weekend.fridayDone)) {
-        actions += weekendAction("学校作业全部完成", "all-done");
-      } else if (weekend.allDoneDate) {
-        actions += weekendAction("撤销全部完成", "undo-all", "secondary");
-      }
-      if (date === sunday && !weekend.allDoneDate && !weekend.penaltyConfirmed) {
-        actions += weekendAction("周日结束仍未完成", "penalty", "danger");
-      } else if (weekend.penaltyConfirmed) {
-        actions += weekendAction("撤销未完成结算", "undo-penalty", "secondary");
-      }
-    }
-    elements.weekendActions.innerHTML = actions;
+    elements.weekendPenaltyButton.hidden = date !== sunday || !weekend.planSaved || Boolean(weekend.allDoneDate);
+    elements.weekendPenaltyButton.textContent = weekend.penaltyConfirmed ? "撤销未完成结算" : "周日结束仍未完成";
   }
 
   function taskButton(label, action, id, className = "") {
@@ -514,21 +495,32 @@
 
   function renderTasks() {
     const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    const weekend = key ? weekendForDate(date) || {} : null;
+    const isFriday = Boolean(key && date === key);
+    const canEditList = !key || isFriday;
+    const ledgerReady = key && !isFriday ? true : Boolean(recordFor(date)?.ledgerConfirmed);
     const tasks = tasksForDate(date);
     const confirmed = taskListConfirmed(date);
     const doneCount = tasks.filter((task) => task.status === "done").length;
     const active = activeTaskForDate(date);
     elements.taskSummary.textContent = tasks.length ? `${doneCount} / ${tasks.length} 项完成` : "0 项";
-    elements.taskEntry.hidden = confirmed;
+    elements.taskEntry.hidden = confirmed || !canEditList || !ledgerReady;
     elements.emptyTaskList.hidden = tasks.length > 0;
-    elements.confirmTaskListButton.hidden = tasks.length === 0;
+    elements.emptyTaskList.textContent = key && !isFriday
+      ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
+      : ledgerReady ? "还没有作业，点击麦克风连续报完，或直接输入文字。" : "先核对钉钉和成长记录册，再录入作业。";
+    elements.confirmTaskListButton.hidden = tasks.length === 0 || !canEditList;
     elements.confirmTaskListButton.textContent = confirmed ? "修改作业清单" : "确认作业清单";
     const currentRecordData = recordFor(date) || {};
-    elements.taskConfirmHint.textContent = confirmed
+    elements.taskConfirmHint.textContent = !canEditList
+      ? weekend?.planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
+      : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
+        : confirmed
       ? doneCount === tasks.length && tasks.length
-        ? weekendKeyFor(date) ? "清单已全部完成，可进行周末结算。"
+        ? key ? "周末清单已全部完成并自动结算。"
           : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
-        : "清单已确认；一次只开始一项。"
+        : key ? "清单已确认；接下来给每项作业安排周六或周日。" : "清单已确认；一次只开始一项。"
       : tasks.length ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。";
     elements.activeTaskBanner.hidden = !active;
     if (active) {
@@ -539,7 +531,9 @@
     elements.taskList.innerHTML = tasks.map((task) => {
       const status = task.status || "pending";
       let buttons = "";
-      if (confirmed) {
+      const canDoToday = !key || (weekend.planSaved && !isFriday
+        && (date === addDays(key, 2) || plannedDayForTask(task) === "saturday"));
+      if (confirmed && canDoToday) {
         if (status === "active") {
           buttons = taskButton("暂停", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
@@ -549,17 +543,20 @@
         } else {
           buttons = taskButton("开始", "start", task.id, "primary-task-action");
         }
-      } else {
+      } else if (!confirmed && canEditList) {
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");
       }
       const meta = status === "done"
-        ? `${task.completedAt || "已"} 完成 · 用时 ${taskDurationLabel(task)}`
+        ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · 用时 ${taskDurationLabel(task)}`
         : status === "active" ? `正在进行 · ${taskDurationLabel(task)}`
-          : status === "paused" ? `已暂停 · 已用 ${taskDurationLabel(task)}` : "待开始";
-      return `<article class="task-item ${status}">
+          : status === "paused" ? `已暂停 · 已用 ${taskDurationLabel(task)}`
+            : key && weekend.planSaved && !isFriday && !canDoToday ? `计划${plannedDayLabel(task)}完成` : "待开始";
+      const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
+      const plannedToday = key && !isFriday && plannedDateForTask(key, task) === date;
+      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}">
         <div class="task-main-row">
           <div class="task-copy">
-            <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>
+            <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${planBadge}
             <small class="task-meta">${escapeHtml(meta)}</small>
           </div>
           <div class="task-buttons">${buttons}</div>
@@ -575,8 +572,8 @@
     elements.recordHeading.textContent = date === todayIso()
       ? "今天的准备与作业"
       : `${formatDate(date)}的记录`;
-    elements.ledgerButton.hidden = weekendMode;
-    elements.ledgerButton.parentElement.classList.toggle("single", weekendMode);
+    const key = weekendKeyFor(date);
+    elements.ledgerButton.hidden = Boolean(key && date !== key);
     const sports = sportsForRecord(record);
     elements.sportCard.classList.toggle("completed", sports.length > 0);
     elements.sportStatus.textContent = sports.length
@@ -585,7 +582,8 @@
       button.setAttribute("aria-pressed", String(sports.includes(button.dataset.sport)));
     });
     elements.ledgerButton.setAttribute("aria-pressed", String(Boolean(record.ledgerConfirmed)));
-    elements.ledgerStatus.textContent = record.ledgerConfirmed ? `${record.ledgerAt || "已"} 确认全部作业` : "已核对钉钉全部作业";
+    elements.ledgerStatus.textContent = record.ledgerConfirmed
+      ? `${record.ledgerAt || "已"} 完成核对，可以录入清单` : "先确定今天全部作业，再录入清单";
 
     const result = weekendMode && !includeDailyInLedger(date, record) ? null : resultFor(record);
     elements.dayResult.hidden = !result;
@@ -594,7 +592,6 @@
       elements.resultAmount.textContent = amountText(result.amount);
       elements.dayResult.className = `day-result${result.amount < 0 ? " negative" : result.amount === 0 ? " neutral" : ""}`;
     }
-    elements.note.value = record.note || "";
   }
 
   function render() {
@@ -730,6 +727,10 @@
   }
 
   function addTasksFromDraft() {
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    if (key && date !== key) return showToast("周六、周日直接使用周五清单，不需要重新录入");
+    if (!currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉和成长记录册");
     const parsed = parseTaskDraft(elements.taskDraft.value.trim(), selectedTaskSubject);
     if (!parsed.length) return showToast("请先说出或输入作业内容");
     const owner = taskOwnerForDate(elements.recordDate.value, true);
@@ -740,11 +741,14 @@
       subject: task.subject,
       title: task.title,
       status: "pending",
-      elapsedMs: 0
+      elapsedMs: 0,
+      ...(key ? { plannedDay: "saturday" } : {})
     })));
-    if (weekendKeyFor(elements.recordDate.value)) {
+    if (key) {
       owner.confirmed = false;
       delete owner.confirmedAt;
+      delete owner.planSaved;
+      delete owner.planSavedAt;
     } else {
       owner.tasksConfirmed = false;
       delete owner.tasksConfirmedAt;
@@ -759,14 +763,24 @@
   }
 
   function toggleTaskListConfirmation() {
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    if (key && date !== key) return showToast("周六、周日使用周五已经确认的清单");
     const owner = taskOwnerForDate(elements.recordDate.value, true);
     const tasks = tasksForDate();
     if (!tasks.length) return showToast("请先录入作业");
     const confirmed = taskListConfirmed();
+    if (!confirmed && !currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉和成长记录册");
     if (confirmed && activeTaskForDate()) return showToast("请先暂停当前作业再修改清单");
-    if (weekendKeyFor(elements.recordDate.value)) {
+    if (confirmed && key && tasks.some((task) => (task.status || "pending") !== "pending"))
+      return showToast("周末已经开始执行，不能再修改清单");
+    if (key) {
       owner.confirmed = !confirmed;
       if (owner.confirmed) owner.confirmedAt = currentTime(); else delete owner.confirmedAt;
+      if (confirmed) {
+        delete owner.planSaved;
+        delete owner.planSavedAt;
+      }
     } else {
       owner.tasksConfirmed = !confirmed;
       if (owner.tasksConfirmed) owner.tasksConfirmedAt = currentTime(); else delete owner.tasksConfirmedAt;
@@ -787,12 +801,19 @@
   function performTaskAction(action, id) {
     const task = taskById(id);
     if (!task) return;
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    const weekend = key ? weekendForDate(date, true) : null;
     const tasks = tasksForDate();
     let openFocusAfterRender = false;
     if (action === "delete") {
+      if (key && date !== key) return showToast("周末清单只能在周五修改");
       const owner = taskOwnerForDate(elements.recordDate.value, true);
       owner.tasks = tasks.filter((item) => String(item.id) !== String(id));
-      if (!weekendKeyFor(elements.recordDate.value)) {
+      if (key) {
+        delete owner.planSaved;
+        delete owner.planSavedAt;
+      } else {
         delete owner.finishTime;
         delete owner.tasksFinishedAt;
         delete owner.ruleId;
@@ -804,8 +825,11 @@
       return showToast("作业已删除");
     }
     if (!taskListConfirmed()) return showToast("请先确认作业清单");
+    if (key && (!weekend.planSaved || date === key)) return showToast(date === key ? "请先安排好周六、周日，周末再开始作业" : "请先在周五保存周末安排");
+    if (key && date === addDays(key, 1) && plannedDayForTask(task) === "sunday" && action !== "undo")
+      return showToast("这项安排在周日，今天先做周六计划");
     const record = currentRecord(true);
-    if (record.finishTime && action !== "undo") return showToast("当天已经结算，如需修改可先撤销一项完成");
+    if (!key && record.finishTime && action !== "undo") return showToast("当天已经结算，如需修改可先撤销一项完成");
     if (action === "start") {
       const active = activeTaskForDate();
       if (active && active !== task) return showToast(`请先暂停或完成“${active.title}”`);
@@ -823,8 +847,9 @@
       stopTaskClock(task, "done");
       closeFocusModal();
       task.completedAt = currentTime();
+      if (key) task.completedDate = date;
       const completedAll = tasks.every((item) => item.status === "done");
-      if (completedAll && !weekendKeyFor(elements.recordDate.value)) {
+      if (completedAll && !key) {
         record.tasksFinishedAt = task.completedAt;
         delete record.ruleId;
         if (record.ledgerConfirmed) {
@@ -835,13 +860,24 @@
           delete record.finishTime;
           showToast("作业已全部完成，确认成长记录册后自动结算");
         }
+      } else if (completedAll && key) {
+        weekend.allDoneDate = date;
+        weekend.allDoneTime = task.completedAt;
+        delete weekend.penaltyConfirmed;
+        const result = weekendResultFor(key, weekend);
+        showToast(`周末作业已全部完成，${result.label} ${amountText(result.amount, false)}`);
       } else {
-        showToast(completedAll ? "作业清单已全部完成，可进行周末结算" : "完成一项，选择下一项吧");
+        showToast("完成一项，选择下一项吧");
       }
     } else if (action === "undo") {
       task.status = "paused";
       delete task.completedAt;
-      if (!weekendKeyFor(elements.recordDate.value)) {
+      delete task.completedDate;
+      if (key) {
+        delete weekend.allDoneDate;
+        delete weekend.allDoneTime;
+        delete weekend.penaltyConfirmed;
+      } else {
         delete record.finishTime;
         delete record.tasksFinishedAt;
         delete record.ruleId;
@@ -904,91 +940,50 @@
     }
   }
 
-  function toggleWeekendField(field, timeField, message) {
-    const weekend = weekendForDate(elements.recordDate.value, true);
-    if (field === "confirmed" && weekend.confirmed && activeTaskForDate())
-      return showToast("请先暂停当前作业再修改清单");
-    weekend[field] = !weekend[field];
-    if (weekend[field] && timeField) weekend[timeField] = currentTime();
-    else if (timeField) delete weekend[timeField];
-    cleanupWeekend();
-    persist();
-    render();
-    showToast(message);
-  }
-
-  function planValue(input) {
-    const value = Number.parseInt(input.value || "0", 10);
-    return Number.isFinite(value) ? Math.max(0, Math.min(300, value)) : 0;
-  }
-
-  function updateWeekendPlanTotal() {
-    const total = planValue(elements.fridayPlanMinutes) + planValue(elements.saturdayMorningMinutes)
-      + planValue(elements.saturdayAfternoonMinutes);
-    elements.weekendPlannedTotal.textContent = `共 ${total} 分钟`;
-  }
-
-  function saveWeekendPlan() {
-    const weekend = weekendForDate(elements.recordDate.value, true);
-    if (!weekend.confirmed) return showToast("请先确认周末作业已经全部核对");
-    const friday = planValue(elements.fridayPlanMinutes);
-    const morning = planValue(elements.saturdayMorningMinutes);
-    const afternoon = planValue(elements.saturdayAfternoonMinutes);
-    if (friday + morning + afternoon <= 0) return showToast("请填写至少一个计划时段");
-    weekend.fridayMinutes = friday;
-    weekend.saturdayMorningMinutes = morning;
-    weekend.saturdayAfternoonMinutes = afternoon;
-    weekend.targetTime = elements.saturdayTargetTime.value || "18:00";
-    weekend.planSaved = true;
-    persist();
-    render();
-    showToast("周末计划已保存");
-  }
-
-  function performWeekendAction(action) {
+  function selectWeekendTaskDay(id, plannedDay) {
     const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    if (!key || date !== key) return showToast("周末安排只能在周五制定");
     const weekend = weekendForDate(date, true);
-    if (!weekend.planSaved || !weekend.confirmed) return showToast("请先确认作业并保存周末计划");
-    if (action === "friday-done") {
-      weekend.fridayDone = true;
-      weekend.fridayDoneAt = currentTime();
-      showToast("周五安排已完成");
-    } else if (action === "undo-friday") {
-      delete weekend.fridayDone;
-      delete weekend.fridayDoneAt;
-      showToast("已撤销周五完成");
-    } else if (action === "saturday-morning") {
-      weekend.saturdayMorningDone = true;
-      weekend.saturdayMorningDoneAt = currentTime();
-      showToast("周六上午安排已完成");
-    } else if (action === "undo-saturday-morning") {
-      delete weekend.saturdayMorningDone;
-      delete weekend.saturdayMorningDoneAt;
-      showToast("已撤销上午完成");
-    } else if (action === "all-done") {
-      if (tasksForDate().length && !allTasksDone()) return showToast("清单里还有作业没有完成");
-      if (date >= addDays(weekendKeyFor(date), 1) && !weekend.saturdayMorningDone) {
-        weekend.saturdayMorningDone = true;
-        weekend.saturdayMorningDoneAt = currentTime();
-      }
-      weekend.allDoneDate = date;
-      weekend.allDoneTime = currentTime();
-      delete weekend.penaltyConfirmed;
-      showToast("学校的一次性作业已全部完成");
-    } else if (action === "undo-all") {
-      delete weekend.allDoneDate;
-      delete weekend.allDoneTime;
-      showToast("已撤销全部完成");
-    } else if (action === "penalty") {
-      if (!window.confirm("确认到周日结束学校作业仍未完成吗？")) return;
-      weekend.penaltyConfirmed = true;
-      showToast("周末未完成已结算");
-    } else if (action === "undo-penalty") {
-      delete weekend.penaltyConfirmed;
-      showToast("已撤销未完成结算");
-    }
+    if (!weekend.confirmed) return showToast("请先确认作业清单");
+    if (tasksForDate().some((task) => (task.status || "pending") !== "pending"))
+      return showToast("周末已经开始执行，安排已锁定");
+    const task = taskById(id);
+    if (!task) return;
+    task.plannedDay = plannedDay === "sunday" ? "sunday" : "saturday";
+    delete weekend.planSaved;
+    delete weekend.planSavedAt;
     persist();
     render();
+  }
+
+  function saveWeekendTaskPlan() {
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    if (!key || date !== key) return showToast("周末安排只能在周五保存");
+    const weekend = weekendForDate(date, true);
+    const tasks = tasksForDate();
+    if (!weekend.confirmed || !tasks.length) return showToast("请先确认完整的作业清单");
+    if (tasks.some((task) => (task.status || "pending") !== "pending")) return showToast("周末已经开始执行，安排已锁定");
+    tasks.forEach((task) => { task.plannedDay = plannedDayForTask(task); });
+    weekend.planSaved = true;
+    weekend.planSavedAt = currentTime();
+    delete weekend.penaltyConfirmed;
+    persist();
+    render();
+    showToast("周末安排已保存，周六和周日会自动带入");
+  }
+
+  function toggleWeekendPenalty() {
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    const weekend = weekendForDate(date, true);
+    if (!key || date !== addDays(key, 2) || !weekend.planSaved || weekend.allDoneDate) return;
+    if (!weekend.penaltyConfirmed && !window.confirm("确认到周日结束，学校作业仍未全部完成吗？")) return;
+    weekend.penaltyConfirmed = !weekend.penaltyConfirmed;
+    persist();
+    render();
+    showToast(weekend.penaltyConfirmed ? "周末未完成已结算" : "已撤销未完成结算");
   }
 
   elements.settingsButton.addEventListener("click", () => {
@@ -1007,16 +1002,12 @@
   });
   elements.recordDate.addEventListener("change", () => setRecordDate(elements.recordDate.value));
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
-  elements.weekendConfirmedButton.addEventListener("click", () => toggleWeekendField("confirmed", "confirmedAt", "周末作业确认状态已更新"));
-  elements.dailySeparatedButton.addEventListener("click", () => toggleWeekendField("dailySeparated", null, "每日任务分类已更新"));
-  elements.specialSeparatedButton.addEventListener("click", () => toggleWeekendField("specialSeparated", null, "特殊任务分类已更新"));
-  [elements.fridayPlanMinutes, elements.saturdayMorningMinutes, elements.saturdayAfternoonMinutes]
-    .forEach((input) => input.addEventListener("input", updateWeekendPlanTotal));
-  elements.saveWeekendPlanButton.addEventListener("click", saveWeekendPlan);
-  elements.weekendActions.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-weekend-action]");
-    if (button) performWeekendAction(button.dataset.weekendAction);
+  elements.weekendTaskPlanList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-plan-day]");
+    if (button) selectWeekendTaskDay(button.dataset.taskId, button.dataset.planDay);
   });
+  elements.saveWeekendTaskPlanButton.addEventListener("click", saveWeekendTaskPlan);
+  elements.weekendPenaltyButton.addEventListener("click", toggleWeekendPenalty);
   elements.sportOptions.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-sport]");
     if (button) toggleSport(button.dataset.sport);
@@ -1040,12 +1031,6 @@
   });
   elements.focusCompleteButton.addEventListener("click", () => {
     if (focusModalTaskId) performTaskAction("complete", focusModalTaskId);
-  });
-  elements.note.addEventListener("change", () => {
-    const note = elements.note.value.trim();
-    const record = currentRecord(Boolean(note));
-    if (record) record.note = note;
-    saveAndRender(note ? "备注已保存" : null);
   });
   elements.resetDayButton.addEventListener("click", () => {
     const date = elements.recordDate.value;
@@ -1089,8 +1074,6 @@
     if (record?.startTime && !record.finishTime && !record.ruleId) {
       renderCurrentRecord();
       if (activeTaskForDate()) renderTasks();
-      const key = weekendKeyFor(elements.recordDate.value);
-      if (key) elements.weekendActualMinutes.textContent = `${weekendActualMinutes(key)} 分钟`;
     }
   }, 30000);
 })();

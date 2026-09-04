@@ -152,6 +152,18 @@ public class MainActivity extends Activity {
     private LinearLayout taskSettlementPanel;
     private TextView taskSettlementLabel;
     private TextView taskSettlementAmount;
+    private LinearLayout weekendTaskPlanner;
+    private TextView weekendTaskPlannerKicker;
+    private TextView weekendTaskPlannerTitle;
+    private TextView weekendTaskPlannerHelp;
+    private TextView weekendTaskPlanSummary;
+    private LinearLayout weekendTaskPlanList;
+    private TextView weekendTaskPlanHint;
+    private Button saveWeekendTaskPlanButton;
+    private LinearLayout weekendTaskResultPanel;
+    private TextView weekendTaskResultLabel;
+    private TextView weekendTaskResultAmount;
+    private Button weekendTaskPenaltyButton;
     private final List<Button> subjectTabButtons = new ArrayList<>();
     private String selectedTaskSubject = "语文";
 
@@ -278,9 +290,7 @@ public class MainActivity extends Activity {
         content.addView(buildDateStrip());
         content.addView(space(14));
         weekendCard = buildWeekendCard();
-        content.addView(weekendCard, matchWrap());
-        weekendSpacer = space(14);
-        content.addView(weekendSpacer);
+        weekendSpacer = space(0);
         content.addView(buildProcessCard());
         content.addView(space(14));
         content.addView(buildHistoryCard());
@@ -576,15 +586,18 @@ public class MainActivity extends Activity {
         recordHeadingView.setPadding(0, dp(3), 0, dp(10));
         card.addView(recordHeadingView);
 
-        sportCard = buildSportCard();
-        card.addView(sportCard, matchWrap());
-        card.addView(space(9));
-        ledgerCard = prepCard("成长记录册已补全", "已核对钉钉全部作业");
+        ledgerCard = prepCard("已核对钉钉和成长记录册", "先确定今天全部作业，再录入清单");
         card.addView(ledgerCard, matchFixed(dp(72)));
         card.addView(space(16));
 
         card.addView(buildTasksPanel(), matchWrap());
         card.addView(space(16));
+
+        card.addView(buildWeekendTaskPlanner(), matchWrap());
+        card.addView(space(16));
+
+        sportCard = buildSportCard();
+        card.addView(sportCard, matchWrap());
 
         LinearLayout session = vertical();
         session.setPadding(dp(16), dp(19), dp(16), dp(17));
@@ -647,8 +660,6 @@ public class MainActivity extends Activity {
         session.addView(resultPanel, resultParams);
         // The detailed task list now owns timing and completion; keep the legacy views off-screen for old data compatibility.
 
-        card.addView(space(18));
-        card.addView(text("备注（选填）", 13, INK, true));
         noteInput = new EditText(this);
         noteInput.setTextSize(14);
         noteInput.setTextColor(INK);
@@ -673,10 +684,6 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        LinearLayout.LayoutParams noteParams = matchWrap();
-        noteParams.topMargin = dp(7);
-        card.addView(noteInput, noteParams);
-
         LinearLayout tools = horizontal();
         tools.setGravity(Gravity.START);
         Button reset = textButton("清除当天记录");
@@ -840,6 +847,72 @@ public class MainActivity extends Activity {
         return panel;
     }
 
+    private LinearLayout buildWeekendTaskPlanner() {
+        LinearLayout panel = vertical();
+        panel.setPadding(dp(15), dp(17), dp(15), dp(15));
+        panel.setBackground(rounded(Color.rgb(255, 250, 240), 18, Color.rgb(216, 204, 177), 1));
+        panel.setVisibility(View.GONE);
+
+        LinearLayout head = horizontal();
+        head.setGravity(Gravity.TOP);
+        LinearLayout copy = vertical();
+        weekendTaskPlannerKicker = text("周五安排", 10, GREEN, true);
+        weekendTaskPlannerKicker.setLetterSpacing(0.1f);
+        copy.addView(weekendTaskPlannerKicker);
+        weekendTaskPlannerTitle = text("给每项作业安排完成日期", 17, INK, true);
+        copy.addView(weekendTaskPlannerTitle);
+        weekendTaskPlannerHelp = text("默认安排在周六；确实需要周日完成的，再改成周日。", 10, MUTED, false);
+        weekendTaskPlannerHelp.setPadding(0, dp(4), 0, 0);
+        copy.addView(weekendTaskPlannerHelp);
+        head.addView(copy, weightedWrap(1));
+        weekendTaskPlanSummary = text("尚未保存", 11, GREEN, true);
+        weekendTaskPlanSummary.setPadding(dp(8), dp(5), dp(8), dp(5));
+        weekendTaskPlanSummary.setBackground(rounded(GREEN_SOFT, 18, GREEN_SOFT, 0));
+        head.addView(weekendTaskPlanSummary);
+        panel.addView(head, matchWrap());
+
+        weekendTaskPlanList = vertical();
+        LinearLayout.LayoutParams listParams = matchWrap();
+        listParams.topMargin = dp(12);
+        panel.addView(weekendTaskPlanList, listParams);
+
+        weekendTaskPlanHint = text("确认作业清单后再安排。", 10, MUTED, false);
+        weekendTaskPlanHint.setPadding(0, dp(12), 0, dp(8));
+        panel.addView(weekendTaskPlanHint);
+        saveWeekendTaskPlanButton = new Button(this);
+        saveWeekendTaskPlanButton.setText("保存周末安排");
+        saveWeekendTaskPlanButton.setTextSize(12);
+        saveWeekendTaskPlanButton.setTextColor(Color.WHITE);
+        saveWeekendTaskPlanButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        saveWeekendTaskPlanButton.setAllCaps(false);
+        saveWeekendTaskPlanButton.setBackground(rounded(GREEN, 11, GREEN, 0));
+        saveWeekendTaskPlanButton.setOnClickListener(v -> saveWeekendTaskPlan());
+        panel.addView(saveWeekendTaskPlanButton, matchFixed(dp(44)));
+
+        weekendTaskResultPanel = horizontal();
+        weekendTaskResultPanel.setGravity(Gravity.CENTER_VERTICAL);
+        weekendTaskResultPanel.setPadding(dp(13), dp(11), dp(13), dp(11));
+        LinearLayout resultCopy = vertical();
+        resultCopy.addView(text("周末结算", 10, MUTED, false));
+        weekendTaskResultLabel = text("", 12, INK, true);
+        resultCopy.addView(weekendTaskResultLabel);
+        weekendTaskResultPanel.addView(resultCopy, weightedWrap(1));
+        weekendTaskResultAmount = text("", 17, GREEN, true);
+        weekendTaskResultPanel.addView(weekendTaskResultAmount);
+        LinearLayout.LayoutParams resultParams = matchWrap();
+        resultParams.topMargin = dp(12);
+        panel.addView(weekendTaskResultPanel, resultParams);
+
+        weekendTaskPenaltyButton = textButton("周日结束仍未完成");
+        weekendTaskPenaltyButton.setTextColor(RED);
+        weekendTaskPenaltyButton.setOnClickListener(v -> toggleWeekendTaskPenalty());
+        LinearLayout.LayoutParams penaltyParams = matchFixed(dp(42));
+        penaltyParams.topMargin = dp(8);
+        panel.addView(weekendTaskPenaltyButton, penaltyParams);
+        weekendTaskPlanner = panel;
+        return panel;
+    }
+
     private void selectTaskSubject(String subject) {
         selectedTaskSubject = subject;
         for (int index = 0; index < subjectTabButtons.size(); index++) {
@@ -876,6 +949,16 @@ public class MainActivity extends Activity {
     }
 
     private void addTasksFromDraft() {
+        String weekendKey = weekendKeyFor(currentDate);
+        if (weekendKey != null && !currentDate.equals(weekendKey)) {
+            toast("周六、周日直接使用周五清单，不需要重新录入");
+            return;
+        }
+        JSONObject dailyRecord = currentRecord(false);
+        if (dailyRecord == null || !dailyRecord.optBoolean("ledgerConfirmed")) {
+            toast("请先核对钉钉和成长记录册");
+            return;
+        }
         String draft = taskDraftInput.getText().toString().trim();
         List<JSONObject> parsed = parseTaskDraft(draft);
         if (parsed.isEmpty()) {
@@ -891,12 +974,15 @@ public class MainActivity extends Activity {
             put(task, "id", stamp + "-" + index);
             put(task, "status", "pending");
             put(task, "elapsedMs", 0L);
+            if (weekendKey != null) put(task, "plannedDay", "saturday");
             tasks.put(task);
         }
         put(owner, "tasks", tasks);
-        if (weekendKeyFor(currentDate) != null) {
+        if (weekendKey != null) {
             put(owner, "confirmed", false);
             owner.remove("confirmedAt");
+            owner.remove("planSaved");
+            owner.remove("planSavedAt");
         } else {
             put(owner, "tasksConfirmed", false);
             owner.remove("tasksConfirmedAt");
@@ -949,6 +1035,18 @@ public class MainActivity extends Activity {
             if (task == null || !"done".equals(task.optString("status"))) return false;
         }
         return true;
+    }
+
+    private String plannedDayForTask(JSONObject task) {
+        return task != null && "sunday".equals(task.optString("plannedDay")) ? "sunday" : "saturday";
+    }
+
+    private String plannedDayLabel(JSONObject task) {
+        return "sunday".equals(plannedDayForTask(task)) ? "周日" : "周六";
+    }
+
+    private String plannedDateForTask(String weekendKey, JSONObject task) {
+        return addDays(weekendKey, "sunday".equals(plannedDayForTask(task)) ? 2 : 1);
     }
 
     private long taskElapsedMillis(JSONObject task) {
@@ -1054,22 +1152,41 @@ public class MainActivity extends Activity {
     }
 
     private void toggleTaskListConfirmation() {
+        String weekendKey = weekendKeyFor(currentDate);
+        if (weekendKey != null && !currentDate.equals(weekendKey)) {
+            toast("周六、周日使用周五已经确认的清单");
+            return;
+        }
         JSONArray tasks = taskArray(false);
         if (tasks.length() == 0) {
             toast("请先录入作业");
             return;
         }
         boolean confirmed = taskListConfirmed();
+        JSONObject dailyRecord = currentRecord(false);
+        if (!confirmed && (dailyRecord == null || !dailyRecord.optBoolean("ledgerConfirmed"))) {
+            toast("请先核对钉钉和成长记录册");
+            return;
+        }
         if (confirmed && activeTask(false) != null) {
             toast("请先暂停当前作业再修改清单");
             return;
         }
+        if (confirmed && weekendKey != null) {
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task != null && !"pending".equals(task.optString("status", "pending"))) {
+                    toast("周末已经开始执行，不能再修改清单");
+                    return;
+                }
+            }
+        }
         JSONObject owner = taskOwner(true);
-        String field = weekendKeyFor(currentDate) != null ? "confirmed" : "tasksConfirmed";
-        String timeField = weekendKeyFor(currentDate) != null ? "confirmedAt" : "tasksConfirmedAt";
+        String field = weekendKey != null ? "confirmed" : "tasksConfirmed";
+        String timeField = weekendKey != null ? "confirmedAt" : "tasksConfirmedAt";
         put(owner, field, !confirmed);
         if (!confirmed) put(owner, timeField, currentTime()); else owner.remove(timeField);
-        if (weekendKeyFor(currentDate) == null) {
+        if (weekendKey == null) {
             if (confirmed) {
                 owner.remove("finishTime");
                 owner.remove("tasksFinishedAt");
@@ -1083,6 +1200,9 @@ public class MainActivity extends Activity {
                 put(owner, "tasksFinishedAt", latest.isEmpty() ? currentTime() : latest);
                 if (owner.optBoolean("ledgerConfirmed")) put(owner, "finishTime", owner.optString("tasksFinishedAt"));
             }
+        } else {
+            owner.remove("planSaved");
+            owner.remove("planSavedAt");
         }
         saveTaskData();
         renderAll();
@@ -1091,6 +1211,15 @@ public class MainActivity extends Activity {
 
     private void renderTasks() {
         if (taskListContainer == null) return;
+        String weekendKey = weekendKeyFor(currentDate);
+        boolean weekendMode = weekendKey != null;
+        boolean isFriday = weekendMode && currentDate.equals(weekendKey);
+        boolean canEditList = !weekendMode || isFriday;
+        JSONObject weekend = weekendMode ? weekendForDate(currentDate, false) : null;
+        boolean planSaved = weekend != null && weekend.optBoolean("planSaved");
+        JSONObject dailyRecord = currentRecord(false);
+        boolean ledgerReady = weekendMode && !isFriday
+                || dailyRecord != null && dailyRecord.optBoolean("ledgerConfirmed");
         JSONArray tasks = taskArray(false);
         boolean confirmed = taskListConfirmed();
         int done = 0;
@@ -1099,18 +1228,23 @@ public class MainActivity extends Activity {
             if (task != null && "done".equals(task.optString("status"))) done++;
         }
         taskSummaryView.setText(tasks.length() == 0 ? "0 项" : done + " / " + tasks.length() + " 项完成");
-        taskEntryPanel.setVisibility(confirmed ? View.GONE : View.VISIBLE);
+        taskEntryPanel.setVisibility(!confirmed && canEditList && ledgerReady ? View.VISIBLE : View.GONE);
         emptyTaskView.setVisibility(tasks.length() == 0 ? View.VISIBLE : View.GONE);
-        taskConfirmButton.setVisibility(tasks.length() == 0 ? View.GONE : View.VISIBLE);
+        emptyTaskView.setText(weekendMode && !isFriday
+                ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
+                : ledgerReady ? "还没有作业，点击麦克风连续报完，或直接输入文字。"
+                : "先核对钉钉和成长记录册，再录入作业。");
+        taskConfirmButton.setVisibility(tasks.length() == 0 || !canEditList ? View.GONE : View.VISIBLE);
         taskConfirmButton.setText(confirmed ? "修改作业清单" : "确认作业清单");
-        JSONObject dailyRecord = currentRecord(false);
-        boolean weekendMode = weekendKeyFor(currentDate) != null;
-        taskConfirmHintView.setText(confirmed
+        taskConfirmHintView.setText(!canEditList
+                ? planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
+                : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
+                : confirmed
                 ? done == tasks.length() && tasks.length() > 0
-                    ? weekendMode ? "清单已全部完成，可进行周末结算。"
+                    ? weekendMode ? "周末清单已全部完成并自动结算。"
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
                         ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
-                    : "清单已确认；一次只开始一项。"
+                    : weekendMode ? "清单已确认；接下来给每项作业安排周六或周日。" : "清单已确认；一次只开始一项。"
                 : tasks.length() > 0 ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。");
 
         Result settlement = weekendMode ? null : resultFor(dailyRecord);
@@ -1136,40 +1270,258 @@ public class MainActivity extends Activity {
             if (task == null) continue;
             final int taskIndex = index;
             String status = task.optString("status", "pending");
+            boolean canDoToday = !weekendMode || planSaved && !isFriday
+                    && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(task)));
+            boolean plannedToday = weekendMode && !isFriday && currentDate.equals(plannedDateForTask(weekendKey, task));
             LinearLayout item = vertical();
             item.setPadding(dp(12), dp(11), dp(12), dp(11));
-            int fill = "active".equals(status) ? GREEN_SOFT : PAGE;
-            int stroke = "active".equals(status) ? GREEN : LINE;
+            int fill = "active".equals(status) ? GREEN_SOFT : plannedToday ? Color.rgb(255, 250, 240) : PAGE;
+            int stroke = "active".equals(status) ? GREEN : plannedToday ? Color.rgb(216, 204, 177) : LINE;
             item.setBackground(rounded(fill, 13, stroke, 1));
-            TextView title = text(task.optString("subject", "其他") + " · " + task.optString("title", "未命名作业"), 13, INK, true);
+            String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
+            TextView title = text(task.optString("subject", "其他") + " · " + task.optString("title", "未命名作业") + planLabel, 13, INK, true);
             if ("done".equals(status)) title.setAlpha(0.6f);
             item.addView(title);
             String meta = "待开始";
             if ("active".equals(status)) meta = "正在进行 · " + taskDurationLabel(task);
             else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);
-            else if ("done".equals(status)) meta = task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
+            else if ("done".equals(status)) meta = (hasText(task, "completedDate") ? formatShortDate(task.optString("completedDate")) + " " : "")
+                    + task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
+            else if (weekendMode && planSaved && !isFriday && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
             TextView metaView = text(meta, 10, MUTED, false);
             metaView.setPadding(0, dp(4), 0, dp(8));
             item.addView(metaView);
             LinearLayout actions = horizontal();
-            if (!confirmed) {
+            if (!confirmed && canEditList) {
                 addTaskActionButton(actions, "删除", false, true, () -> performTaskAction("delete", taskIndex));
-            } else if ("active".equals(status)) {
+            } else if (confirmed && canDoToday && "active".equals(status)) {
                 addTaskActionButton(actions, "暂停", false, false, () -> performTaskAction("pause", taskIndex));
                 addTaskActionButton(actions, "完成", true, false, () -> performTaskAction("complete", taskIndex));
-            } else if ("paused".equals(status)) {
+            } else if (confirmed && canDoToday && "paused".equals(status)) {
                 addTaskActionButton(actions, "继续", true, false, () -> performTaskAction("start", taskIndex));
                 addTaskActionButton(actions, "完成", false, false, () -> performTaskAction("complete", taskIndex));
-            } else if ("done".equals(status)) {
+            } else if (confirmed && canDoToday && "done".equals(status)) {
                 addTaskActionButton(actions, "撤销完成", false, false, () -> performTaskAction("undo", taskIndex));
-            } else {
+            } else if (confirmed && canDoToday) {
                 addTaskActionButton(actions, "开始", true, false, () -> performTaskAction("start", taskIndex));
             }
-            item.addView(actions, matchFixed(dp(39)));
+            if (actions.getChildCount() > 0) item.addView(actions, matchFixed(dp(39)));
             LinearLayout.LayoutParams itemParams = matchWrap();
             if (taskListContainer.getChildCount() > 0) itemParams.topMargin = dp(8);
             taskListContainer.addView(item, itemParams);
         }
+    }
+
+    private void renderWeekendTaskPlanner() {
+        String key = weekendKeyFor(currentDate);
+        boolean weekendMode = key != null;
+        weekendTaskPlanner.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
+        if (!weekendMode) return;
+
+        JSONObject weekend = weekendForDate(currentDate, false);
+        if (weekend == null) weekend = new JSONObject();
+        JSONArray tasks = taskArray(false);
+        boolean confirmed = weekend.optBoolean("confirmed");
+        boolean planSaved = weekend.optBoolean("planSaved");
+        boolean isFriday = currentDate.equals(key);
+        String saturday = addDays(key, 1);
+        String sunday = addDays(key, 2);
+        boolean executionStarted = false;
+        int saturdayCount = 0;
+        int sundayCount = 0;
+        int saturdayDone = 0;
+        int sundayDone = 0;
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null) continue;
+            if (!"pending".equals(task.optString("status", "pending"))) executionStarted = true;
+            if ("sunday".equals(plannedDayForTask(task))) {
+                sundayCount++;
+                if ("done".equals(task.optString("status"))) sundayDone++;
+            } else {
+                saturdayCount++;
+                if ("done".equals(task.optString("status"))) saturdayDone++;
+            }
+        }
+
+        weekendTaskPlannerKicker.setText(isFriday ? "周五安排" : "周五计划已自动带入");
+        weekendTaskPlannerTitle.setText(isFriday ? "给每项作业安排完成日期"
+                : "今天按" + (currentDate.equals(saturday) ? "周六" : "周日") + "计划完成");
+        weekendTaskPlannerHelp.setText(isFriday
+                ? "默认安排在周六；确实需要周日完成的，再改成周日。"
+                : "这份清单来自 " + formatShortDate(key) + "（周五），今天不需要重新录入。");
+        weekendTaskPlanSummary.setText(planSaved
+                ? "周六 " + saturdayCount + " 项 · 周日 " + sundayCount + " 项" : "尚未保存");
+
+        weekendTaskPlanList.removeAllViews();
+        if (isFriday && confirmed && tasks.length() > 0) {
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task == null) continue;
+                final int taskIndex = index;
+                LinearLayout row = vertical();
+                row.setPadding(dp(12), dp(10), dp(12), dp(10));
+                row.setBackground(rounded(Color.WHITE, 13, LINE, 1));
+                row.addView(text(task.optString("subject", "其他") + " · "
+                        + task.optString("title", "未命名作业"), 13, INK, true));
+                LinearLayout days = horizontal();
+                days.setPadding(0, dp(8), 0, 0);
+                Button saturdayButton = planDayButton("周六", "saturday".equals(plannedDayForTask(task)), executionStarted);
+                saturdayButton.setOnClickListener(v -> selectWeekendTaskDay(taskIndex, "saturday"));
+                days.addView(saturdayButton, weightedFixed(1, dp(38)));
+                days.addView(spaceHorizontal(6));
+                Button sundayButton = planDayButton("周日", "sunday".equals(plannedDayForTask(task)), executionStarted);
+                sundayButton.setOnClickListener(v -> selectWeekendTaskDay(taskIndex, "sunday"));
+                days.addView(sundayButton, weightedFixed(1, dp(38)));
+                row.addView(days, matchFixed(dp(46)));
+                LinearLayout.LayoutParams rowParams = matchWrap();
+                if (weekendTaskPlanList.getChildCount() > 0) rowParams.topMargin = dp(8);
+                weekendTaskPlanList.addView(row, rowParams);
+            }
+        } else if (!isFriday && planSaved) {
+            addWeekendPlanSummaryRow("周六计划", saturdayDone + " / " + saturdayCount + " 项完成", currentDate.equals(saturday));
+            addWeekendPlanSummaryRow("周日计划", sundayDone + " / " + sundayCount + " 项完成", currentDate.equals(sunday));
+        }
+
+        saveWeekendTaskPlanButton.setVisibility(isFriday && confirmed && tasks.length() > 0 && !executionStarted
+                ? View.VISIBLE : View.GONE);
+        saveWeekendTaskPlanButton.setText(planSaved ? "更新周末安排" : "保存周末安排");
+        if (!confirmed) {
+            weekendTaskPlanHint.setText(isFriday ? "先核对并确认上面的作业清单。" : "周五的作业清单还没有确认。");
+        } else if (!planSaved) {
+            weekendTaskPlanHint.setText(isFriday ? "选好每项作业的完成日，再保存安排。" : "周五还没有保存周末安排。");
+        } else if (executionStarted && isFriday) {
+            weekendTaskPlanHint.setText("周末已经开始执行，安排已锁定。");
+        } else if (currentDate.equals(saturday)) {
+            weekendTaskPlanHint.setText("今天优先完成周六的 " + saturdayCount + " 项。");
+        } else if (currentDate.equals(sunday)) {
+            weekendTaskPlanHint.setText("今天完成周日的 " + sundayCount + " 项，并补齐未完成项。");
+        } else {
+            weekendTaskPlanHint.setText("安排保存后，周六和周日会自动显示。");
+        }
+
+        Result result = weekendResultFor(key, weekend);
+        weekendTaskResultPanel.setVisibility(result == null ? View.GONE : View.VISIBLE);
+        if (result != null) {
+            weekendTaskResultLabel.setText(result.label);
+            weekendTaskResultAmount.setText(amountText(result.amount));
+            weekendTaskResultAmount.setTextColor(amountColor(result.amount));
+            int fill = result.amount < 0 ? RED_SOFT : result.amount == 0 ? AMBER_SOFT : GREEN_SOFT;
+            weekendTaskResultPanel.setBackground(rounded(fill, 12, fill, 0));
+        }
+        boolean showPenalty = currentDate.equals(sunday) && planSaved && !hasText(weekend, "allDoneDate");
+        weekendTaskPenaltyButton.setVisibility(showPenalty ? View.VISIBLE : View.GONE);
+        weekendTaskPenaltyButton.setText(weekend.optBoolean("penaltyConfirmed")
+                ? "撤销未完成结算" : "周日结束仍未完成");
+    }
+
+    private Button planDayButton(String label, boolean selected, boolean locked) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(11);
+        button.setTextColor(selected ? Color.rgb(118, 84, 31) : MUTED);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setAllCaps(false);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setEnabled(!locked);
+        button.setBackground(rounded(selected ? AMBER_SOFT : Color.WHITE, 18,
+                selected ? AMBER : LINE, 1));
+        return button;
+    }
+
+    private void addWeekendPlanSummaryRow(String title, String status, boolean today) {
+        LinearLayout row = vertical();
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        row.setBackground(rounded(today ? GREEN_SOFT : Color.WHITE, 13, today ? Color.rgb(155, 189, 171) : LINE, 1));
+        row.addView(text(title, 13, INK, true));
+        TextView statusView = text(status, 10, MUTED, false);
+        statusView.setPadding(0, dp(3), 0, 0);
+        row.addView(statusView);
+        LinearLayout.LayoutParams params = matchWrap();
+        if (weekendTaskPlanList.getChildCount() > 0) params.topMargin = dp(8);
+        weekendTaskPlanList.addView(row, params);
+    }
+
+    private void selectWeekendTaskDay(int index, String plannedDay) {
+        String key = weekendKeyFor(currentDate);
+        if (key == null || !currentDate.equals(key)) {
+            toast("周末安排只能在周五制定");
+            return;
+        }
+        JSONObject weekend = weekendForDate(currentDate, true);
+        if (!weekend.optBoolean("confirmed")) {
+            toast("请先确认作业清单");
+            return;
+        }
+        JSONArray tasks = taskArray(false);
+        for (int taskIndex = 0; taskIndex < tasks.length(); taskIndex++) {
+            JSONObject item = tasks.optJSONObject(taskIndex);
+            if (item != null && !"pending".equals(item.optString("status", "pending"))) {
+                toast("周末已经开始执行，安排已锁定");
+                return;
+            }
+        }
+        JSONObject task = tasks.optJSONObject(index);
+        if (task == null) return;
+        put(task, "plannedDay", "sunday".equals(plannedDay) ? "sunday" : "saturday");
+        weekend.remove("planSaved");
+        weekend.remove("planSavedAt");
+        saveWeekends();
+        renderAll();
+    }
+
+    private void saveWeekendTaskPlan() {
+        String key = weekendKeyFor(currentDate);
+        if (key == null || !currentDate.equals(key)) {
+            toast("周末安排只能在周五保存");
+            return;
+        }
+        JSONObject weekend = weekendForDate(currentDate, true);
+        JSONArray tasks = taskArray(false);
+        if (!weekend.optBoolean("confirmed") || tasks.length() == 0) {
+            toast("请先确认完整的作业清单");
+            return;
+        }
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && !"pending".equals(task.optString("status", "pending"))) {
+                toast("周末已经开始执行，安排已锁定");
+                return;
+            }
+            if (task != null) put(task, "plannedDay", plannedDayForTask(task));
+        }
+        put(weekend, "planSaved", true);
+        put(weekend, "planSavedAt", currentTime());
+        weekend.remove("penaltyConfirmed");
+        saveWeekends();
+        renderAll();
+        toast("周末安排已保存，周六和周日会自动带入");
+    }
+
+    private void toggleWeekendTaskPenalty() {
+        String key = weekendKeyFor(currentDate);
+        JSONObject weekend = weekendForDate(currentDate, true);
+        if (key == null || !currentDate.equals(addDays(key, 2)) || !weekend.optBoolean("planSaved")
+                || hasText(weekend, "allDoneDate")) return;
+        if (weekend.optBoolean("penaltyConfirmed")) {
+            weekend.remove("penaltyConfirmed");
+            saveWeekends();
+            renderAll();
+            toast("已撤销未完成结算");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("确认周末未完成")
+                .setMessage("确认到周日结束，学校作业仍未全部完成吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认", (dialog, which) -> {
+                    put(weekend, "penaltyConfirmed", true);
+                    saveWeekends();
+                    renderAll();
+                    toast("周末未完成已结算");
+                })
+                .show();
     }
 
     private void addTaskActionButton(LinearLayout row, String label, boolean primary, boolean danger, Runnable action) {
@@ -1190,17 +1542,26 @@ public class MainActivity extends Activity {
     }
 
     private void performTaskAction(String action, int index) {
+        String weekendKey = weekendKeyFor(currentDate);
+        JSONObject weekend = weekendKey == null ? null : weekendForDate(currentDate, true);
         JSONArray tasks = taskArray(true);
         JSONObject task = tasks.optJSONObject(index);
         if (task == null) return;
         boolean showFocusAfterRender = false;
         if ("delete".equals(action)) {
+            if (weekendKey != null && !currentDate.equals(weekendKey)) {
+                toast("周末清单只能在周五修改");
+                return;
+            }
             tasks.remove(index);
-            if (weekendKeyFor(currentDate) == null) {
+            if (weekendKey == null) {
                 JSONObject owner = taskOwner(true);
                 owner.remove("finishTime");
                 owner.remove("tasksFinishedAt");
                 owner.remove("ruleId");
+            } else {
+                weekend.remove("planSaved");
+                weekend.remove("planSavedAt");
             }
             cleanupCurrentRecord();
             cleanupWeekend();
@@ -1213,8 +1574,19 @@ public class MainActivity extends Activity {
             toast("请先确认作业清单");
             return;
         }
+        if (weekendKey != null && (!weekend.optBoolean("planSaved") || currentDate.equals(weekendKey))) {
+            toast(currentDate.equals(weekendKey)
+                    ? "请先安排好周六、周日，周末再开始作业" : "请先在周五保存周末安排");
+            return;
+        }
+        if (weekendKey != null && currentDate.equals(addDays(weekendKey, 1))
+                && "sunday".equals(plannedDayForTask(task))
+                && ("start".equals(action) || "complete".equals(action))) {
+            toast("这项安排在周日，今天先做周六计划");
+            return;
+        }
         JSONObject record = currentRecord(true);
-        if (hasText(record, "finishTime") && !"undo".equals(action)) {
+        if (weekendKey == null && hasText(record, "finishTime") && !"undo".equals(action)) {
             toast("当天已经结算，如需修改可先撤销一项完成");
             return;
         }
@@ -1238,8 +1610,9 @@ public class MainActivity extends Activity {
             stopTaskClock(task, "done");
             dismissTaskFocusDialog();
             put(task, "completedAt", currentTime());
+            if (weekendKey != null) put(task, "completedDate", currentDate);
             boolean completedAll = allTasksDone();
-            if (completedAll && weekendKeyFor(currentDate) == null) {
+            if (completedAll && weekendKey == null) {
                 put(record, "tasksFinishedAt", task.optString("completedAt"));
                 record.remove("ruleId");
                 if (record.optBoolean("ledgerConfirmed")) {
@@ -1251,16 +1624,27 @@ public class MainActivity extends Activity {
                     record.remove("finishTime");
                     toast("作业已全部完成，确认成长记录册后自动结算");
                 }
+            } else if (completedAll) {
+                put(weekend, "allDoneDate", currentDate);
+                put(weekend, "allDoneTime", task.optString("completedAt"));
+                weekend.remove("penaltyConfirmed");
+                Result result = weekendResultFor(weekendKey, weekend);
+                toast("周末作业已全部完成，" + result.label + " " + amountText(result.amount));
             } else {
-                toast(completedAll ? "作业清单已全部完成，可进行周末结算" : "完成一项，选择下一项吧");
+                toast("完成一项，选择下一项吧");
             }
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
             task.remove("completedAt");
-            if (weekendKeyFor(currentDate) == null) {
+            task.remove("completedDate");
+            if (weekendKey == null) {
                 record.remove("finishTime");
                 record.remove("tasksFinishedAt");
                 record.remove("ruleId");
+            } else {
+                weekend.remove("allDoneDate");
+                weekend.remove("allDoneTime");
+                weekend.remove("penaltyConfirmed");
             }
             toast("已撤销完成，可以继续这项作业");
         }
@@ -1382,7 +1766,9 @@ public class MainActivity extends Activity {
         boolean weekendMode = key != null;
         weekendCard.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         weekendSpacer.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
-        viewModeView.setText(weekendMode ? "周末计划与今日执行" : "平日记录");
+        viewModeView.setText(!weekendMode ? "平日记录"
+                : currentDate.equals(key) ? "周五录入与安排"
+                : currentDate.equals(addDays(key, 1)) ? "周六按计划完成" : "周日按计划完成");
         if (!weekendMode) return;
 
         JSONObject weekend = weekendForDate(currentDate, false);
@@ -1752,6 +2138,7 @@ public class MainActivity extends Activity {
         recordDateButton.setText(formatLongDate(currentDate));
         renderWeekend();
         renderTasks();
+        renderWeekendTaskPlanner();
         renderCurrent();
         renderHistoryAndSummary();
     }
@@ -1789,9 +2176,10 @@ public class MainActivity extends Activity {
             button.setBackground(rounded(selected ? GREEN : Color.WHITE, 18, selected ? GREEN : LINE, 1));
         }
         stylePrep(ledgerCard, ledgerCheckView, record.optBoolean("ledgerConfirmed", false));
-        ledgerCard.setVisibility(weekendMode ? View.GONE : View.VISIBLE);
+        String weekendKey = weekendKeyFor(currentDate);
+        ledgerCard.setVisibility(weekendKey != null && !currentDate.equals(weekendKey) ? View.GONE : View.VISIBLE);
         ledgerStatusView.setText(record.optBoolean("ledgerConfirmed", false)
-                ? fallbackTime(record, "ledgerAt") + " 确认全部作业" : "已核对钉钉全部作业");
+                ? fallbackTime(record, "ledgerAt") + " 完成核对，可以录入清单" : "先确定今天全部作业，再录入清单");
 
         String start = record.optString("startTime", "");
         String dinner = record.optString("dinnerTime", "");
@@ -1975,10 +2363,10 @@ public class MainActivity extends Activity {
                     + weekend.optString("allDoneTime", "") + " 全部完成";
         } else if (weekend.optBoolean("penaltyConfirmed")) {
             status = "周日结束仍未完成";
-        } else if (weekend.optBoolean("fridayDone")) {
-            status = "周五安排已完成，周末进行中";
+        } else if (weekend.optBoolean("planSaved")) {
+            status = "周五安排已保存，周末进行中";
         } else {
-            status = "周末计划进行中";
+            status = "等待周五安排";
         }
         TextView statusView = text(status, 12, MUTED, false);
         statusView.setPadding(0, dp(4), 0, dp(2));
@@ -2264,29 +2652,31 @@ public class MainActivity extends Activity {
 
     private Result weekendResultFor(String key, JSONObject weekend) {
         if (weekend == null) return null;
-        double fridayPart = weekend.optBoolean("fridayDone") ? 0.5 : 0;
+        double planningPart = weekend.optBoolean("planSaved") ? 0.5 : 0;
         if (weekend.optBoolean("penaltyConfirmed") && !hasText(weekend, "allDoneDate")) {
-            return new Result("周日结束仍未完成", fridayPart - 0.5);
+            return new Result("周日结束仍未完成", planningPart - 0.5);
         }
         if (!hasText(weekend, "allDoneDate")) return null;
-        String saturday = addDays(key, 1);
-        String doneDate = weekend.optString("allDoneDate");
-        String target = weekend.optString("targetTime", "18:00");
-        double finishPart = 0;
-        String label = "周日完成";
-        if (doneDate.compareTo(saturday) < 0) {
-            finishPart = 1;
-            label = "周五提前全部完成";
-        } else if (doneDate.equals(saturday)) {
-            if (weekend.optString("allDoneTime", "23:59").compareTo(target) <= 0) {
-                finishPart = 1;
-                label = target + " 目标前完成";
-            } else {
-                finishPart = 0.5;
-                label = target + " 目标后完成";
+        JSONArray tasks = weekend.optJSONArray("tasks");
+        boolean followedPlan = tasks != null && tasks.length() > 0;
+        if (followedPlan) {
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task == null || !"done".equals(task.optString("status"))) {
+                    followedPlan = false;
+                    break;
+                }
+                String completedDate = task.optString("completedDate", weekend.optString("allDoneDate"));
+                if (completedDate.compareTo(plannedDateForTask(key, task)) > 0) {
+                    followedPlan = false;
+                    break;
+                }
             }
+        } else {
+            followedPlan = weekend.optString("allDoneDate").compareTo(addDays(key, 1)) <= 0;
         }
-        return new Result(label, fridayPart + finishPart);
+        return new Result(followedPlan ? "按周五计划完成" : "全部完成，但晚于计划",
+                planningPart + (followedPlan ? 1.0 : 0.5));
     }
 
     private int weekendActualMinutes(String key) {
