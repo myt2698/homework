@@ -428,6 +428,22 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .empty-task-list[hidden] { display: none; }
 .task-list-footer { margin-top: 14px; }
 .task-list-footer > span { color: var(--muted); font-size: .7rem; }
+.task-footer-actions { display: flex; flex: 0 0 auto; gap: 7px; align-items: center; }
+.task-footer-actions .primary-button { min-width: 0; }
+.order-intro { padding: 11px 13px; border: 1px dashed #9cbcf5; border-radius: 14px; color: #5373a6; background: #f3f7ff; font-size: .72rem; font-weight: 700; }
+.order-group { display: grid; gap: 8px; }
+.order-group + .order-group { margin-top: 5px; }
+.order-group-title { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 3px 0; color: #345fba; }
+.order-group-title strong { font-size: .8rem; }
+.order-group-title small { color: var(--muted); font-size: .66rem; }
+.task-item.sortable { cursor: grab; touch-action: pan-y; transition: opacity .15s ease, transform .15s ease, box-shadow .15s ease; }
+.task-item.sortable:active { cursor: grabbing; }
+.task-item.sortable.dragging { opacity: .42; transform: scale(.98); }
+.task-item.sortable.drag-over { box-shadow: 0 0 0 3px rgba(75,130,239,.2); transform: translateY(2px); }
+.drag-handle { flex: 0 0 auto; margin-right: 7px; color: #7890b9; font-size: 1.15rem; font-weight: 900; letter-spacing: -4px; }
+.order-number { display: grid; width: 25px; height: 25px; flex: 0 0 auto; margin-right: 9px; border-radius: 50%; place-items: center; color: #fff; background: var(--subject-color); font-size: .7rem; font-weight: 850; }
+.task-buttons button.order-arrow { min-width: 31px; padding: 5px 8px; color: #5373a6; background: #fff; }
+.task-buttons button.order-arrow:disabled { opacity: .25; cursor: default; }
 
 .weekend-task-planner {
   margin-top: 16px;
@@ -681,6 +697,7 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .voice-entry-row, .task-list-footer { align-items: stretch; flex-direction: column; }
   .voice-entry-row small { text-align: left; }
   .voice-button, .task-list-footer button { width: 100%; }
+  .task-footer-actions { width: 100%; flex-direction: column; }
   .quest-section-title { align-items: flex-start; flex-direction: column; gap: 2px; }
   .quest-current-card { padding: 14px 12px; }
 }

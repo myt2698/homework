@@ -125,7 +125,10 @@
         <div class="empty-task-list" id="emptyTaskList">还没有作业，点击麦克风连续报完，或直接输入文字。</div>
         <div class="task-list-footer">
           <span id="taskConfirmHint">录入后先核对，避免漏掉作业。</span>
-          <button class="secondary-button" id="confirmTaskListButton" type="button" hidden>确认作业清单</button>
+          <div class="task-footer-actions">
+            <button class="primary-button compact-button" id="taskOrderButton" type="button" hidden>确定顺序，开始闯关</button>
+            <button class="secondary-button" id="confirmTaskListButton" type="button" hidden>确认作业清单</button>
+          </div>
         </div>
 
         <div class="day-result" id="dayResult" hidden>

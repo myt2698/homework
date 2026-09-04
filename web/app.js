@@ -59,6 +59,7 @@
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
     taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
+    taskOrderButton: $("#taskOrderButton"),
     activeTaskBanner: $("#activeTaskBanner"), activeTaskTitle: $("#activeTaskTitle"),
     activeTaskTime: $("#activeTaskTime"), taskList: $("#taskList"),
     emptyTaskList: $("#emptyTaskList"), taskConfirmHint: $("#taskConfirmHint"),
@@ -80,6 +81,7 @@
   let focusModalTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
+  let draggingTaskId = null;
 
   function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -161,6 +163,11 @@
   function taskListConfirmed(date = elements.recordDate.value) {
     const owner = taskOwnerForDate(date);
     return Boolean(owner && (weekendKeyFor(date) ? owner.confirmed : owner.tasksConfirmed));
+  }
+  function taskOrderSaved(date = elements.recordDate.value) {
+    const owner = taskOwnerForDate(date);
+    const tasks = tasksForDate(date);
+    return Boolean(owner?.orderSaved || tasks.some((task) => (task.status || "pending") !== "pending"));
   }
   function activeTaskForDate(date = elements.recordDate.value) {
     return tasksForDate(date).find((task) => task.status === "active") || null;
@@ -306,12 +313,14 @@
   }
   function weekendResultFor(key, weekend) {
     if (!weekend) return null;
-    const planningPart = weekend.planSaved ? 0.5 : 0;
+    const tasks = Array.isArray(weekend.tasks) ? weekend.tasks : [];
+    const orderReady = Boolean(weekend.orderSaved
+      || tasks.some((task) => (task.status || "pending") !== "pending"));
+    const planningPart = weekend.planSaved && orderReady ? 0.5 : 0;
     if (weekend.penaltyConfirmed && !weekend.allDoneDate) {
       return { label: "周日结束仍未完成", amount: planningPart - 0.5 };
     }
     if (!weekend.allDoneDate) return null;
-    const tasks = Array.isArray(weekend.tasks) ? weekend.tasks : [];
     const followedPlan = tasks.length
       ? tasks.every((task) => task.status === "done" && (task.completedDate || weekend.allDoneDate) <= plannedDateForTask(key, task))
       : weekend.allDoneDate <= addDays(key, 1);
@@ -418,7 +427,9 @@
         ? latestStatus(entry.record)
         : entry.weekend.allDoneDate
           ? `${formatDate(entry.weekend.allDoneDate)} ${entry.weekend.allDoneTime || ""} 全部完成`
-          : entry.weekend.penaltyConfirmed ? "周日结束仍未完成" : entry.weekend.planSaved ? "周五安排已保存，周末进行中" : "等待周五安排";
+          : entry.weekend.penaltyConfirmed ? "周日结束仍未完成"
+            : entry.weekend.planSaved && taskOrderSaved(date) ? "周五计划已完成，周末进行中"
+              : entry.weekend.planSaved ? "等待确定闯关顺序" : "等待周五安排";
       const subStatus = entry.type === "daily"
         ? entry.record.note || (result ? result.label : "流程尚未完成")
         : result ? result.label : "按周五清单安排周六、周日";
@@ -503,6 +514,8 @@
       ? isFriday ? "先核对并确认上面的作业清单。" : "周五的作业清单还没有确认。"
       : !weekend.planSaved ? isFriday ? "选好每项作业的完成日，再保存安排。" : "周五还没有保存周末安排。"
         : executionStarted && isFriday ? "周末已经开始执行，安排已锁定。"
+          : isFriday && !taskOrderSaved(date) ? "日期已安排，再回到上面排好周六、周日的闯关顺序。"
+            : isFriday ? "周末日期和闯关顺序都安排好啦。"
           : date === saturday ? `今天优先完成周六的 ${saturdayTasks.length} 项。`
             : date === sunday ? `今天完成周日的 ${sundayTasks.length} 项，并补齐未完成项。` : "安排保存后，周六和周日会自动显示。";
 
@@ -532,15 +545,28 @@
     const confirmed = taskListConfirmed(date);
     const doneCount = tasks.filter((task) => task.status === "done").length;
     const active = activeTaskForDate(date);
+    const orderSaved = taskOrderSaved(date);
+    const allPending = tasks.every((task) => (task.status || "pending") === "pending");
+    const canArrangeOrder = confirmed && canEditList && allPending && (!key || weekend.planSaved);
+    const sortingMode = canArrangeOrder && !orderSaved;
+    const orderPendingWeekend = confirmed && Boolean(key && !isFriday && weekend.planSaved && !orderSaved);
     elements.taskEntry.hidden = confirmed || !canEditList || !ledgerReady;
     elements.emptyTaskList.hidden = tasks.length > 0;
     elements.emptyTaskList.textContent = key && !isFriday
       ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
       : ledgerReady ? "还没有作业，点击麦克风连续报完，或直接输入文字。" : "先核对钉钉和成长记录册，再录入作业。";
-    elements.confirmTaskListButton.hidden = tasks.length === 0 || !canEditList;
+    elements.confirmTaskListButton.hidden = tasks.length === 0 || !canEditList || (confirmed && !allPending);
     elements.confirmTaskListButton.textContent = confirmed ? "修改作业清单" : "确认作业清单";
+    elements.taskOrderButton.hidden = !canArrangeOrder;
+    elements.taskOrderButton.textContent = sortingMode ? "确定顺序，开始闯关" : "调整闯关顺序";
+    elements.taskOrderButton.className = sortingMode
+      ? "primary-button compact-button" : "text-button bordered compact-order-button";
     const currentRecordData = recordFor(date) || {};
-    elements.taskConfirmHint.textContent = !canEditList
+    elements.taskConfirmHint.textContent = sortingMode
+      ? key ? "分别排好周六、周日的顺序，确定后就按计划闯关。" : "拖动作业，或使用箭头排好顺序，再确定开始。"
+      : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
+      : key && isFriday && orderSaved ? "周末完成日期和闯关顺序都安排好了。"
+      : !canEditList
       ? weekend?.planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
       : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
         : confirmed
@@ -549,20 +575,27 @@
           : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
         : key ? "清单已确认；接下来给每项作业安排周六或周日。" : "清单已确认；一次只开始一项。"
       : tasks.length ? "核对无误后再确认清单。" : "录入后先核对，避免漏掉作业。";
-    const questMode = confirmed && (!key || (!isFriday && weekend.planSaved));
+    const questMode = confirmed && orderSaved && (!key || (!isFriday && weekend.planSaved));
     const questTasks = !questMode ? tasks : !key ? tasks
       : date === addDays(key, 1)
         ? tasks.filter((task) => plannedDayForTask(task) === "saturday")
-        : tasks.filter((task) => plannedDayForTask(task) === "sunday"
-          || task.status !== "done" || task.completedDate === date);
+        : [
+          ...tasks.filter((task) => plannedDayForTask(task) === "saturday"
+            && (task.status !== "done" || task.completedDate === date)),
+          ...tasks.filter((task) => plannedDayForTask(task) === "sunday")
+        ];
     const questDone = questTasks.filter((task) => task.status === "done");
     const questRemaining = questTasks.filter((task) => task.status !== "done");
     const progressTotal = questMode ? questTasks.length : tasks.length;
     const progressDone = questMode ? questDone.length : doneCount;
-    elements.taskPanelTitle.textContent = questMode ? "今天一关一关来" : "选一项，轻松开始吧";
-    elements.taskPanelHelp.textContent = questMode
-      ? "不用一次想完，只看眼前这一项。"
-      : "一次专心做一项，每完成一项都很棒！";
+    elements.taskPanelTitle.textContent = sortingMode ? "安排你的闯关顺序"
+      : orderPendingWeekend ? "还差一步：确定顺序"
+        : questMode ? "今天一关一关来" : "选一项，轻松开始吧";
+    elements.taskPanelHelp.textContent = sortingMode
+      ? "这是你的计划，想先做哪一项由你决定。"
+      : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
+        : questMode ? "不用一次想完，只看眼前这一项。"
+          : "一次专心做一项，每完成一项都很棒！";
     elements.taskSummary.textContent = progressTotal ? `${progressDone} / ${progressTotal} 项完成` : "0 项";
     elements.activeTaskBanner.hidden = !active || questMode;
     if (active) {
@@ -583,7 +616,10 @@
       let buttons = "";
       const canDoToday = canDoTaskToday(task);
       const allowActions = options.allowActions !== false;
-      if (confirmed && canDoToday && allowActions) {
+      if (options.sortable) {
+        buttons = `<button class="order-arrow" type="button" data-order-action="up" data-task-id="${escapeHtml(String(task.id))}" aria-label="向前移动"${options.moveUp ? "" : " disabled"}>↑</button>
+          <button class="order-arrow" type="button" data-order-action="down" data-task-id="${escapeHtml(String(task.id))}" aria-label="向后移动"${options.moveDown ? "" : " disabled"}>↓</button>`;
+      } else if (confirmed && canDoToday && allowActions) {
         if (status === "active") {
           buttons = taskButton("暂停", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
@@ -598,15 +634,19 @@
       } else if (!confirmed && canEditList) {
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");
       }
-      const meta = status === "done"
+      const meta = options.sortable ? "长按拖动，或用右侧箭头调整"
+        : status === "done"
         ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · 用时 ${taskDurationLabel(task)}`
         : status === "active" ? `正在进行 · ${taskDurationLabel(task)}`
           : status === "paused" ? `已暂停 · 已用 ${taskDurationLabel(task)}`
             : key && weekend.planSaved && !isFriday && !canDoToday ? `计划${plannedDayLabel(task)}完成` : "待开始";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && !isFriday && plannedDateForTask(key, task) === date;
-      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}" data-subject="${escapeHtml(task.subject || "其他")}">
+      const sortAttributes = options.sortable
+        ? ` sortable" draggable="true" data-sort-task-id="${escapeHtml(String(task.id))}` : "";
+      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${sortAttributes}" data-subject="${escapeHtml(task.subject || "其他")}">
         <div class="task-main-row">
+          ${options.sortable ? `<span class="drag-handle" aria-hidden="true">⠿</span><span class="order-number">${options.orderNumber}</span>` : ""}
           <div class="task-copy">
             <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${planBadge}
             <small class="task-meta">${escapeHtml(meta)}</small>
@@ -616,8 +656,24 @@
       </article>`;
     };
 
+    if (sortingMode) {
+      const groupHtml = (label, groupTasks, help) => groupTasks.length ? `<section class="order-group">
+        ${label ? `<div class="order-group-title"><strong>${label}</strong><small>${help}</small></div>` : ""}
+        ${groupTasks.map((task, index) => taskCard(task, {
+          sortable: true, orderNumber: index + 1, moveUp: index > 0, moveDown: index < groupTasks.length - 1
+        })).join("")}</section>` : "";
+      const orderBody = key
+        ? groupHtml("周六闯关顺序", tasks.filter((task) => plannedDayForTask(task) === "saturday"), "先完成周六计划")
+          + groupHtml("周日闯关顺序", tasks.filter((task) => plannedDayForTask(task) === "sunday"), "周日按这个顺序完成")
+        : groupHtml("", tasks, "");
+      elements.taskSummary.textContent = `${tasks.length} 关待安排`;
+      elements.activeTaskBanner.hidden = true;
+      elements.taskList.innerHTML = `<div class="order-intro">🧭 先选一项容易开始的热身，再安排最需要动脑的作业。</div>${orderBody}`;
+      return;
+    }
+
     if (!questMode) {
-      elements.taskList.innerHTML = tasks.map((task) => taskCard(task)).join("");
+      elements.taskList.innerHTML = tasks.map((task) => taskCard(task, { allowActions: !orderPendingWeekend })).join("");
       return;
     }
 
@@ -853,6 +909,8 @@
       delete owner.tasksFinishedAt;
       delete owner.ruleId;
     }
+    delete owner.orderSaved;
+    delete owner.orderSavedAt;
     elements.taskDraft.value = "";
     persist();
     render();
@@ -869,8 +927,8 @@
     const confirmed = taskListConfirmed();
     if (!confirmed && !currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉和成长记录册");
     if (confirmed && activeTaskForDate()) return showToast("请先暂停当前作业再修改清单");
-    if (confirmed && key && tasks.some((task) => (task.status || "pending") !== "pending"))
-      return showToast("周末已经开始执行，不能再修改清单");
+    if (confirmed && tasks.some((task) => (task.status || "pending") !== "pending"))
+      return showToast("已经开始闯关，不能再修改清单");
     if (key) {
       owner.confirmed = !confirmed;
       if (owner.confirmed) owner.confirmedAt = currentTime(); else delete owner.confirmedAt;
@@ -890,11 +948,79 @@
         if (owner.ledgerConfirmed) owner.finishTime = owner.tasksFinishedAt;
       }
     }
+    if (!confirmed) {
+      owner.orderSaved = false;
+      delete owner.orderSavedAt;
+    } else {
+      delete owner.orderSaved;
+      delete owner.orderSavedAt;
+    }
     taskListExpanded = false;
     completedTasksExpanded = false;
     persist();
     render();
     showToast(confirmed ? "可以修改作业清单了" : `清单已确认，共 ${tasks.length} 项`);
+  }
+
+  function toggleTaskOrder() {
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    const tasks = tasksForDate(date);
+    const owner = taskOwnerForDate(date, true);
+    if (!taskListConfirmed(date) || !tasks.length) return showToast("请先确认完整的作业清单");
+    if (key && date !== key) return showToast("周末顺序请回到周五安排");
+    if (key && !owner.planSaved) return showToast("请先安排每项作业在周六还是周日完成");
+    if (tasks.some((task) => (task.status || "pending") !== "pending"))
+      return showToast("已经开始闯关，顺序不能再调整");
+    if (taskOrderSaved(date)) {
+      owner.orderSaved = false;
+      delete owner.orderSavedAt;
+      taskListExpanded = false;
+      completedTasksExpanded = false;
+      persist();
+      render();
+      showToast("可以重新安排顺序了");
+      return;
+    }
+    owner.orderSaved = true;
+    owner.orderSavedAt = currentTime();
+    taskListExpanded = false;
+    completedTasksExpanded = false;
+    persist();
+    render();
+    showToast(key ? "周末闯关顺序已确定！" : "顺序已确定，开始第一关吧！");
+  }
+
+  function reorderTask(sourceId, targetId) {
+    if (String(sourceId) === String(targetId)) return;
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    const tasks = tasksForDate(date);
+    const fromIndex = tasks.findIndex((task) => String(task.id) === String(sourceId));
+    const targetIndex = tasks.findIndex((task) => String(task.id) === String(targetId));
+    if (fromIndex < 0 || targetIndex < 0) return;
+    if (key && plannedDayForTask(tasks[fromIndex]) !== plannedDayForTask(tasks[targetIndex]))
+      return showToast("周六和周日的作业请分别排序");
+    const [moved] = tasks.splice(fromIndex, 1);
+    tasks.splice(targetIndex, 0, moved);
+    const owner = taskOwnerForDate(date, true);
+    owner.tasks = tasks;
+    owner.orderSaved = false;
+    delete owner.orderSavedAt;
+    persist();
+    render();
+  }
+
+  function moveTaskOneStep(id, direction) {
+    const date = elements.recordDate.value;
+    const key = weekendKeyFor(date);
+    const tasks = tasksForDate(date);
+    const task = tasks.find((item) => String(item.id) === String(id));
+    if (!task) return;
+    const group = key ? tasks.filter((item) => plannedDayForTask(item) === plannedDayForTask(task)) : tasks;
+    const position = group.indexOf(task);
+    const target = group[position + direction];
+    if (target) reorderTask(task.id, target.id);
   }
 
   function performTaskAction(action, id) {
@@ -926,6 +1052,7 @@
       return showToast("作业已删除");
     }
     if (!taskListConfirmed()) return showToast("请先确认作业清单");
+    if (!taskOrderSaved()) return showToast(key && date !== key ? "请回到周五确定周末闯关顺序" : "请先确定闯关顺序");
     if (key && (!weekend.planSaved || date === key)) return showToast(date === key ? "请先安排好周六、周日，周末再开始作业" : "请先在周五保存周末安排");
     if (key && date === addDays(key, 1) && plannedDayForTask(task) === "sunday" && action !== "undo")
       return showToast("这项安排在周日，今天先做周六计划");
@@ -1065,6 +1192,8 @@
     task.plannedDay = plannedDay === "sunday" ? "sunday" : "saturday";
     delete weekend.planSaved;
     delete weekend.planSavedAt;
+    weekend.orderSaved = false;
+    delete weekend.orderSavedAt;
     persist();
     render();
   }
@@ -1080,10 +1209,12 @@
     tasks.forEach((task) => { task.plannedDay = plannedDayForTask(task); });
     weekend.planSaved = true;
     weekend.planSavedAt = currentTime();
+    weekend.orderSaved = false;
+    delete weekend.orderSavedAt;
     delete weekend.penaltyConfirmed;
     persist();
     render();
-    showToast("周末安排已保存，周六和周日会自动带入");
+    showToast("完成日期已保存，再给两天的作业排好顺序吧");
   }
 
   function toggleWeekendPenalty() {
@@ -1135,7 +1266,13 @@
   elements.addTasksButton.addEventListener("click", addTasksFromDraft);
   elements.clearTaskDraftButton.addEventListener("click", () => { elements.taskDraft.value = ""; });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
+  elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
   elements.taskList.addEventListener("click", (event) => {
+    const orderButton = event.target.closest("button[data-order-action]");
+    if (orderButton) {
+      moveTaskOneStep(orderButton.dataset.taskId, orderButton.dataset.orderAction === "up" ? -1 : 1);
+      return;
+    }
     const toggle = event.target.closest("button[data-list-toggle]");
     if (toggle) {
       if (toggle.dataset.listToggle === "later") taskListExpanded = !taskListExpanded;
@@ -1145,6 +1282,33 @@
     }
     const button = event.target.closest("button[data-task-action]");
     if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
+  });
+  elements.taskList.addEventListener("dragstart", (event) => {
+    const card = event.target.closest("[data-sort-task-id]");
+    if (!card) return;
+    draggingTaskId = card.dataset.sortTaskId;
+    card.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggingTaskId);
+  });
+  elements.taskList.addEventListener("dragover", (event) => {
+    const card = event.target.closest("[data-sort-task-id]");
+    if (!card || !draggingTaskId || card.dataset.sortTaskId === draggingTaskId) return;
+    event.preventDefault();
+    elements.taskList.querySelectorAll(".drag-over").forEach((item) => item.classList.remove("drag-over"));
+    card.classList.add("drag-over");
+  });
+  elements.taskList.addEventListener("drop", (event) => {
+    const card = event.target.closest("[data-sort-task-id]");
+    if (!card || !draggingTaskId) return;
+    event.preventDefault();
+    const sourceId = draggingTaskId;
+    draggingTaskId = null;
+    reorderTask(sourceId, card.dataset.sortTaskId);
+  });
+  elements.taskList.addEventListener("dragend", () => {
+    draggingTaskId = null;
+    elements.taskList.querySelectorAll(".dragging, .drag-over").forEach((item) => item.classList.remove("dragging", "drag-over"));
   });
   elements.focusCloseButton.addEventListener("click", closeFocusModal);
   elements.focusPauseButton.addEventListener("click", () => {
