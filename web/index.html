@@ -15,7 +15,6 @@
         <div>
           <p class="eyebrow">每天进步一点点</p>
           <h1>作业小账本</h1>
-          <p class="hero-cheer">认真完成，也别忘了开心和休息呀！</p>
         </div>
       </div>
       <button class="icon-button" id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsPanel">
@@ -76,7 +75,7 @@
     </section>
 
     <section class="card record-card">
-      <div class="section-heading">
+      <div class="section-heading" hidden>
         <div>
           <p class="section-kicker">🚀 今日小目标</p>
           <h2 id="recordHeading">今天进行到哪里了？</h2>
@@ -155,7 +154,7 @@
         <span class="weekend-plan-entry-arrow" aria-hidden="true">›</span>
       </button>
 
-      <div class="prep-grid sport-section">
+      <div class="prep-grid sport-section daily-extras" hidden>
         <div class="prep-check sport-check" id="sportCard">
           <span class="check-mark" aria-hidden="true">✓</span>
           <span class="sport-copy">
@@ -180,12 +179,11 @@
         </button>
       </div>
 
-      <div class="record-actions">
+      <div class="record-actions daily-extras" hidden>
         <button class="text-button danger" id="resetDayButton" type="button">清除当天记录</button>
       </div>
     </section>
 
-    <footer>🌱 每天完成一点点，就会越来越厉害 · 数据只保存在当前浏览器中</footer>
   </main>
 
   <section class="app-shell history-page" id="historyPage" aria-labelledby="historyPageTitle" hidden>

@@ -335,11 +335,6 @@ public class MainActivity extends Activity {
         weekendCard = buildWeekendCard();
         weekendSpacer = space(0);
         content.addView(buildProcessCard());
-        content.addView(space(16));
-
-        TextView footer = text("🌱 每天完成一点点，就会越来越厉害\n数据只保存在这台手机中", 11, MUTED, true);
-        footer.setGravity(Gravity.CENTER);
-        content.addView(footer, matchWrap());
         mainPageView = scrollView;
         historyPageView = buildHistoryPage();
         historyPageView.setVisibility(View.GONE);
@@ -359,9 +354,6 @@ public class MainActivity extends Activity {
         eyebrow.setLetterSpacing(0.12f);
         titles.addView(eyebrow);
         titles.addView(text("🌟 作业小账本", 28, GREEN_DARK, true));
-        TextView cheer = text("认真完成，也别忘了开心和休息呀！", 10, MUTED, false);
-        cheer.setPadding(0, dp(3), 0, 0);
-        titles.addView(cheer);
         row.addView(titles, weightedWrap(1));
         Button settings = smallButton("设置");
         settings.setOnClickListener(v -> showStartDatePicker());
@@ -645,34 +637,22 @@ public class MainActivity extends Activity {
 
     private View buildProcessCard() {
         LinearLayout card = card();
-        TextView kicker = text("🚀 今日小目标", 10, GREEN, true);
-        kicker.setLetterSpacing(0.12f);
-        card.addView(kicker);
         recordHeadingView = text("今天进行到哪里了？", 21, INK, true);
-        recordHeadingView.setPadding(0, dp(3), 0, dp(10));
-        card.addView(recordHeadingView);
 
         ledgerCard = prepCard("已核对钉钉和成长记录册", "先确定今天全部作业，再录入清单");
         card.addView(ledgerCard, matchFixed(dp(72)));
         card.addView(space(16));
 
         card.addView(buildTasksPanel(), matchWrap());
-        card.addView(space(16));
 
         buildWeekendTaskPlanner();
-        card.addView(buildWeekendTaskPlanEntry(), matchWrap());
-        card.addView(space(16));
+        LinearLayout.LayoutParams weekendEntryParams = matchWrap();
+        weekendEntryParams.topMargin = dp(16);
+        card.addView(buildWeekendTaskPlanEntry(), weekendEntryParams);
 
         sportCard = buildSportCard();
-        card.addView(sportCard, matchWrap());
-        card.addView(space(9));
-        LinearLayout habitRow = horizontal();
         readingCard = dailyHabitCard("阅读打卡", "完成阅读后打卡", "readingDone", "readingAt", true);
-        habitRow.addView(readingCard, weightedFixed(1, dp(76)));
-        habitRow.addView(spaceHorizontal(8));
         choresCard = dailyHabitCard("家务打卡", "做完家务后打卡", "choresDone", "choresAt", false);
-        habitRow.addView(choresCard, weightedFixed(1, dp(76)));
-        card.addView(habitRow, matchFixed(dp(76)));
 
         LinearLayout session = vertical();
         session.setPadding(dp(16), dp(19), dp(16), dp(17));
@@ -759,15 +739,6 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        LinearLayout tools = horizontal();
-        tools.setGravity(Gravity.START);
-        Button reset = textButton("清除当天记录");
-        reset.setTextColor(RED);
-        reset.setOnClickListener(v -> confirmResetCurrent());
-        tools.addView(reset);
-        LinearLayout.LayoutParams toolsParams = matchWrap();
-        toolsParams.topMargin = dp(14);
-        card.addView(tools, toolsParams);
         return card;
     }
 
