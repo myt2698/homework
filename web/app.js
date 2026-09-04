@@ -548,11 +548,14 @@
       elements.activeTaskTime.textContent = `已专注 ${taskDurationLabel(active)}`;
     }
 
+    const canDoTaskToday = (task) => !key || (weekend.planSaved && !isFriday
+      && (date === addDays(key, 2) || plannedDayForTask(task) === "saturday"));
+    const suggestedTask = active ? null : tasks.find((task) => (task.status || "pending") === "pending" && canDoTaskToday(task));
+
     elements.taskList.innerHTML = tasks.map((task) => {
       const status = task.status || "pending";
       let buttons = "";
-      const canDoToday = !key || (weekend.planSaved && !isFriday
-        && (date === addDays(key, 2) || plannedDayForTask(task) === "saturday"));
+      const canDoToday = canDoTaskToday(task);
       if (confirmed && canDoToday) {
         if (status === "active") {
           buttons = taskButton("暂停", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
@@ -561,7 +564,9 @@
         } else if (status === "done") {
           buttons = taskButton("撤销完成", "undo", task.id);
         } else {
-          buttons = taskButton("开始", "start", task.id, "primary-task-action");
+          const suggested = suggestedTask && String(suggestedTask.id) === String(task.id);
+          buttons = taskButton("开始", "start", task.id,
+            suggested ? "primary-task-action start-task-action" : "quiet-start-action");
         }
       } else if (!confirmed && canEditList) {
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");

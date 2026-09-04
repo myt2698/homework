@@ -1301,6 +1301,19 @@ public class MainActivity extends Activity {
         }
 
         taskListContainer.removeAllViews();
+        int suggestedTaskIndex = -1;
+        if (confirmed && activeTask(false) == null) {
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject candidate = tasks.optJSONObject(index);
+                if (candidate == null || !"pending".equals(candidate.optString("status", "pending"))) continue;
+                boolean candidateCanStart = !weekendMode || planSaved && !isFriday
+                        && (currentDate.equals(addDays(weekendKey, 2)) || "saturday".equals(plannedDayForTask(candidate)));
+                if (candidateCanStart) {
+                    suggestedTaskIndex = index;
+                    break;
+                }
+            }
+        }
         for (int index = 0; index < tasks.length(); index++) {
             JSONObject task = tasks.optJSONObject(index);
             if (task == null) continue;
@@ -1315,9 +1328,12 @@ public class MainActivity extends Activity {
             int stroke = "active".equals(status) ? GREEN : plannedToday ? Color.rgb(216, 204, 177) : LINE;
             item.setBackground(rounded(fill, 13, stroke, 1));
             String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
+            LinearLayout mainRow = horizontal();
+            mainRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout taskCopy = vertical();
             TextView title = text(task.optString("subject", "其他") + " · " + task.optString("title", "未命名作业") + planLabel, 13, INK, true);
             if ("done".equals(status)) title.setAlpha(0.6f);
-            item.addView(title);
+            taskCopy.addView(title);
             String meta = "待开始";
             if ("active".equals(status)) meta = "正在进行 · " + taskDurationLabel(task);
             else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);
@@ -1325,8 +1341,9 @@ public class MainActivity extends Activity {
                     + task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
             else if (weekendMode && planSaved && !isFriday && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
             TextView metaView = text(meta, 10, MUTED, false);
-            metaView.setPadding(0, dp(4), 0, dp(8));
-            item.addView(metaView);
+            metaView.setPadding(0, dp(4), 0, 0);
+            taskCopy.addView(metaView);
+            mainRow.addView(taskCopy, weightedWrap(1));
             LinearLayout actions = horizontal();
             if (!confirmed && canEditList) {
                 addTaskActionButton(actions, "删除", false, true, () -> performTaskAction("delete", taskIndex));
@@ -1339,9 +1356,16 @@ public class MainActivity extends Activity {
             } else if (confirmed && canDoToday && "done".equals(status)) {
                 addTaskActionButton(actions, "撤销完成", false, false, () -> performTaskAction("undo", taskIndex));
             } else if (confirmed && canDoToday) {
-                addTaskActionButton(actions, "开始", true, false, () -> performTaskAction("start", taskIndex));
+                boolean suggested = taskIndex == suggestedTaskIndex;
+                addTaskActionButton(actions, suggested ? "▶ 开始" : "开始", suggested, false,
+                        () -> performTaskAction("start", taskIndex));
             }
-            if (actions.getChildCount() > 0) item.addView(actions, matchFixed(dp(39)));
+            if (actions.getChildCount() > 0) {
+                mainRow.addView(spaceHorizontal(8));
+                mainRow.addView(actions, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            }
+            item.addView(mainRow, matchWrap());
             LinearLayout.LayoutParams itemParams = matchWrap();
             if (taskListContainer.getChildCount() > 0) itemParams.topMargin = dp(8);
             taskListContainer.addView(item, itemParams);
@@ -1454,7 +1478,7 @@ public class MainActivity extends Activity {
     private Button planDayButton(String label, boolean selected, boolean locked) {
         Button button = new Button(this);
         button.setText(label);
-        button.setTextSize(11);
+        button.setTextSize(10);
         button.setTextColor(selected ? Color.rgb(118, 84, 31) : MUTED);
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setAllCaps(false);
@@ -1570,10 +1594,11 @@ public class MainActivity extends Activity {
         button.setMinHeight(0);
         button.setMinimumHeight(0);
         int fill = primary ? GREEN : Color.WHITE;
-        button.setBackground(rounded(fill, 9, primary ? GREEN : LINE, 1));
+        button.setBackground(rounded(fill, 18, primary ? GREEN : LINE, 1));
         button.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams params = weightedFixed(1, dp(39));
-        if (row.getChildCount() > 0) params.leftMargin = dp(6);
+        int width = label.length() > 3 ? dp(76) : dp(58);
+        LinearLayout.LayoutParams params = fixed(width, dp(34));
+        if (row.getChildCount() > 0) params.leftMargin = dp(5);
         row.addView(button, params);
     }
 
