@@ -17,7 +17,7 @@
     { id: "lesson-4", label: "第4课", words: "暖洋洋 舒适 揭晓 身份 暖和 的确 曾经 打滚 水沟 注视".split(" ") },
     { id: "lesson-5", label: "第5课", words: "蚊子 即使 问题 绳子 苍蝇 证明 相互 配合 研究 类似 能够".split(" ") },
     { id: "lesson-6", label: "第6课", words: "帽子 脑袋 舒服 假如 设法 懂事 一溜烟 各式各样 摆放 玻璃".split(" ") },
-    { id: "garden-2", label: "语文园地二", words: "提纲 生锈 泡沫 综合 氧气 错账 矿物 俱乐部".split(" ") },
+    { id: "garden-2", label: "语文园地二", words: "提纲 生锈 泡沫 综合 氧气 结账 矿物 俱乐部".split(" ") },
     { id: "lesson-9", label: "第9课", words: "爬山虎 操场 嫩绿 新鲜 均匀 空隙 叶柄 触角 弯曲 痕迹 瞧不起 牢固".split(" ") },
     { id: "lesson-10", label: "第10课", words: "住宅 选择 住址 大厅 柔弱 平坦 光滑 修理 重要 增长".split(" ") },
     { id: "lesson-11", label: "第11课", words: "宇宙 黑乎乎 翻身 下降 精疲力竭 飘动 照耀 四肢 奔流不息 茂盛 整个".split(" ") },
