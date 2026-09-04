@@ -28,7 +28,7 @@
     { id: "lesson-17", label: "第17课", words: "崇山峻岭 盘旋 扩建 修筑 平整 打仗 自然 当地 耗费 大量 智慧 工程 奇迹".split(" ") },
     { id: "lesson-18", label: "第18课", words: "柱子 栏杆 人物 神清气爽 建筑 耸立 半山腰 金碧辉煌 镜子 隐隐约约 游人 狮子 姿态".split(" ") },
     { id: "garden-5", label: "语文园地五", words: "陵寝 景观 丝绸".split(" ") },
-    { id: "lesson-20", label: "第20课", words: "虽然 拳头 故意 神气 忙乱 锤子 助威 胳膊 纷纷 可笑 无缘无故".split(" ") },
+    { id: "lesson-20", label: "第20课", words: "虽然 拳头 故意 神气 忙乱 鞋子 助威 胳膊 纷纷 可笑 无缘无故".split(" ") },
     { id: "lesson-21", label: "第21课", words: "文艺 表演 角色 排练 主意 通情达理 充分 提示 演技 撤换 等候 哄堂大笑 垂头丧气".split(" ") },
     { id: "garden-6", label: "语文园地六", words: "韭菜 芥菜 辣椒 红薯 莲藕 芋头".split(" ") },
     { id: "lesson-24", label: "第24课", words: "主席 举行 心情 补充 激动 状态 奉献 运动员 训练 建设 勤劳 邀请".split(" ") },
