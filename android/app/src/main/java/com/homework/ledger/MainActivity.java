@@ -1,25 +1,24 @@
 package com.homework.ledger;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
-import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.MediaPlayer;
+import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.speech.RecognizerIntent;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.UtteranceProgressListener;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
@@ -44,6 +43,10 @@ import org.json.JSONException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -65,6 +68,8 @@ public class MainActivity extends Activity {
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
     private static final String[] SPORTS = {"跳绳", "仰卧起坐", "50米跑", "踢毽子", "坐位体前屈"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
+    private static final String DICTATION_VOICE_GUIDANCE =
+            "使用家长逐词录制的人声；每个词连续播放两遍，两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
     private static final String[][] DICTATION_LESSONS = {
             {"lesson-1", "第1课", "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波"},
             {"lesson-2", "第2课", "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡"},
@@ -88,7 +93,10 @@ public class MainActivity extends Activity {
             {"lesson-24", "第24课", "主席 举行 心情 补充 激动 状态 奉献 运动员 训练 建设 勤劳 邀请"},
             {"lesson-25", "第25课", "崛起 严肃 干脆 默默 若有所思 清晰 离开 随便 忘怀 非凡 惩处 训斥 燃烧 响亮"}
     };
-    private static final int VOICE_TASK_REQUEST = 201;
+    private static final int RECORD_AUDIO_PERMISSION_REQUEST = 201;
+    private static final int DICTATION_RECORD_AUDIO_PERMISSION_REQUEST = 202;
+    private static final long VOICE_RECORDING_LIMIT_MS = 120_000L;
+    private static final long DICTATION_RECORDING_MIN_MS = 400L;
     private static final Pattern SUBJECT_PATTERN = Pattern.compile("^(语文|数学|英语|科学|道法|体育|音乐|美术|其他)[\\s：:、，,-]*(.*)$");
     private static final Pattern SUBJECT_ANYWHERE_PATTERN = Pattern.compile("(语文|数学|英语|科学|道法|体育|音乐|美术|其他)(?:作业)?");
     private static final Pattern NUMBERED_TASK_PATTERN = Pattern.compile(
@@ -143,13 +151,18 @@ public class MainActivity extends Activity {
     private Button startDictationButton;
     private Button stopDictationButton;
     private int selectedDictationLessonIndex;
-    private TextToSpeech textToSpeech;
-    private boolean dictationTtsReady;
+    private MediaPlayer dictationMediaPlayer;
+    private MediaPlayer dictationPreviewPlayer;
+    private MediaRecorder dictationRecorder;
+    private File pendingDictationRecordingFile;
+    private String pendingDictationRecordingWord;
+    private String activeDictationRecordingWord;
+    private String activeDictationPreviewWord;
+    private long dictationRecordingStartedAt;
     private boolean dictationRunning;
     private List<String> activeDictationWords = new ArrayList<>();
     private int activeDictationIndex;
     private int activeDictationRepeat;
-    private String activeDictationUtteranceId;
 
     private TextView balanceView;
     private TextView periodView;
@@ -215,6 +228,14 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryPendingList;
     private Button taskEntryConfirmButton;
     private EditText taskDraftInput;
+    private Button voiceTaskButton;
+    private TextView voiceTaskStatusView;
+    private OfflineVoiceRecognizer offlineVoiceRecognizer;
+    private boolean startVoiceAfterPermission;
+    private boolean addTasksAfterVoiceStops;
+    private boolean discardVoiceResultAfterStop;
+    private String voiceDraftPrefix = "";
+    private String latestVoicePartial = "";
     private TextView taskSummaryView;
     private TextView taskPanelTitleView;
     private TextView taskPanelHelpView;
@@ -286,6 +307,11 @@ public class MainActivity extends Activity {
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
     private final Runnable dictationNextWord = this::speakCurrentDictationWord;
+    private final Runnable offlineVoiceTimeout = () -> {
+        if (offlineVoiceRecognizer == null || !offlineVoiceRecognizer.isRecording()) return;
+        stopOfflineVoiceInput();
+        toast("单次离线录音最长2分钟，正在整理识别结果");
+    };
     private final Runnable timerTick = new Runnable() {
         @Override
         public void run() {
@@ -311,6 +337,100 @@ public class MainActivity extends Activity {
             timerHandler.postDelayed(this, 1000);
         }
     };
+    private final OfflineVoiceRecognizer.Listener offlineVoiceListener =
+            new OfflineVoiceRecognizer.Listener() {
+                @Override
+                public void onModelReady() {
+                    setVoiceTaskButtonIdle();
+                    if (voiceTaskStatusView != null) {
+                        voiceTaskStatusView.setText("离线中文识别已就绪，录音不会上传网络");
+                    }
+                }
+
+                @Override
+                public void onModelError(Throwable error) {
+                    if (voiceTaskButton != null) {
+                        voiceTaskButton.setEnabled(true);
+                        voiceTaskButton.setText("↻ 重试加载离线语音");
+                    }
+                    if (voiceTaskStatusView != null) {
+                        voiceTaskStatusView.setText("离线语音模型加载失败，点击按钮重试");
+                    }
+                }
+
+                @Override
+                public void onPartialResult(String text) {
+                    if (discardVoiceResultAfterStop) return;
+                    latestVoicePartial = text;
+                    setTaskDraftFromVoice(text);
+                    if (voiceTaskStatusView != null && !text.isEmpty()) {
+                        voiceTaskStatusView.setText("正在离线识别：" + trailingText(text, 22));
+                    }
+                }
+
+                @Override
+                public void onFinalResult(String text) {
+                    timerHandler.removeCallbacks(offlineVoiceTimeout);
+                    if (discardVoiceResultAfterStop) {
+                        discardVoiceResultAfterStop = false;
+                        addTasksAfterVoiceStops = false;
+                        voiceDraftPrefix = "";
+                        latestVoicePartial = "";
+                        if (taskDraftInput != null) taskDraftInput.setText("");
+                        setVoiceTaskButtonIdle();
+                        if (voiceTaskStatusView != null) {
+                            voiceTaskStatusView.setText("录音已停止，内容已清空，可以重新录入");
+                        }
+                        return;
+                    }
+                    latestVoicePartial = text;
+                    setTaskDraftFromVoice(text);
+                    setVoiceTaskButtonIdle();
+                    boolean shouldAddTasks = addTasksAfterVoiceStops;
+                    addTasksAfterVoiceStops = false;
+                    if (text.isEmpty()) {
+                        if (voiceTaskStatusView != null) {
+                            voiceTaskStatusView.setText("没有听清，请靠近麦克风后重试");
+                        }
+                        if (!shouldAddTasks) toast("没有识别到语音，请重试或直接输入文字");
+                    } else {
+                        if (voiceTaskStatusView != null) {
+                            voiceTaskStatusView.setText("识别完成，请核对文字后生成清单");
+                        }
+                        if (!shouldAddTasks) toast("离线语音已转成文字，请核对");
+                    }
+                    if (shouldAddTasks) addTasksFromDraft();
+                }
+
+                @Override
+                public void onRecordingError(Throwable error) {
+                    timerHandler.removeCallbacks(offlineVoiceTimeout);
+                    if (discardVoiceResultAfterStop) {
+                        discardVoiceResultAfterStop = false;
+                        addTasksAfterVoiceStops = false;
+                        voiceDraftPrefix = "";
+                        latestVoicePartial = "";
+                        if (taskDraftInput != null) taskDraftInput.setText("");
+                        setVoiceTaskButtonIdle();
+                        if (voiceTaskStatusView != null) {
+                            voiceTaskStatusView.setText("录音已停止，内容已清空，可以重新录入");
+                        }
+                        return;
+                    }
+                    setTaskDraftFromVoice(latestVoicePartial);
+                    setVoiceTaskButtonIdle();
+                    boolean shouldAddTasks = addTasksAfterVoiceStops;
+                    addTasksAfterVoiceStops = false;
+                    if (voiceTaskStatusView != null) {
+                        voiceTaskStatusView.setText("录音或离线识别失败，请重试");
+                    }
+                    if (shouldAddTasks) {
+                        addTasksFromDraft();
+                    } else {
+                        toast("无法完成离线语音识别，请检查麦克风权限后重试");
+                    }
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -328,7 +448,8 @@ public class MainActivity extends Activity {
         currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
 
         setContentView(buildScreen());
-        initializeTextToSpeech();
+        offlineVoiceRecognizer = new OfflineVoiceRecognizer(this);
+        initializeOfflineVoiceRecognizer();
         renderAll();
         timerHandler.postDelayed(timerTick, 30000);
     }
@@ -337,12 +458,23 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         timerHandler.removeCallbacks(timerTick);
         timerHandler.removeCallbacks(taskFocusTick);
+        timerHandler.removeCallbacks(offlineVoiceTimeout);
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
         if (taskEntryDialog != null) taskEntryDialog.dismiss();
         if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
         stopDictation(false, false);
-        if (textToSpeech != null) textToSpeech.shutdown();
+        stopDictationWordRecording(true, false);
+        releaseDictationPreviewPlayer();
+        if (offlineVoiceRecognizer != null) offlineVoiceRecognizer.release();
         super.onDestroy();
+    }
+
+    @Override
+    protected void onStop() {
+        stopOfflineVoiceInput();
+        stopDictationWordRecording(true, false);
+        releaseDictationPreviewPlayer();
+        super.onStop();
     }
 
     @Override
@@ -359,30 +491,127 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != VOICE_TASK_REQUEST || resultCode != RESULT_OK || data == null) return;
-        ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-        if (results == null || results.isEmpty()) return;
-        String spoken = results.get(0).trim();
-        if (spoken.isEmpty()) return;
-        String existing = taskDraftInput.getText().toString().trim();
-        taskDraftInput.setText(existing.isEmpty() ? spoken : existing + "；" + spoken);
-        taskDraftInput.setSelection(taskDraftInput.length());
-        toast("语音已转成文字，请核对后生成清单");
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == DICTATION_RECORD_AUDIO_PERMISSION_REQUEST) {
+            boolean granted = grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            String word = pendingDictationRecordingWord;
+            pendingDictationRecordingWord = null;
+            if (granted && word != null) {
+                beginDictationWordRecording(word);
+            } else if (!granted) {
+                toast("需要麦克风权限才能录制词语人声");
+            }
+            return;
+        }
+        if (requestCode != RECORD_AUDIO_PERMISSION_REQUEST) return;
+        boolean granted = grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+        boolean shouldStart = startVoiceAfterPermission;
+        startVoiceAfterPermission = false;
+        if (granted && shouldStart) {
+            beginOfflineVoiceInput();
+        } else if (!granted) {
+            toast("需要麦克风权限才能离线识别作业；也可以继续手动输入文字");
+        }
+    }
+
+    private void initializeOfflineVoiceRecognizer() {
+        if (offlineVoiceRecognizer == null || offlineVoiceRecognizer.isReady()) return;
+        if (voiceTaskButton != null) {
+            voiceTaskButton.setEnabled(false);
+            voiceTaskButton.setText("正在准备离线语音…");
+        }
+        if (voiceTaskStatusView != null) {
+            voiceTaskStatusView.setText("正在本机加载中文识别模型，首次需要几秒钟");
+        }
+        offlineVoiceRecognizer.initialize(offlineVoiceListener);
     }
 
     private void startVoiceTaskInput() {
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "请连续报作业，每项先说科目");
-        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-        try {
-            startActivityForResult(intent, VOICE_TASK_REQUEST);
-        } catch (ActivityNotFoundException exception) {
-            toast("手机没有可用的语音识别服务，请直接输入文字");
+        if (offlineVoiceRecognizer == null) return;
+        if (offlineVoiceRecognizer.isRecording()) {
+            stopOfflineVoiceInput();
+            return;
         }
+        if (offlineVoiceRecognizer.isBusy()) {
+            toast("正在整理刚才的识别结果，请稍候");
+            return;
+        }
+        if (!offlineVoiceRecognizer.isReady()) {
+            initializeOfflineVoiceRecognizer();
+            toast(offlineVoiceRecognizer.isInitializing()
+                    ? "正在加载离线中文模型，请稍候再试"
+                    : "离线中文模型暂时不可用，请点击重试");
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            startVoiceAfterPermission = true;
+            requestPermissions(
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    RECORD_AUDIO_PERMISSION_REQUEST
+            );
+            return;
+        }
+        beginOfflineVoiceInput();
+    }
+
+    private void beginOfflineVoiceInput() {
+        if (offlineVoiceRecognizer == null || !offlineVoiceRecognizer.isReady()) return;
+        discardVoiceResultAfterStop = false;
+        voiceDraftPrefix = taskDraftInput == null ? "" : taskDraftInput.getText().toString().trim();
+        latestVoicePartial = "";
+        if (!offlineVoiceRecognizer.start(offlineVoiceListener)) return;
+        if (voiceTaskButton != null) {
+            voiceTaskButton.setEnabled(true);
+            voiceTaskButton.setText("■ 停止并使用文字");
+        }
+        if (voiceTaskStatusView != null) {
+            voiceTaskStatusView.setText("正在本机识别，可以连续报多项作业");
+        }
+        timerHandler.removeCallbacks(offlineVoiceTimeout);
+        timerHandler.postDelayed(offlineVoiceTimeout, VOICE_RECORDING_LIMIT_MS);
+    }
+
+    private void stopOfflineVoiceInput() {
+        if (offlineVoiceRecognizer == null || !offlineVoiceRecognizer.isRecording()) return;
+        timerHandler.removeCallbacks(offlineVoiceTimeout);
+        offlineVoiceRecognizer.stop();
+        if (voiceTaskButton != null) {
+            voiceTaskButton.setEnabled(false);
+            voiceTaskButton.setText("正在整理识别结果…");
+        }
+        if (voiceTaskStatusView != null) {
+            voiceTaskStatusView.setText("录音已停止，正在完成离线识别");
+        }
+    }
+
+    private void setTaskDraftFromVoice(String spoken) {
+        if (taskDraftInput == null) return;
+        String clean = spoken == null ? "" : spoken.trim();
+        String combined = voiceDraftPrefix.isEmpty() || clean.isEmpty()
+                ? voiceDraftPrefix + clean
+                : voiceDraftPrefix + "；" + clean;
+        taskDraftInput.setText(combined);
+        taskDraftInput.setSelection(taskDraftInput.length());
+    }
+
+    private void setVoiceTaskButtonIdle() {
+        if (voiceTaskButton == null) return;
+        voiceTaskButton.setEnabled(offlineVoiceRecognizer != null
+                && offlineVoiceRecognizer.isReady());
+        voiceTaskButton.setText("🎙 开始语音报作业");
+    }
+
+    private String trailingText(String value, int maximumCharacters) {
+        if (value.length() <= maximumCharacters) return value;
+        return "…" + value.substring(value.length() - maximumCharacters);
     }
 
     private View buildScreen() {
@@ -864,18 +1093,19 @@ public class MainActivity extends Activity {
         taskEntryPanel.addView(subjectTabs, matchFixed(dp(39)));
         selectTaskSubject(selectedTaskSubject);
         taskEntryPanel.addView(space(9));
-        Button voice = new Button(this);
-        voice.setText("🎙 开始报作业");
-        voice.setTextSize(13);
-        voice.setTextColor(GREEN);
-        voice.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        voice.setAllCaps(false);
-        voice.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
-        voice.setOnClickListener(v -> startVoiceTaskInput());
-        taskEntryPanel.addView(voice, matchFixed(dp(46)));
-        TextView voiceTip = text("可以连续说：语文……，数学……，英语……", 10, MUTED, false);
-        voiceTip.setPadding(0, dp(7), 0, 0);
-        taskEntryPanel.addView(voiceTip);
+        voiceTaskButton = new Button(this);
+        voiceTaskButton.setText("正在准备离线语音…");
+        voiceTaskButton.setTextSize(13);
+        voiceTaskButton.setTextColor(GREEN);
+        voiceTaskButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        voiceTaskButton.setAllCaps(false);
+        voiceTaskButton.setEnabled(false);
+        voiceTaskButton.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
+        voiceTaskButton.setOnClickListener(v -> startVoiceTaskInput());
+        taskEntryPanel.addView(voiceTaskButton, matchFixed(dp(46)));
+        voiceTaskStatusView = text("正在本机加载中文识别模型", 10, MUTED, false);
+        voiceTaskStatusView.setPadding(0, dp(7), 0, 0);
+        taskEntryPanel.addView(voiceTaskStatusView);
 
         taskDraftInput = new EditText(this);
         taskDraftInput.setTextSize(14);
@@ -901,11 +1131,11 @@ public class MainActivity extends Activity {
         add.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         add.setAllCaps(false);
         add.setBackground(rounded(GREEN, 10, GREEN, 0));
-        add.setOnClickListener(v -> addTasksFromDraft());
+        add.setOnClickListener(v -> generateTasksFromDraft());
         entryActions.addView(add, weightedFixed(1, dp(43)));
         entryActions.addView(spaceHorizontal(6));
         Button clear = textButton("清空");
-        clear.setOnClickListener(v -> taskDraftInput.setText(""));
+        clear.setOnClickListener(v -> clearTaskDraftAndStopVoice());
         entryActions.addView(clear, fixed(dp(62), dp(43)));
         LinearLayout.LayoutParams entryActionParams = matchWrap();
         entryActionParams.topMargin = dp(9);
@@ -1109,6 +1339,8 @@ public class MainActivity extends Activity {
                 .create();
         taskEntryDialog = dialog;
         dialog.setOnDismissListener(ignored -> {
+            addTasksAfterVoiceStops = false;
+            stopOfflineVoiceInput();
             if (taskEntryPanel.getParent() instanceof ViewGroup) {
                 ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
             }
@@ -1116,6 +1348,7 @@ public class MainActivity extends Activity {
             taskEntryDialogStatus = null;
         });
         dialog.show();
+        dialog.setCanceledOnTouchOutside(false);
         renderTasks();
     }
 
@@ -1314,6 +1547,35 @@ public class MainActivity extends Activity {
             parsed.add(task);
         }
         return parsed;
+    }
+
+    private void generateTasksFromDraft() {
+        if (offlineVoiceRecognizer != null
+                && (offlineVoiceRecognizer.isRecording() || offlineVoiceRecognizer.isBusy())) {
+            addTasksAfterVoiceStops = true;
+            stopOfflineVoiceInput();
+            if (voiceTaskStatusView != null) {
+                voiceTaskStatusView.setText("录音已停止，识别完成后将自动生成清单");
+            }
+            return;
+        }
+        addTasksFromDraft();
+    }
+
+    private void clearTaskDraftAndStopVoice() {
+        addTasksAfterVoiceStops = false;
+        voiceDraftPrefix = "";
+        latestVoicePartial = "";
+        boolean voiceActive = offlineVoiceRecognizer != null
+                && (offlineVoiceRecognizer.isRecording() || offlineVoiceRecognizer.isBusy());
+        discardVoiceResultAfterStop = voiceActive;
+        if (voiceActive) stopOfflineVoiceInput();
+        if (taskDraftInput != null) taskDraftInput.setText("");
+        if (voiceTaskStatusView != null) {
+            voiceTaskStatusView.setText(voiceActive
+                    ? "录音已停止，正在清空识别结果"
+                    : "内容已清空，可以重新录入");
+        }
     }
 
     private void addTasksFromDraft() {
@@ -2248,7 +2510,9 @@ public class MainActivity extends Activity {
         mainRow.addView(taskCopy, weightedWrap(1));
         LinearLayout actions = horizontal();
         if (!confirmed && canEditList) {
-            addTaskActionButton(actions, "删除", false, true, () -> performTaskAction("delete", taskIndex));
+            String deleteLabel = target == taskEntryPendingList ? "删除作业" : "删除";
+            addTaskActionButton(actions, deleteLabel, false, true,
+                    () -> performTaskAction("delete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "active".equals(status)) {
             addTaskActionButton(actions, "暂停", false, false, () -> performTaskAction("pause", taskIndex));
             addTaskActionButton(actions, "完成", true, false, () -> performTaskAction("complete", taskIndex));
@@ -2538,8 +2802,9 @@ public class MainActivity extends Activity {
         button.setAllCaps(false);
         button.setMinHeight(0);
         button.setMinimumHeight(0);
-        int fill = primary ? GREEN : Color.WHITE;
-        button.setBackground(rounded(fill, 18, primary ? GREEN : LINE, 1));
+        int fill = primary ? GREEN : danger ? Color.rgb(255, 244, 244) : Color.WHITE;
+        int stroke = primary ? GREEN : danger ? Color.rgb(235, 148, 148) : LINE;
+        button.setBackground(rounded(fill, 18, stroke, 1));
         button.setOnClickListener(v -> action.run());
         int width = label.length() > 3 ? dp(76) : dp(58);
         LinearLayout.LayoutParams params = fixed(width, dp(34));
@@ -2832,16 +3097,13 @@ public class MainActivity extends Activity {
 
         LinearLayout header = horizontal();
         header.setGravity(Gravity.CENTER_VERTICAL);
-        Button back = new Button(this);
-        back.setText("‹");
-        back.setTextSize(26);
-        back.setTextColor(GREEN);
-        back.setAllCaps(false);
-        back.setMinHeight(0);
-        back.setMinimumHeight(0);
-        back.setBackground(rounded(Color.WHITE, 15, LINE, 1));
+        Button back = smallButton("返回");
+        back.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        back.setGravity(Gravity.CENTER);
+        back.setIncludeFontPadding(false);
+        back.setPadding(0, 0, 0, 0);
         back.setOnClickListener(v -> showMainPage());
-        header.addView(back, fixed(dp(44), dp(44)));
+        header.addView(back, fixed(dp(64), dp(40)));
         header.addView(spaceHorizontal(13));
         LinearLayout headerCopy = vertical();
         headerCopy.addView(text("🔊 四上语文词语表", 10, GREEN, true));
@@ -2882,12 +3144,12 @@ public class MainActivity extends Activity {
         dictationWordBank = vertical();
         dictationWordBank.setPadding(dp(15), dp(15), dp(15), dp(15));
         dictationWordBank.setBackground(rounded(Color.rgb(248, 251, 255), 17, LINE, 1));
-        TextView bankKicker = text("本课词语", 10, GREEN, true);
+        TextView bankKicker = text("本课词语与人声录音", 10, GREEN, true);
         bankKicker.setLetterSpacing(0.1f);
         dictationWordBank.addView(bankKicker);
         dictationLessonTitleView = text("第1课", 18, INK, true);
         dictationWordBank.addView(dictationLessonTitleView);
-        TextView bankHelp = text("内置词语不可删除，自行添加的词语可以移除", 9, MUTED, false);
+        TextView bankHelp = text("请由家长为每个词清楚地读一遍并保存；开始听写前，本课词语需要全部完成录音。", 9, MUTED, false);
         bankHelp.setPadding(0, dp(4), 0, dp(8));
         dictationWordBank.addView(bankHelp);
         dictationWordsContainer = vertical();
@@ -2942,7 +3204,7 @@ public class MainActivity extends Activity {
         practice.addView(practiceKicker);
         dictationStatusView = text("准备好后开始听写", 17, INK, true);
         practice.addView(dictationStatusView);
-        dictationTimingView = text("第一遍正常语速，第二遍稍慢；两遍间隔1秒，四字词后停3秒，其余词语停2秒。", 10, MUTED, false);
+        dictationTimingView = text(DICTATION_VOICE_GUIDANCE, 10, MUTED, false);
         dictationTimingView.setPadding(0, dp(5), 0, 0);
         practice.addView(dictationTimingView);
         LinearLayout progressRow = horizontal();
@@ -3012,25 +3274,86 @@ public class MainActivity extends Activity {
     }
 
     private void addDictationWordRow(String word, int number, boolean custom, int customIndex) {
-        LinearLayout row = horizontal();
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(10), dp(7), dp(9), dp(7));
+        LinearLayout row = vertical();
+        row.setPadding(dp(10), dp(8), dp(9), dp(8));
         row.setBackground(rounded(custom ? Color.rgb(240, 251, 247) : Color.WHITE, 12,
                 custom ? Color.rgb(168, 220, 201) : Color.rgb(199, 216, 245), 1));
+
+        boolean hasRecording = hasDictationWordRecording(word);
+        boolean recordingThisWord = word.equals(activeDictationRecordingWord);
+        boolean recordingAnotherWord = activeDictationRecordingWord != null && !recordingThisWord;
+        LinearLayout info = horizontal();
+        info.setGravity(Gravity.CENTER_VERTICAL);
         TextView badge = text(String.valueOf(number), 10, custom ? Color.rgb(55, 126, 104) : GREEN, true);
         badge.setGravity(Gravity.CENTER);
-        row.addView(badge, fixed(dp(27), dp(30)));
+        info.addView(badge, fixed(dp(27), dp(30)));
+        info.addView(spaceHorizontal(5));
+        LinearLayout copy = vertical();
         TextView wordView = text(word + (custom ? "  ·  自定义" : ""), 13, INK, true);
-        row.addView(wordView, weightedWrap(1));
-        if (custom) {
-            Button remove = textButton("删除");
-            remove.setTextColor(Color.rgb(55, 126, 104));
-            remove.setOnClickListener(v -> removeCustomDictationWord(customIndex));
-            row.addView(remove, fixed(dp(58), dp(36)));
+        copy.addView(wordView);
+        String recordingStatus = recordingThisWord ? "正在录音，读完后点击停止"
+                : hasRecording ? "已录制家长人声" : "未录音";
+        TextView status = text(recordingStatus, 9,
+                recordingThisWord ? RED : hasRecording ? Color.rgb(55, 126, 104) : MUTED, false);
+        status.setPadding(0, dp(2), 0, 0);
+        copy.addView(status);
+        info.addView(copy, weightedWrap(1));
+        row.addView(info, matchWrap());
+
+        LinearLayout actions = horizontal();
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        Button record = dictationWordActionButton(
+                recordingThisWord ? "停止" : hasRecording ? "重录" : "录音",
+                !hasRecording && !recordingThisWord,
+                recordingThisWord
+        );
+        record.setEnabled(!recordingAnotherWord && !dictationRunning);
+        record.setOnClickListener(v -> toggleDictationWordRecording(word));
+        actions.addView(record, fixed(dp(55), dp(34)));
+        if (hasRecording && !recordingThisWord) {
+            actions.addView(spaceHorizontal(4));
+            Button preview = dictationWordActionButton(
+                    word.equals(activeDictationPreviewWord) ? "停止" : "试听", false, false);
+            preview.setEnabled(activeDictationRecordingWord == null && !dictationRunning);
+            preview.setOnClickListener(v -> toggleDictationWordPreview(word));
+            actions.addView(preview, fixed(dp(50), dp(34)));
+            actions.addView(spaceHorizontal(4));
+            Button deleteRecording = dictationWordActionButton("删录音", false, true);
+            deleteRecording.setEnabled(activeDictationRecordingWord == null && !dictationRunning);
+            deleteRecording.setOnClickListener(v -> deleteDictationWordRecording(word));
+            actions.addView(deleteRecording, fixed(dp(62), dp(34)));
         }
+        if (custom) {
+            actions.addView(spaceHorizontal(4));
+            Button remove = dictationWordActionButton("删词语", false, false);
+            remove.setEnabled(activeDictationRecordingWord == null && !dictationRunning);
+            remove.setOnClickListener(v -> removeCustomDictationWord(customIndex));
+            actions.addView(remove, fixed(dp(58), dp(34)));
+        }
+        LinearLayout.LayoutParams actionParams = matchWrap();
+        actionParams.topMargin = dp(6);
+        row.addView(actions, actionParams);
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(6);
         dictationWordsContainer.addView(row, params);
+    }
+
+    private Button dictationWordActionButton(String label, boolean primary, boolean danger) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(10);
+        button.setTextColor(primary ? Color.WHITE : danger ? RED : GREEN);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setAllCaps(false);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setPadding(0, 0, 0, 0);
+        int fill = primary ? GREEN : danger ? Color.rgb(255, 244, 244) : Color.WHITE;
+        int stroke = primary ? GREEN : danger ? Color.rgb(235, 148, 148) : LINE;
+        button.setBackground(rounded(fill, 10, stroke, 1));
+        return button;
     }
 
     private void renderDictationPage() {
@@ -3039,9 +3362,11 @@ public class MainActivity extends Activity {
         List<String> allWords = dictationWordsForSelectedLesson();
         JSONArray custom = customWordsForSelectedLesson();
         dictationLessonButton.setText(lesson[1] + "  ▾");
-        dictationLessonButton.setEnabled(!dictationRunning);
+        dictationLessonButton.setEnabled(!dictationRunning && activeDictationRecordingWord == null);
         dictationLessonTitleView.setText(lesson[1]);
-        dictationLessonCountView.setText(allWords.size() + " 个词语");
+        int recordedCount = 0;
+        for (String word : allWords) if (hasDictationWordRecording(word)) recordedCount++;
+        dictationLessonCountView.setText("已录 " + recordedCount + " / " + allWords.size());
         dictationWordsContainer.removeAllViews();
         String[] builtIn = lesson[2].split(" ");
         for (int index = 0; index < builtIn.length; index++) {
@@ -3054,16 +3379,24 @@ public class MainActivity extends Activity {
         dictationWordBank.setVisibility(dictationRunning ? View.GONE : View.VISIBLE);
         dictationHiddenWords.setVisibility(dictationRunning ? View.VISIBLE : View.GONE);
         startDictationButton.setVisibility(dictationRunning ? View.GONE : View.VISIBLE);
+        startDictationButton.setEnabled(activeDictationRecordingWord == null);
         stopDictationButton.setVisibility(dictationRunning ? View.VISIBLE : View.GONE);
         if (!dictationRunning) {
-            dictationStatusView.setText("准备好后开始听写");
-            dictationTimingView.setText("第一遍正常语速，第二遍稍慢；两遍间隔1秒，四字词后停3秒，其余词语停2秒。");
+            if (activeDictationRecordingWord != null) {
+                dictationStatusView.setText("正在录制「" + activeDictationRecordingWord + "」");
+                dictationTimingView.setText("清楚地读一遍，读完点击“停止”保存；单个词最长录制10秒。");
+            } else {
+                dictationStatusView.setText(recordedCount == allWords.size()
+                        ? "本课人声已录齐，可以开始听写"
+                        : "还有 " + (allWords.size() - recordedCount) + " 个词语未录音");
+                dictationTimingView.setText(DICTATION_VOICE_GUIDANCE);
+            }
             setDictationProgress(0, allWords.size(), -1);
         }
     }
 
     private void showDictationLessonPicker() {
-        if (dictationRunning) return;
+        if (dictationRunning || activeDictationRecordingWord != null) return;
         String[] labels = new String[DICTATION_LESSONS.length];
         for (int index = 0; index < DICTATION_LESSONS.length; index++) labels[index] = DICTATION_LESSONS[index][1];
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -3117,28 +3450,212 @@ public class MainActivity extends Activity {
         toast("已移除自定义词语");
     }
 
-    private void initializeTextToSpeech() {
-        textToSpeech = new TextToSpeech(this, status -> {
-            if (status != TextToSpeech.SUCCESS || textToSpeech == null) return;
-            int language = textToSpeech.setLanguage(Locale.CHINA);
-            dictationTtsReady = language != TextToSpeech.LANG_MISSING_DATA
-                    && language != TextToSpeech.LANG_NOT_SUPPORTED;
-            textToSpeech.setSpeechRate(1f);
-            textToSpeech.setPitch(1f);
-            textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                @Override public void onStart(String utteranceId) { }
-                @Override public void onDone(String utteranceId) {
-                    runOnUiThread(() -> handleDictationUtteranceDone(utteranceId));
+    private File dictationRecordingDirectory() {
+        return new File(getFilesDir(), "dictation-word-recordings");
+    }
+
+    private File dictationWordRecordingFile(String word) {
+        String fileName;
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(word.trim().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte value : digest) hex.append(String.format(Locale.ROOT, "%02x", value & 0xff));
+            fileName = hex + ".m4a";
+        } catch (NoSuchAlgorithmException ignored) {
+            fileName = Integer.toHexString(word.hashCode()) + ".m4a";
+        }
+        return new File(dictationRecordingDirectory(), fileName);
+    }
+
+    private boolean hasDictationWordRecording(String word) {
+        File file = dictationWordRecordingFile(word);
+        return file.isFile() && file.length() > 0;
+    }
+
+    private void toggleDictationWordRecording(String word) {
+        if (word.equals(activeDictationRecordingWord)) {
+            stopDictationWordRecording(true, true);
+            return;
+        }
+        if (activeDictationRecordingWord != null || dictationRunning) return;
+        releaseDictationPreviewPlayer();
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            pendingDictationRecordingWord = word;
+            requestPermissions(
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    DICTATION_RECORD_AUDIO_PERMISSION_REQUEST
+            );
+            return;
+        }
+        beginDictationWordRecording(word);
+    }
+
+    private void beginDictationWordRecording(String word) {
+        if (activeDictationRecordingWord != null || dictationRunning) return;
+        stopOfflineVoiceInput();
+        if (offlineVoiceRecognizer != null && offlineVoiceRecognizer.isBusy()) {
+            pendingDictationRecordingWord = word;
+            timerHandler.postDelayed(() -> {
+                if (word.equals(pendingDictationRecordingWord)
+                        && dictationPageView != null
+                        && dictationPageView.getVisibility() == View.VISIBLE) {
+                    beginDictationWordRecording(word);
                 }
-                @Override public void onError(String utteranceId) {
-                    runOnUiThread(() -> {
-                        if (!dictationRunning || !utteranceId.equals(activeDictationUtteranceId)) return;
-                        stopDictation(false, false);
-                        toast("朗读服务暂时不可用，请检查系统语音设置");
-                    });
+            }, 250);
+            return;
+        }
+        pendingDictationRecordingWord = null;
+        releaseDictationPreviewPlayer();
+        releaseDictationMediaPlayer();
+        File directory = dictationRecordingDirectory();
+        if ((!directory.isDirectory() && !directory.mkdirs()) || !directory.canWrite()) {
+            toast("无法创建词语录音目录");
+            return;
+        }
+        File output = new File(directory, dictationWordRecordingFile(word).getName() + ".recording");
+        if (output.exists() && !output.delete()) {
+            toast("无法准备词语录音文件");
+            return;
+        }
+
+        MediaRecorder recorder = new MediaRecorder();
+        try {
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioSamplingRate(44100);
+            recorder.setAudioEncodingBitRate(96000);
+            recorder.setMaxDuration(10_000);
+            recorder.setOutputFile(output.getAbsolutePath());
+            recorder.setOnInfoListener((source, what, extra) -> {
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                    runOnUiThread(() -> stopDictationWordRecording(true, true));
                 }
             });
-        });
+            recorder.setOnErrorListener((source, what, extra) -> runOnUiThread(() -> {
+                stopDictationWordRecording(false, false);
+                toast("词语录音失败，请重试");
+            }));
+            recorder.prepare();
+            recorder.start();
+            dictationRecorder = recorder;
+            pendingDictationRecordingFile = output;
+            activeDictationRecordingWord = word;
+            dictationRecordingStartedAt = System.currentTimeMillis();
+            renderDictationPage();
+        } catch (Exception error) {
+            recorder.reset();
+            recorder.release();
+            output.delete();
+            toast("无法开始录音，请检查麦克风权限");
+        }
+    }
+
+    private void stopDictationWordRecording(boolean keepRecording, boolean notify) {
+        MediaRecorder recorder = dictationRecorder;
+        String word = activeDictationRecordingWord;
+        File temporaryFile = pendingDictationRecordingFile;
+        if (recorder == null || word == null) return;
+        dictationRecorder = null;
+        activeDictationRecordingWord = null;
+        pendingDictationRecordingFile = null;
+        boolean longEnough = System.currentTimeMillis() - dictationRecordingStartedAt
+                >= DICTATION_RECORDING_MIN_MS;
+        boolean stoppedCleanly = false;
+        try {
+            recorder.stop();
+            stoppedCleanly = true;
+        } catch (RuntimeException ignored) {
+            // A very short or interrupted capture is discarded below.
+        }
+        recorder.reset();
+        recorder.release();
+
+        boolean saved = false;
+        if (keepRecording && stoppedCleanly && longEnough && temporaryFile != null
+                && temporaryFile.isFile() && temporaryFile.length() > 0) {
+            File finalFile = dictationWordRecordingFile(word);
+            File backupFile = new File(finalFile.getParentFile(), finalFile.getName() + ".backup");
+            boolean backupReady = !backupFile.exists() || backupFile.delete();
+            boolean oldRecordingMoved = backupReady
+                    && (!finalFile.exists() || finalFile.renameTo(backupFile));
+            saved = oldRecordingMoved && temporaryFile.renameTo(finalFile);
+            if (saved) {
+                backupFile.delete();
+            } else if (backupFile.exists()) {
+                backupFile.renameTo(finalFile);
+            }
+        }
+        if (!saved && temporaryFile != null) temporaryFile.delete();
+        renderDictationPage();
+        if (notify) {
+            toast(saved ? "“" + word + "”的人声录音已保存" : "录音时间太短，请重新录制");
+        }
+    }
+
+    private void toggleDictationWordPreview(String word) {
+        if (word.equals(activeDictationPreviewWord)) {
+            releaseDictationPreviewPlayer();
+            renderDictationPage();
+            return;
+        }
+        releaseDictationPreviewPlayer();
+        File recording = dictationWordRecordingFile(word);
+        if (!recording.isFile()) {
+            renderDictationPage();
+            toast("这个词还没有录音");
+            return;
+        }
+        MediaPlayer player = new MediaPlayer();
+        try {
+            player.setDataSource(recording.getAbsolutePath());
+            player.setOnCompletionListener(completed -> runOnUiThread(() -> {
+                if (dictationPreviewPlayer != completed) return;
+                releaseDictationPreviewPlayer();
+                renderDictationPage();
+            }));
+            player.setOnErrorListener((failed, what, extra) -> {
+                runOnUiThread(() -> {
+                    if (dictationPreviewPlayer != failed) return;
+                    releaseDictationPreviewPlayer();
+                    renderDictationPage();
+                    toast("无法播放这条词语录音");
+                });
+                return true;
+            });
+            player.prepare();
+            dictationPreviewPlayer = player;
+            activeDictationPreviewWord = word;
+            player.start();
+            renderDictationPage();
+        } catch (Exception error) {
+            player.release();
+            toast("无法播放这条词语录音");
+        }
+    }
+
+    private void releaseDictationPreviewPlayer() {
+        MediaPlayer player = dictationPreviewPlayer;
+        dictationPreviewPlayer = null;
+        activeDictationPreviewWord = null;
+        if (player != null) player.release();
+    }
+
+    private void deleteDictationWordRecording(String word) {
+        new AlertDialog.Builder(this)
+                .setTitle("删除词语录音")
+                .setMessage("确定删除“" + word + "”的家长人声录音吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (dialog, which) -> {
+                    if (word.equals(activeDictationPreviewWord)) releaseDictationPreviewPlayer();
+                    File file = dictationWordRecordingFile(word);
+                    boolean deleted = !file.exists() || file.delete();
+                    renderDictationPage();
+                    toast(deleted ? "词语录音已删除" : "无法删除词语录音");
+                })
+                .show();
     }
 
     private void setDictationProgress(int completed, int total, int current) {
@@ -3148,15 +3665,21 @@ public class MainActivity extends Activity {
     }
 
     private void startDictation() {
-        if (!dictationTtsReady || textToSpeech == null) {
-            toast("系统语音服务正在准备，稍后再试");
-            return;
-        }
         List<String> words = dictationWordsForSelectedLesson();
         if (words.isEmpty()) {
             toast("请先添加听写词语");
             return;
         }
+        List<String> missing = new ArrayList<>();
+        for (String word : words) {
+            if (!hasDictationWordRecording(word)) missing.add(word);
+        }
+        if (!missing.isEmpty()) {
+            String firstMissing = missing.get(0);
+            toast("还有 " + missing.size() + " 个词未录音，请先录制“" + firstMissing + "”");
+            return;
+        }
+        releaseDictationPreviewPlayer();
         stopDictation(false, false);
         activeDictationWords = new ArrayList<>(words);
         activeDictationIndex = 0;
@@ -3167,28 +3690,66 @@ public class MainActivity extends Activity {
     }
 
     private void speakCurrentDictationWord() {
-        if (!dictationRunning || textToSpeech == null || activeDictationIndex >= activeDictationWords.size()) return;
+        if (!dictationRunning || activeDictationIndex >= activeDictationWords.size()) return;
         String word = activeDictationWords.get(activeDictationIndex);
         int repeatNumber = activeDictationRepeat + 1;
         int nextWordGap = dictationWordGapMs(word);
-        textToSpeech.setSpeechRate(repeatNumber == 1 ? 1f : 0.82f);
-        dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在朗读第 " + repeatNumber + " 遍");
+        dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在播放家长录音第 "
+                + repeatNumber + " 遍");
         dictationTimingView.setText(repeatNumber == 1
-                ? "听清楚，1秒后会再读一遍。"
+                ? "认真听，1秒后会再播放一遍。"
                 : activeDictationIndex + 1 >= activeDictationWords.size()
                 ? "这是最后一个词，写完就可以核对啦。"
                 : "写下这个词，" + (nextWordGap / 1000) + "秒后进入下一个。");
         setDictationProgress(activeDictationIndex, activeDictationWords.size(), activeDictationIndex + 1);
-        activeDictationUtteranceId = "dictation-" + System.nanoTime();
-        int result = textToSpeech.speak(word, TextToSpeech.QUEUE_FLUSH, null, activeDictationUtteranceId);
-        if (result == TextToSpeech.ERROR) {
+        playDictationWordRecording(word);
+    }
+
+    private void playDictationWordRecording(String word) {
+        releaseDictationMediaPlayer();
+        File recording = dictationWordRecordingFile(word);
+        if (!recording.isFile()) {
             stopDictation(false, false);
-            toast("朗读服务暂时不可用，请检查系统语音设置");
+            toast("“" + word + "”的人声录音不存在，请重新录制");
+            return;
+        }
+        MediaPlayer player = new MediaPlayer();
+        try {
+            player.setDataSource(recording.getAbsolutePath());
+            player.setOnCompletionListener(completedPlayer -> runOnUiThread(() -> {
+                if (dictationMediaPlayer != completedPlayer) return;
+                dictationMediaPlayer = null;
+                completedPlayer.release();
+                handleDictationAudioDone();
+            }));
+            player.setOnErrorListener((failedPlayer, what, extra) -> {
+                runOnUiThread(() -> {
+                    if (dictationMediaPlayer != failedPlayer) return;
+                    dictationMediaPlayer = null;
+                    failedPlayer.release();
+                    stopDictation(false, false);
+                    toast("无法播放“" + word + "”的人声录音，请重新录制");
+                });
+                return true;
+            });
+            player.prepare();
+            dictationMediaPlayer = player;
+            player.start();
+        } catch (Exception error) {
+            player.release();
+            stopDictation(false, false);
+            toast("无法播放“" + word + "”的人声录音，请重新录制");
         }
     }
 
-    private void handleDictationUtteranceDone(String utteranceId) {
-        if (!dictationRunning || !utteranceId.equals(activeDictationUtteranceId)) return;
+    private void releaseDictationMediaPlayer() {
+        MediaPlayer player = dictationMediaPlayer;
+        dictationMediaPlayer = null;
+        if (player != null) player.release();
+    }
+
+    private void handleDictationAudioDone() {
+        if (!dictationRunning) return;
         timerHandler.removeCallbacks(dictationNextWord);
         if (activeDictationRepeat == 0) {
             activeDictationRepeat = 1;
@@ -3219,13 +3780,12 @@ public class MainActivity extends Activity {
         int completedCount = completed ? total : activeDictationIndex;
         dictationRunning = false;
         timerHandler.removeCallbacks(dictationNextWord);
-        if (textToSpeech != null) textToSpeech.stop();
+        releaseDictationMediaPlayer();
         renderDictationPage();
         dictationStatusView.setText(completed ? "听写完成，共 " + total + " 个词语！" : "听写已停止");
         dictationTimingView.setText(completed ? "太棒了，现在可以打开词语表自己核对。" : "可以重新选择课程，准备好后再次开始。");
         setDictationProgress(completedCount, total, -1);
         activeDictationWords.clear();
-        activeDictationUtteranceId = null;
         if (completed && notify) toast("听写完成，认真核对一下吧");
     }
 
@@ -3280,6 +3840,9 @@ public class MainActivity extends Activity {
 
     private void showHistoryPage() {
         stopDictation(false, false);
+        pendingDictationRecordingWord = null;
+        stopDictationWordRecording(true, false);
+        releaseDictationPreviewPlayer();
         renderHistoryAndSummary();
         mainPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.GONE);
@@ -3289,6 +3852,9 @@ public class MainActivity extends Activity {
 
     private void showMainPage() {
         stopDictation(false, false);
+        pendingDictationRecordingWord = null;
+        stopDictationWordRecording(true, false);
+        releaseDictationPreviewPlayer();
         historyPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.GONE);
         mainPageView.setVisibility(View.VISIBLE);
