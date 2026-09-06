@@ -9,7 +9,7 @@
     late: { label: "9:30 以后", amount: -0.5 }
   };
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
-  const SPORTS = ["跳绳", "仰卧起坐", "50米跑", "踢毽子", "坐位体前屈"];
+  const SPORTS = ["跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"];
   const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
   const DICTATION_LESSONS = [
     { id: "lesson-1", label: "第1课", words: "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波".split(" ") },
@@ -91,7 +91,8 @@
     weekendResultLabel: $("#weekendResultLabel"), weekendResultAmount: $("#weekendResultAmount"),
     sportCard: $("#sportCard"), sportStatus: $("#sportStatus"), sportOptions: $("#sportOptions"),
     readingButton: $("#readingButton"), readingStatus: $("#readingStatus"),
-    choresButton: $("#choresButton"), choresStatus: $("#choresStatus"),
+    mathThinkingButton: $("#mathThinkingButton"), mathThinkingStatus: $("#mathThinkingStatus"),
+    englishReadingButton: $("#englishReadingButton"), englishReadingStatus: $("#englishReadingStatus"),
     ledgerButton: $("#ledgerButton"), ledgerStatus: $("#ledgerStatus"),
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryCloseButton: $("#taskEntryCloseButton"),
@@ -179,13 +180,17 @@
   }
   function isMeaningful(record) {
     return Boolean(record && (record.ropeDone || (Array.isArray(record.sportActivities) && record.sportActivities.length)
-      || record.ledgerConfirmed || record.readingDone || record.choresDone || record.note || record.ruleId
+      || record.ledgerConfirmed || record.readingDone || record.mathThinkingDone || record.englishReadingDone
+      || record.choresDone || record.note || record.ruleId
       || record.tasksConfirmed || (Array.isArray(record.tasks) && record.tasks.length)
       || TIME_FIELDS.some((field) => record[field])));
   }
 
   function sportsForRecord(record) {
-    if (Array.isArray(record?.sportActivities)) return record.sportActivities.filter((item) => SPORTS.includes(item));
+    if (Array.isArray(record?.sportActivities)) {
+      return SPORTS.filter((activity) => record.sportActivities.includes(activity)
+        || (activity === "50米" && record.sportActivities.includes("50米跑")));
+    }
     return record?.ropeDone ? ["跳绳"] : [];
   }
   function cleanupCurrentRecord() {
@@ -444,10 +449,13 @@
     if (record?.dinnerTime) return `${record.dinnerTime} 吃饭暂停`;
     if (record?.startTime) return `${record.startTime} 开始，进行中`;
     if (record?.ledgerConfirmed) return "成长记录册已补全";
-    if (record?.readingDone && record?.choresDone) return "阅读和家务已打卡";
-    if (record?.readingDone) return "阅读已打卡";
+    const dailyCheckins = [];
+    if (sportsForRecord(record).length) dailyCheckins.push("运动");
+    if (record?.readingDone) dailyCheckins.push("阅读");
+    if (record?.mathThinkingDone) dailyCheckins.push("数学思维");
+    if (record?.englishReadingDone) dailyCheckins.push("英文阅读");
+    if (dailyCheckins.length) return `${dailyCheckins.join("、")}已打卡`;
     if (record?.choresDone) return "家务已打卡";
-    if (sportsForRecord(record).length) return `运动已打卡 ${sportsForRecord(record).length} 项`;
     return "尚未开始";
   }
   function escapeHtml(value) {
@@ -1052,11 +1060,14 @@
     elements.ledgerStatus.textContent = record.ledgerConfirmed
       ? `${record.ledgerAt || "已"} 完成核对，可以录入清单` : "先确定今天全部作业，再录入清单";
     setPrepState(elements.readingButton, record.readingDone);
-    setPrepState(elements.choresButton, record.choresDone);
+    setPrepState(elements.mathThinkingButton, record.mathThinkingDone);
+    setPrepState(elements.englishReadingButton, record.englishReadingDone);
     elements.readingStatus.textContent = record.readingDone
-      ? `${record.readingAt || "已"} 完成阅读` : "今天完成阅读后打卡";
-    elements.choresStatus.textContent = record.choresDone
-      ? `${record.choresAt || "已"} 完成家务` : "今天做完家务后打卡";
+      ? `${record.readingAt || "已"} 完成阅读` : "完成阅读后打卡";
+    elements.mathThinkingStatus.textContent = record.mathThinkingDone
+      ? `${record.mathThinkingAt || "已"} 完成数学思维` : "完成数学思维练习后打卡";
+    elements.englishReadingStatus.textContent = record.englishReadingDone
+      ? `${record.englishReadingAt || "已"} 完成英文阅读` : "完成英文阅读后打卡";
 
     const result = weekendMode && !includeDailyInLedger(date, record) ? null : resultFor(record);
     elements.dayResult.hidden = !result;
@@ -1103,7 +1114,7 @@
     const selected = sports.includes(activity);
     const next = selected ? sports.filter((item) => item !== activity) : [...sports, activity];
     if (next.length) {
-      record.sportActivities = next;
+      record.sportActivities = SPORTS.filter((activity) => next.includes(activity));
       if (!record.sportAt) record.sportAt = currentTime();
     } else {
       delete record.sportActivities;
@@ -1651,7 +1662,8 @@
   });
   elements.ledgerButton.addEventListener("click", () => togglePrep("ledgerConfirmed", "ledgerAt", "成长记录册状态已更新"));
   elements.readingButton.addEventListener("click", () => togglePrep("readingDone", "readingAt", "阅读打卡状态已更新"));
-  elements.choresButton.addEventListener("click", () => togglePrep("choresDone", "choresAt", "家务打卡状态已更新"));
+  elements.mathThinkingButton.addEventListener("click", () => togglePrep("mathThinkingDone", "mathThinkingAt", "数学思维状态已更新"));
+  elements.englishReadingButton.addEventListener("click", () => togglePrep("englishReadingDone", "englishReadingAt", "英文阅读状态已更新"));
   elements.voiceTaskButton.addEventListener("click", toggleVoiceInput);
   elements.subjectTabs.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-subject]");

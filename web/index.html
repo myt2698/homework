@@ -151,30 +151,41 @@
         <span class="weekend-plan-entry-arrow" aria-hidden="true">›</span>
       </button>
 
-      <div class="prep-grid sport-section daily-extras" hidden>
-        <div class="prep-check sport-check" id="sportCard">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span class="sport-copy">
-            <strong>运动打卡</strong>
-            <small id="sportStatus">选择今天完成的运动</small>
-          </span>
-          <div class="sport-options" id="sportOptions" aria-label="运动项目">
-            <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
-            <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
-            <button type="button" data-sport="50米跑" aria-pressed="false">50米跑</button>
-            <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
-            <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
-          </div>
+      <section class="daily-checkins" aria-labelledby="dailyCheckinsTitle">
+        <div class="daily-checkins-heading">
+          <p class="section-kicker">🌱 每日任务</p>
+          <h3 id="dailyCheckinsTitle">每天坚持一点点</h3>
+          <p>运动、中英文阅读和思维训练分别完成、分别打卡。</p>
         </div>
-        <button class="prep-check habit-check" id="readingButton" type="button" aria-pressed="false">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span><strong>阅读打卡</strong><small id="readingStatus">今天完成阅读后打卡</small></span>
-        </button>
-        <button class="prep-check habit-check" id="choresButton" type="button" aria-pressed="false">
-          <span class="check-mark" aria-hidden="true">✓</span>
-          <span><strong>家务打卡</strong><small id="choresStatus">今天做完家务后打卡</small></span>
-        </button>
-      </div>
+        <div class="prep-grid sport-section">
+          <div class="prep-check sport-check" id="sportCard">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span class="sport-copy">
+              <strong>运动打卡</strong>
+              <small id="sportStatus">选择今天完成的运动</small>
+            </span>
+            <div class="sport-options" id="sportOptions" aria-label="运动项目">
+              <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
+              <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
+              <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
+              <button type="button" data-sport="50米" aria-pressed="false">50米</button>
+              <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
+            </div>
+          </div>
+          <button class="prep-check habit-check" id="readingButton" type="button" aria-pressed="false">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span><strong>阅读打卡</strong><small id="readingStatus">完成阅读后打卡</small></span>
+          </button>
+          <button class="prep-check habit-check" id="mathThinkingButton" type="button" aria-pressed="false">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span><strong>数学思维</strong><small id="mathThinkingStatus">完成数学思维练习后打卡</small></span>
+          </button>
+          <button class="prep-check habit-check" id="englishReadingButton" type="button" aria-pressed="false">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span><strong>英文阅读</strong><small id="englishReadingStatus">完成英文阅读后打卡</small></span>
+          </button>
+        </div>
+      </section>
 
       <div class="record-actions daily-extras" hidden>
         <button class="text-button danger" id="resetDayButton" type="button">清除当天记录</button>

@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
     private static final String KEY_WEEKENDS = "weekends";
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
-    private static final String[] SPORTS = {"跳绳", "仰卧起坐", "50米跑", "踢毽子", "坐位体前屈"};
+    private static final String[] SPORTS = {"跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
     private static final String DICTATION_VOICE_GUIDANCE =
             "使用家长逐词录制的人声；每个词连续播放两遍，两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
@@ -212,9 +212,12 @@ public class MainActivity extends Activity {
     private LinearLayout readingCard;
     private TextView readingCheckView;
     private TextView readingStatusView;
-    private LinearLayout choresCard;
-    private TextView choresCheckView;
-    private TextView choresStatusView;
+    private LinearLayout mathThinkingCard;
+    private TextView mathThinkingCheckView;
+    private TextView mathThinkingStatusView;
+    private LinearLayout englishReadingCard;
+    private TextView englishReadingCheckView;
+    private TextView englishReadingStatusView;
     private LinearLayout ledgerCard;
     private TextView ledgerCheckView;
     private TextView ledgerStatusView;
@@ -956,8 +959,36 @@ public class MainActivity extends Activity {
         card.addView(buildWeekendTaskPlanEntry(), weekendEntryParams);
 
         sportCard = buildSportCard();
-        readingCard = dailyHabitCard("阅读打卡", "完成阅读后打卡", "readingDone", "readingAt", true);
-        choresCard = dailyHabitCard("家务打卡", "做完家务后打卡", "choresDone", "choresAt", false);
+        readingCard = dailyHabitCard("阅读打卡", "完成阅读后打卡", "readingDone", "readingAt");
+        mathThinkingCard = dailyHabitCard(
+                "数学思维", "完成数学思维练习后打卡", "mathThinkingDone", "mathThinkingAt");
+        englishReadingCard = dailyHabitCard(
+                "英文阅读", "完成英文阅读后打卡", "englishReadingDone", "englishReadingAt");
+
+        LinearLayout dailyHeading = vertical();
+        TextView dailyKicker = text("每日任务", 10, GREEN, true);
+        dailyKicker.setLetterSpacing(0.1f);
+        dailyHeading.addView(dailyKicker);
+        dailyHeading.addView(text("每天坚持一点点", 17, INK, true));
+        TextView dailyHelp = text("运动、中英文阅读和思维训练分别完成、分别打卡。", 10, MUTED, false);
+        dailyHelp.setPadding(0, dp(4), 0, 0);
+        dailyHeading.addView(dailyHelp);
+        LinearLayout.LayoutParams dailyHeadingParams = matchWrap();
+        dailyHeadingParams.topMargin = dp(18);
+        card.addView(dailyHeading, dailyHeadingParams);
+
+        LinearLayout.LayoutParams sportParams = matchWrap();
+        sportParams.topMargin = dp(10);
+        card.addView(sportCard, sportParams);
+        LinearLayout.LayoutParams readingParams = matchWrap();
+        readingParams.topMargin = dp(9);
+        card.addView(readingCard, readingParams);
+        LinearLayout.LayoutParams mathParams = matchWrap();
+        mathParams.topMargin = dp(9);
+        card.addView(mathThinkingCard, mathParams);
+        LinearLayout.LayoutParams englishParams = matchWrap();
+        englishParams.topMargin = dp(9);
+        card.addView(englishReadingCard, englishParams);
 
         LinearLayout session = vertical();
         session.setPadding(dp(16), dp(19), dp(16), dp(17));
@@ -3041,8 +3072,7 @@ public class MainActivity extends Activity {
         return item;
     }
 
-    private LinearLayout dailyHabitCard(String title, String subtitle, String field,
-                                        String timeField, boolean reading) {
+    private LinearLayout dailyHabitCard(String title, String subtitle, String field, String timeField) {
         LinearLayout item = horizontal();
         item.setGravity(Gravity.CENTER_VERTICAL);
         item.setPadding(dp(11), dp(9), dp(10), dp(9));
@@ -3059,15 +3089,17 @@ public class MainActivity extends Activity {
         status.setPadding(0, dp(2), 0, 0);
         copy.addView(status);
         item.addView(copy, weightedWrap(1));
-        if (reading) {
+        if ("readingDone".equals(field)) {
             readingCheckView = check;
             readingStatusView = status;
-        } else {
-            choresCheckView = check;
-            choresStatusView = status;
+        } else if ("mathThinkingDone".equals(field)) {
+            mathThinkingCheckView = check;
+            mathThinkingStatusView = status;
+        } else if ("englishReadingDone".equals(field)) {
+            englishReadingCheckView = check;
+            englishReadingStatusView = status;
         }
-        item.setOnClickListener(v -> togglePrep(field, timeField,
-                reading ? "阅读打卡状态已更新" : "家务打卡状态已更新"));
+        item.setOnClickListener(v -> togglePrep(field, timeField, title + "状态已更新"));
         return item;
     }
 
@@ -4158,7 +4190,9 @@ public class MainActivity extends Activity {
         if (stored != null) {
             for (String activity : SPORTS) {
                 for (int index = 0; index < stored.length(); index++) {
-                    if (activity.equals(stored.optString(index))) {
+                    String savedActivity = stored.optString(index);
+                    if (activity.equals(savedActivity)
+                            || ("50米".equals(activity) && "50米跑".equals(savedActivity))) {
                         selected.add(activity);
                         break;
                     }
@@ -4295,13 +4329,19 @@ public class MainActivity extends Activity {
             button.setBackground(rounded(selected ? GREEN : Color.WHITE, 18, selected ? GREEN : LINE, 1));
         }
         boolean readingDone = record.optBoolean("readingDone", false);
-        boolean choresDone = record.optBoolean("choresDone", false);
+        boolean mathThinkingDone = record.optBoolean("mathThinkingDone", false);
+        boolean englishReadingDone = record.optBoolean("englishReadingDone", false);
         stylePrep(readingCard, readingCheckView, readingDone);
-        stylePrep(choresCard, choresCheckView, choresDone);
+        stylePrep(mathThinkingCard, mathThinkingCheckView, mathThinkingDone);
+        stylePrep(englishReadingCard, englishReadingCheckView, englishReadingDone);
         readingStatusView.setText(readingDone
                 ? fallbackTime(record, "readingAt") + " 完成阅读" : "完成阅读后打卡");
-        choresStatusView.setText(choresDone
-                ? fallbackTime(record, "choresAt") + " 完成家务" : "做完家务后打卡");
+        mathThinkingStatusView.setText(mathThinkingDone
+                ? fallbackTime(record, "mathThinkingAt") + " 完成数学思维"
+                : "完成数学思维练习后打卡");
+        englishReadingStatusView.setText(englishReadingDone
+                ? fallbackTime(record, "englishReadingAt") + " 完成英文阅读"
+                : "完成英文阅读后打卡");
         stylePrep(ledgerCard, ledgerCheckView, record.optBoolean("ledgerConfirmed", false));
         String weekendKey = weekendKeyFor(currentDate);
         ledgerCard.setVisibility(weekendKey != null && !currentDate.equals(weekendKey) ? View.GONE : View.VISIBLE);
@@ -4532,10 +4572,15 @@ public class MainActivity extends Activity {
         if (hasText(record, "dinnerTime")) return record.optString("dinnerTime") + " 吃饭暂停";
         if (hasText(record, "startTime")) return record.optString("startTime") + " 开始，进行中";
         if (record.optBoolean("ledgerConfirmed")) return "成长记录册已补全";
-        if (record.optBoolean("readingDone") && record.optBoolean("choresDone")) return "阅读和家务已打卡";
-        if (record.optBoolean("readingDone")) return "阅读已打卡";
+        List<String> dailyCheckins = new ArrayList<>();
+        if (!sportActivities(record).isEmpty()) dailyCheckins.add("运动");
+        if (record.optBoolean("readingDone")) dailyCheckins.add("阅读");
+        if (record.optBoolean("mathThinkingDone")) dailyCheckins.add("数学思维");
+        if (record.optBoolean("englishReadingDone")) dailyCheckins.add("英文阅读");
+        if (!dailyCheckins.isEmpty()) {
+            return android.text.TextUtils.join("、", dailyCheckins) + "已打卡";
+        }
         if (record.optBoolean("choresDone")) return "家务已打卡";
-        if (!sportActivities(record).isEmpty()) return "运动已打卡 " + sportActivities(record).size() + " 项";
         if (taskCount(record) > 0) return "作业清单已录入";
         return "尚未开始";
     }
@@ -4863,6 +4908,7 @@ public class MainActivity extends Activity {
         if (record.optBoolean("ropeDone")
                 || (record.optJSONArray("sportActivities") != null && record.optJSONArray("sportActivities").length() > 0)
                 || record.optBoolean("ledgerConfirmed") || record.optBoolean("readingDone")
+                || record.optBoolean("mathThinkingDone") || record.optBoolean("englishReadingDone")
                 || record.optBoolean("choresDone")) return true;
         if (record.optBoolean("tasksConfirmed") || taskCount(record) > 0) return true;
         if (hasText(record, "note") || hasText(record, "ruleId")) return true;

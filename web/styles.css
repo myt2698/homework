@@ -264,6 +264,10 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
   gap: 12px;
 }
 .prep-grid.single { grid-template-columns: 1fr; }
+.daily-checkins { margin-top: 18px; }
+.daily-checkins-heading { margin-bottom: 12px; }
+.daily-checkins-heading h3 { margin-top: 2px; color: var(--ink); font-size: 1.04rem; }
+.daily-checkins-heading > p:last-child { margin-top: 4px; color: var(--muted); font-size: .73rem; }
 
 .prep-check {
   display: flex;
