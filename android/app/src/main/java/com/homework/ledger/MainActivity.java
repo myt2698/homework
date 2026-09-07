@@ -220,14 +220,23 @@ public class MainActivity extends Activity {
     private LinearLayout readingCard;
     private TextView readingCheckView;
     private TextView readingStatusView;
+    private TextView readingActionView;
     private LinearLayout mathThinkingCard;
     private TextView mathThinkingCheckView;
     private TextView mathThinkingStatusView;
+    private TextView mathThinkingActionView;
     private LinearLayout englishReadingCard;
     private TextView englishReadingCheckView;
     private TextView englishReadingStatusView;
+    private TextView englishReadingActionView;
+    private LinearLayout dailyCheckinsToggle;
+    private LinearLayout dailyCheckinsBody;
+    private TextView dailyCheckinsSummaryView;
+    private TextView dailyCheckinsArrowView;
+    private boolean dailyCheckinsExpanded;
     private LinearLayout ledgerCard;
     private TextView ledgerCheckView;
+    private TextView ledgerTitleView;
     private TextView ledgerStatusView;
 
     private LinearLayout taskEntryPanel;
@@ -247,13 +256,13 @@ public class MainActivity extends Activity {
     private boolean discardVoiceResultAfterStop;
     private String voiceDraftPrefix = "";
     private String latestVoicePartial = "";
+    private LinearLayout taskPanel;
     private TextView taskSummaryView;
     private TextView taskPanelTitleView;
     private TextView taskPanelHelpView;
     private LinearLayout taskQuestProgressPanel;
-    private TextView taskQuestStageView;
-    private TextView taskQuestRemainingView;
-    private TextView taskQuestPercentView;
+    private LinearLayout taskQuestTimeRow;
+    private TextView taskQuestPhaseView;
     private TextView taskQuestMessageView;
     private ProgressBar taskQuestProgressBar;
     private LinearLayout activeTaskPanel;
@@ -640,12 +649,12 @@ public class MainActivity extends Activity {
         scrollView.setBackgroundColor(PAGE);
 
         LinearLayout content = vertical();
-        content.setPadding(dp(16), dp(22), dp(16), dp(28));
+        content.setPadding(dp(12), dp(14), dp(12), dp(24));
         scrollView.addView(content, matchWrap());
         content.addView(buildHeader());
-        content.addView(space(16));
+        content.addView(space(10));
         content.addView(buildDateStrip());
-        content.addView(space(14));
+        content.addView(space(10));
         weekendCard = buildWeekendCard();
         weekendSpacer = space(0);
         content.addView(buildProcessCard());
@@ -671,7 +680,7 @@ public class MainActivity extends Activity {
         TextView eyebrow = text("每天进步一点点", 10, GREEN, true);
         eyebrow.setLetterSpacing(0.12f);
         titles.addView(eyebrow);
-        titles.addView(text("🌟 作业小账本", 28, GREEN_DARK, true));
+        titles.addView(text("🌟 作业小账本", 24, GREEN_DARK, true));
         row.addView(titles, weightedWrap(1));
         Button history = smallButton("足迹");
         history.setOnClickListener(v -> showHistoryPage());
@@ -690,8 +699,8 @@ public class MainActivity extends Activity {
     private View buildDateStrip() {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(14), dp(11), dp(12), dp(11));
-        row.setBackground(rounded(SURFACE, 19, LINE, 1));
+        row.setPadding(dp(10), dp(7), dp(9), dp(7));
+        row.setBackground(rounded(SURFACE, 16, LINE, 1));
         LinearLayout copy = vertical();
         copy.addView(text("当前查看", 10, MUTED, false));
         viewModeView = text("平日记录", 13, INK, true);
@@ -950,13 +959,15 @@ public class MainActivity extends Activity {
 
     private View buildProcessCard() {
         LinearLayout card = card();
+        card.setPadding(dp(12), dp(14), dp(12), dp(14));
         recordHeadingView = text("今天进行到哪里了？", 21, INK, true);
 
-        ledgerCard = prepCard("已核对钉钉和成长记录册", "先确定今天全部作业，再录入清单");
+        ledgerCard = prepCard("先核对钉钉和成长记录册", "确认今天的作业已经完整");
         card.addView(ledgerCard, matchFixed(dp(72)));
-        card.addView(space(16));
+        card.addView(space(10));
 
-        card.addView(buildTasksPanel(), matchWrap());
+        taskPanel = buildTasksPanel();
+        card.addView(taskPanel, matchWrap());
 
         buildWeekendTaskPlanner();
         LinearLayout.LayoutParams weekendEntryParams = matchWrap();
@@ -964,36 +975,60 @@ public class MainActivity extends Activity {
         card.addView(buildWeekendTaskPlanEntry(), weekendEntryParams);
 
         sportCard = buildSportCard();
-        readingCard = dailyHabitCard("阅读打卡", "完成阅读后打卡", "readingDone", "readingAt");
+        readingCard = dailyHabitCard("中文阅读", "完成中文阅读后打卡", "readingDone", "readingAt");
         mathThinkingCard = dailyHabitCard(
                 "数学思维", "完成数学思维练习后打卡", "mathThinkingDone", "mathThinkingAt");
         englishReadingCard = dailyHabitCard(
                 "英文阅读", "完成英文阅读后打卡", "englishReadingDone", "englishReadingAt");
 
-        LinearLayout dailyHeading = vertical();
-        TextView dailyKicker = text("每日任务", 10, GREEN, true);
-        dailyKicker.setLetterSpacing(0.1f);
-        dailyHeading.addView(dailyKicker);
-        dailyHeading.addView(text("每天坚持一点点", 17, INK, true));
-        TextView dailyHelp = text("运动、中英文阅读和思维训练分别完成、分别打卡。", 10, MUTED, false);
-        dailyHelp.setPadding(0, dp(4), 0, 0);
-        dailyHeading.addView(dailyHelp);
-        LinearLayout.LayoutParams dailyHeadingParams = matchWrap();
-        dailyHeadingParams.topMargin = dp(18);
-        card.addView(dailyHeading, dailyHeadingParams);
+        dailyCheckinsToggle = horizontal();
+        dailyCheckinsToggle.setGravity(Gravity.CENTER_VERTICAL);
+        dailyCheckinsToggle.setPadding(dp(13), dp(11), dp(13), dp(11));
+        dailyCheckinsToggle.setBackground(rounded(Color.rgb(248, 251, 255), 17, LINE, 1));
+        dailyCheckinsToggle.setClickable(true);
+        dailyCheckinsToggle.setFocusable(true);
+        TextView dailyIcon = text("🌱", 19, INK, false);
+        dailyIcon.setGravity(Gravity.CENTER);
+        dailyIcon.setBackground(rounded(Color.rgb(233, 248, 239), 11,
+                Color.rgb(233, 248, 239), 0));
+        dailyCheckinsToggle.addView(dailyIcon, fixed(dp(36), dp(36)));
+        dailyCheckinsToggle.addView(spaceHorizontal(10));
+        LinearLayout dailyCopy = vertical();
+        dailyCopy.addView(text("今日习惯", 14, INK, true));
+        dailyCheckinsSummaryView = text("0 / 4 已完成 · 完成作业后再来打卡", 10, MUTED, false);
+        dailyCheckinsSummaryView.setPadding(0, dp(3), 0, 0);
+        dailyCopy.addView(dailyCheckinsSummaryView);
+        dailyCheckinsToggle.addView(dailyCopy, weightedWrap(1));
+        dailyCheckinsArrowView = text("⌄", 20, Color.rgb(101, 136, 201), false);
+        dailyCheckinsArrowView.setGravity(Gravity.CENTER);
+        dailyCheckinsToggle.addView(dailyCheckinsArrowView, fixed(dp(28), dp(36)));
+        dailyCheckinsToggle.setOnClickListener(v -> {
+            dailyCheckinsExpanded = !dailyCheckinsExpanded;
+            dailyCheckinsBody.setVisibility(dailyCheckinsExpanded ? View.VISIBLE : View.GONE);
+            dailyCheckinsArrowView.setText(dailyCheckinsExpanded ? "⌃" : "⌄");
+        });
+        LinearLayout.LayoutParams dailyToggleParams = matchFixed(dp(62));
+        dailyToggleParams.topMargin = dp(16);
+        card.addView(dailyCheckinsToggle, dailyToggleParams);
 
+        dailyCheckinsBody = vertical();
+        TextView dailyHelp = text("运动、中文阅读、数学思维和英文阅读分别完成、分别打卡。", 10, MUTED, false);
+        dailyHelp.setPadding(0, dp(11), 0, 0);
+        dailyCheckinsBody.addView(dailyHelp);
         LinearLayout.LayoutParams sportParams = matchWrap();
-        sportParams.topMargin = dp(10);
-        card.addView(sportCard, sportParams);
+        sportParams.topMargin = dp(9);
+        dailyCheckinsBody.addView(sportCard, sportParams);
         LinearLayout.LayoutParams readingParams = matchWrap();
         readingParams.topMargin = dp(9);
-        card.addView(readingCard, readingParams);
+        dailyCheckinsBody.addView(readingCard, readingParams);
         LinearLayout.LayoutParams mathParams = matchWrap();
         mathParams.topMargin = dp(9);
-        card.addView(mathThinkingCard, mathParams);
+        dailyCheckinsBody.addView(mathThinkingCard, mathParams);
         LinearLayout.LayoutParams englishParams = matchWrap();
         englishParams.topMargin = dp(9);
-        card.addView(englishReadingCard, englishParams);
+        dailyCheckinsBody.addView(englishReadingCard, englishParams);
+        dailyCheckinsBody.setVisibility(View.GONE);
+        card.addView(dailyCheckinsBody, matchWrap());
 
         LinearLayout session = vertical();
         session.setPadding(dp(16), dp(19), dp(16), dp(17));
@@ -1085,8 +1120,8 @@ public class MainActivity extends Activity {
 
     private LinearLayout buildTasksPanel() {
         LinearLayout panel = vertical();
-        panel.setPadding(dp(15), dp(17), dp(15), dp(15));
-        panel.setBackground(rounded(Color.WHITE, 18, LINE, 1));
+        panel.setPadding(0, dp(11), 0, 0);
+        panel.setBackgroundColor(Color.TRANSPARENT);
 
         LinearLayout head = horizontal();
         head.setGravity(Gravity.TOP);
@@ -1218,34 +1253,24 @@ public class MainActivity extends Activity {
         panel.addView(buildTaskEntryLauncher(), entryParams);
 
         taskQuestProgressPanel = vertical();
-        taskQuestProgressPanel.setPadding(dp(14), dp(13), dp(14), dp(12));
-        taskQuestProgressPanel.setBackground(rounded(Color.rgb(237, 244, 255), 16,
-                Color.rgb(191, 212, 251), 1));
-        LinearLayout questHead = horizontal();
-        questHead.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout questCopy = vertical();
-        taskQuestStageView = text("第 1 关", 10, Color.rgb(83, 115, 166), true);
-        taskQuestRemainingView = text("还剩 0 项", 15, INK, true);
-        taskQuestRemainingView.setPadding(0, dp(3), 0, 0);
-        questCopy.addView(taskQuestStageView);
-        questCopy.addView(taskQuestRemainingView);
-        questHead.addView(questCopy, weightedWrap(1));
-        taskQuestPercentView = text("0%", 18, GREEN, true);
-        questHead.addView(taskQuestPercentView);
-        taskQuestProgressPanel.addView(questHead, matchWrap());
+        taskQuestProgressPanel.setPadding(dp(2), 0, dp(2), dp(3));
+        taskQuestProgressPanel.setBackgroundColor(Color.TRANSPARENT);
         taskQuestProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         taskQuestProgressBar.setMax(100);
         taskQuestProgressBar.setProgressTintList(ColorStateList.valueOf(GREEN));
         taskQuestProgressBar.setProgressBackgroundTintList(ColorStateList.valueOf(Color.rgb(220, 232, 251)));
-        LinearLayout.LayoutParams progressParams = matchFixed(dp(10));
-        progressParams.topMargin = dp(10);
-        taskQuestProgressPanel.addView(taskQuestProgressBar, progressParams);
-        taskQuestMessageView = text("先完成一小项，作业就会开始变少啦！", 10,
-                Color.rgb(84, 112, 153), true);
-        taskQuestMessageView.setPadding(0, dp(8), 0, 0);
-        taskQuestProgressPanel.addView(taskQuestMessageView);
+        taskQuestProgressPanel.addView(taskQuestProgressBar, matchFixed(dp(8)));
+        taskQuestTimeRow = horizontal();
+        taskQuestTimeRow.setGravity(Gravity.CENTER_VERTICAL);
+        taskQuestPhaseView = text("今日计划", 10, MUTED, false);
+        taskQuestTimeRow.addView(taskQuestPhaseView, weightedWrap(1));
+        taskQuestMessageView = text("预计还需 0 分钟", 10, Color.rgb(65, 106, 168), true);
+        taskQuestTimeRow.addView(taskQuestMessageView);
+        LinearLayout.LayoutParams timeParams = matchWrap();
+        timeParams.topMargin = dp(7);
+        taskQuestProgressPanel.addView(taskQuestTimeRow, timeParams);
         LinearLayout.LayoutParams questParams = matchWrap();
-        questParams.topMargin = dp(12);
+        questParams.topMargin = dp(9);
         panel.addView(taskQuestProgressPanel, questParams);
 
         activeTaskPanel = vertical();
@@ -2147,6 +2172,7 @@ public class MainActivity extends Activity {
                 || dailyRecord != null && dailyRecord.optBoolean("ledgerConfirmed");
         JSONArray tasks = taskArray(false);
         boolean confirmed = taskListConfirmed();
+        taskPanel.setVisibility(!ledgerReady && !confirmed && tasks.length() == 0 ? View.GONE : View.VISIBLE);
         if (!confirmed && canEditList && tasks.length() > 1) {
             tasks = sortedPendingTasks(tasks);
             put(taskOwner(true), "tasks", tasks);
@@ -2205,7 +2231,9 @@ public class MainActivity extends Activity {
         int progressDone = questMode ? questDoneCount : allDoneCount;
         taskSummaryView.setText(!confirmed && tasks.length() > 0
                 ? tasks.length() + " 项待确认"
-                : progressTotal == 0 ? "0 项" : progressDone + " / " + progressTotal + " 项完成");
+                : progressTotal == 0 ? "0 项"
+                : questMode ? progressDone + " / " + progressTotal
+                : progressDone + " / " + progressTotal + " 项完成");
         taskPanelTitleView.setText(!confirmed
                 ? ledgerReady ? tasks.length() > 0 ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
                 : sortingMode ? "安排你的闯关顺序"
@@ -2216,6 +2244,7 @@ public class MainActivity extends Activity {
                 : sortingMode ? "这是你的计划，想先做哪一项由你决定。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : "");
+        taskPanelTitleView.setVisibility(questMode ? View.GONE : View.VISIBLE);
         taskPanelHelpView.setVisibility(questMode ? View.GONE : View.VISIBLE);
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
         taskEntryLauncher.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
@@ -2288,10 +2317,6 @@ public class MainActivity extends Activity {
         taskQuestProgressPanel.setVisibility(questMode ? View.VISIBLE : View.GONE);
         if (questMode) {
             int progress = progressTotal == 0 ? 100 : Math.round(progressDone * 100f / progressTotal);
-            int remaining = Math.max(0, progressTotal - progressDone);
-            taskQuestStageView.setText(progress == 100 ? "🏆 今日通关" : "今日进度");
-            taskQuestRemainingView.setText(progress == 100 ? "全部完成啦！" : progressDone + " / " + progressTotal + " 项完成");
-            taskQuestPercentView.setText(progress + "%");
             taskQuestProgressBar.setProgress(progress);
             JSONObject owner = taskOwner(false);
             int currentTaskIndex = -1;
@@ -2314,11 +2339,10 @@ public class MainActivity extends Activity {
             String phase = mealBoundaryIndex >= 0 && currentTaskIndex >= 0
                     ? currentTaskIndex <= mealBoundaryIndex ? "饭前计划" : "饭后计划"
                     : "今日计划";
-            taskQuestMessageView.setText(progress == 100 ? "全部通关，今天的坚持太棒了！"
-                    : phase + " · 预计还需 " + remainingEstimatedMinutes(tasks, questIndexes) + " 分钟");
-            int questFill = progress == 100 ? Color.rgb(255, 248, 217) : Color.rgb(237, 244, 255);
-            int questStroke = progress == 100 ? Color.rgb(240, 212, 124) : Color.rgb(191, 212, 251);
-            taskQuestProgressPanel.setBackground(rounded(questFill, 16, questStroke, 1));
+            taskQuestTimeRow.setVisibility(progress == 100 ? View.GONE : View.VISIBLE);
+            taskQuestPhaseView.setText(phase);
+            taskQuestMessageView.setText("预计还需 "
+                    + remainingEstimatedMinutes(tasks, questIndexes) + " 分钟");
         }
 
         taskListContainer.removeAllViews();
@@ -3382,12 +3406,14 @@ public class MainActivity extends Activity {
         item.addView(check, fixed(dp(34), dp(34)));
         item.addView(spaceHorizontal(12));
         LinearLayout copy = vertical();
-        copy.addView(text(title, 14, INK, true));
+        TextView titleView = text(title, 14, INK, true);
+        copy.addView(titleView);
         TextView status = text(subtitle, 11, MUTED, false);
         status.setPadding(0, dp(3), 0, 0);
         copy.addView(status);
         item.addView(copy, weightedWrap(1));
         ledgerCheckView = check;
+        ledgerTitleView = titleView;
         ledgerStatusView = status;
         item.setOnClickListener(v -> togglePrep("ledgerConfirmed", "ledgerAt", "成长记录册状态已更新"));
         return item;
@@ -3410,15 +3436,23 @@ public class MainActivity extends Activity {
         status.setPadding(0, dp(2), 0, 0);
         copy.addView(status);
         item.addView(copy, weightedWrap(1));
+        TextView action = text("打卡", 10, GREEN, true);
+        action.setGravity(Gravity.CENTER);
+        action.setPadding(dp(9), dp(6), dp(9), dp(6));
+        action.setBackground(rounded(GREEN_SOFT, 16, GREEN_SOFT, 0));
+        item.addView(action);
         if ("readingDone".equals(field)) {
             readingCheckView = check;
             readingStatusView = status;
+            readingActionView = action;
         } else if ("mathThinkingDone".equals(field)) {
             mathThinkingCheckView = check;
             mathThinkingStatusView = status;
+            mathThinkingActionView = action;
         } else if ("englishReadingDone".equals(field)) {
             englishReadingCheckView = check;
             englishReadingStatusView = status;
+            englishReadingActionView = action;
         }
         item.setOnClickListener(v -> togglePrep(field, timeField, title + "状态已更新"));
         return item;
@@ -4709,19 +4743,41 @@ public class MainActivity extends Activity {
         stylePrep(readingCard, readingCheckView, readingDone);
         stylePrep(mathThinkingCard, mathThinkingCheckView, mathThinkingDone);
         stylePrep(englishReadingCard, englishReadingCheckView, englishReadingDone);
+        styleHabitAction(readingActionView, readingDone);
+        styleHabitAction(mathThinkingActionView, mathThinkingDone);
+        styleHabitAction(englishReadingActionView, englishReadingDone);
         readingStatusView.setText(readingDone
-                ? fallbackTime(record, "readingAt") + " 完成阅读" : "完成阅读后打卡");
+                ? fallbackTime(record, "readingAt") + " 完成中文阅读" : "完成中文阅读后打卡");
         mathThinkingStatusView.setText(mathThinkingDone
                 ? fallbackTime(record, "mathThinkingAt") + " 完成数学思维"
                 : "完成数学思维练习后打卡");
         englishReadingStatusView.setText(englishReadingDone
                 ? fallbackTime(record, "englishReadingAt") + " 完成英文阅读"
                 : "完成英文阅读后打卡");
-        stylePrep(ledgerCard, ledgerCheckView, record.optBoolean("ledgerConfirmed", false));
+        int dailyDoneCount = (sportDone ? 1 : 0) + (readingDone ? 1 : 0)
+                + (mathThinkingDone ? 1 : 0) + (englishReadingDone ? 1 : 0);
+        dailyCheckinsSummaryView.setText(dailyDoneCount == 4
+                ? "4 / 4 已完成 · 今天也坚持下来啦"
+                : dailyDoneCount + " / 4 已完成 · "
+                + (dailyDoneCount > 0 ? "继续加油" : "完成作业后再来打卡"));
+        dailyCheckinsToggle.setBackground(rounded(dailyDoneCount == 4
+                        ? Color.rgb(239, 251, 247) : Color.rgb(248, 251, 255),
+                17, dailyDoneCount == 4 ? Color.rgb(159, 214, 197) : LINE, 1));
+        dailyCheckinsBody.setVisibility(dailyCheckinsExpanded ? View.VISIBLE : View.GONE);
+        dailyCheckinsArrowView.setText(dailyCheckinsExpanded ? "⌃" : "⌄");
+
+        boolean ledgerConfirmed = record.optBoolean("ledgerConfirmed", false);
+        stylePrep(ledgerCard, ledgerCheckView, ledgerConfirmed);
         String weekendKey = weekendKeyFor(currentDate);
         ledgerCard.setVisibility(weekendKey != null && !currentDate.equals(weekendKey) ? View.GONE : View.VISIBLE);
-        ledgerStatusView.setText(record.optBoolean("ledgerConfirmed", false)
-                ? fallbackTime(record, "ledgerAt") + " 完成核对，可以录入清单" : "先确定今天全部作业，再录入清单");
+        ledgerTitleView.setText(ledgerConfirmed ? "作业已核对" : "先核对钉钉和成长记录册");
+        ledgerStatusView.setText(ledgerConfirmed
+                ? fallbackTime(record, "ledgerAt") + " 完成" : "确认今天的作业已经完整");
+        ViewGroup.LayoutParams ledgerParams = ledgerCard.getLayoutParams();
+        if (ledgerParams != null) {
+            ledgerParams.height = dp(ledgerConfirmed ? 56 : 72);
+            ledgerCard.setLayoutParams(ledgerParams);
+        }
 
         String start = record.optString("startTime", "");
         String dinner = record.optString("dinnerTime", "");
@@ -5037,7 +5093,7 @@ public class MainActivity extends Activity {
         if (record.optBoolean("ledgerConfirmed")) return "成长记录册已补全";
         List<String> dailyCheckins = new ArrayList<>();
         if (!sportActivities(record).isEmpty()) dailyCheckins.add("运动");
-        if (record.optBoolean("readingDone")) dailyCheckins.add("阅读");
+        if (record.optBoolean("readingDone")) dailyCheckins.add("中文阅读");
         if (record.optBoolean("mathThinkingDone")) dailyCheckins.add("数学思维");
         if (record.optBoolean("englishReadingDone")) dailyCheckins.add("英文阅读");
         if (!dailyCheckins.isEmpty()) {
@@ -5639,6 +5695,13 @@ public class MainActivity extends Activity {
         card.setBackground(rounded(selected ? GREEN_SOFT : Color.WHITE, 17, selected ? Color.rgb(156, 188, 245) : LINE, 1));
         check.setTextColor(selected ? Color.WHITE : Color.TRANSPARENT);
         check.setBackground(rounded(selected ? GREEN : PAGE, 20, selected ? GREEN : LINE, 1));
+    }
+
+    private void styleHabitAction(TextView action, boolean selected) {
+        action.setText(selected ? "已完成" : "打卡");
+        action.setTextColor(selected ? Color.WHITE : GREEN);
+        action.setBackground(rounded(selected ? GREEN : GREEN_SOFT, 16,
+                selected ? GREEN : GREEN_SOFT, 0));
     }
 
     private void styleDot(TextView dot, boolean done, boolean active) {
