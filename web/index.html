@@ -26,39 +26,12 @@
           <span aria-hidden="true">🔊</span>
           <span>听写</span>
         </button>
-        <button class="icon-button" id="settingsButton" type="button" aria-label="设置" aria-expanded="false" aria-controls="settingsPanel">
+        <button class="icon-button" id="settingsButton" type="button" aria-label="设置" aria-controls="settingsPage">
           <span aria-hidden="true">⚙</span>
           <span>设置</span>
         </button>
       </div>
     </header>
-
-    <section class="settings-panel" id="settingsPanel" hidden>
-      <div>
-        <h2>家长工具</h2>
-        <p>日期、数据备份和记录管理集中放在这里，不打扰孩子完成今天的计划。</p>
-      </div>
-      <div class="parent-tool-groups">
-        <div class="settings-date-block">
-          <div class="settings-row">
-            <label for="recordDate">查看记录日期</label>
-            <input id="recordDate" type="date" aria-label="记录日期">
-            <button class="text-button bordered settings-today-button" id="todayButton" type="button">回到今天</button>
-          </div>
-          <small class="settings-date-mode">当前类型：<strong id="viewModeLabel">平日记录</strong></small>
-        </div>
-        <div class="settings-row">
-          <label for="startDate">统计开始日期</label>
-          <input id="startDate" type="date">
-          <button class="small-button" id="saveSettingsButton" type="button">保存</button>
-        </div>
-        <div class="backup-actions">
-          <button class="secondary-button" id="exportDataButton" type="button">导出备份</button>
-          <button class="secondary-button" id="importDataButton" type="button">恢复备份</button>
-          <input id="importDataInput" type="file" accept="application/json,.json" hidden>
-        </div>
-      </div>
-    </section>
 
     <button class="historical-date-notice" id="historicalDateNotice" type="button" hidden>
       <span>正在查看</span>
@@ -311,6 +284,65 @@
     </section>
   </section>
 
+  <section class="app-shell settings-page" id="settingsPage" aria-labelledby="settingsPageTitle" hidden>
+    <header class="history-page-header">
+      <button class="history-back-button" id="closeSettingsButton" type="button" aria-label="返回今日任务">‹</button>
+      <div>
+        <p class="eyebrow">⚙ 安静放在这里</p>
+        <h1 id="settingsPageTitle">设置</h1>
+        <p class="hero-cheer">日期、提示音和数据管理集中在这里。</p>
+      </div>
+    </header>
+
+    <section class="card settings-card">
+      <div class="settings-section-heading">
+        <div><p class="section-kicker">日期</p><h2>查看与统计</h2></div>
+        <small>首页默认显示今天</small>
+      </div>
+      <div class="settings-page-fields">
+        <div class="settings-date-block">
+          <div class="settings-row">
+            <label for="recordDate">查看记录日期</label>
+            <input id="recordDate" type="date" aria-label="记录日期">
+            <button class="text-button bordered settings-today-button" id="todayButton" type="button">回到今天</button>
+          </div>
+          <small class="settings-date-mode">当前类型：<strong id="viewModeLabel">平日记录</strong></small>
+        </div>
+        <div class="settings-row">
+          <label for="startDate">统计开始日期</label>
+          <input id="startDate" type="date">
+          <button class="small-button" id="saveSettingsButton" type="button">保存</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card settings-card alarm-settings-card">
+      <div class="settings-section-heading">
+        <div><p class="section-kicker">休息结束提醒</p><h2>我的“回来写作业”提示音</h2></div>
+        <strong class="alarm-status-badge" id="alarmSoundStatus">使用默认提示</strong>
+      </div>
+      <p class="settings-description">我可以录下“作业时间到啦”等一句响亮的话。休息倒计时结束时会连续播放两遍；未录音时使用默认语音。</p>
+      <div class="alarm-record-actions">
+        <button class="primary-button" id="recordAlarmButton" type="button">🎙 开始录音</button>
+        <button class="secondary-button" id="previewAlarmButton" type="button">🔊 试听</button>
+        <button class="text-button danger" id="resetAlarmButton" type="button" hidden>恢复默认</button>
+      </div>
+      <small class="alarm-record-hint" id="alarmRecordHint">建议录 2～5 秒，例如：“作业时间到啦，我要继续下一项！”</small>
+    </section>
+
+    <section class="card settings-card">
+      <div class="settings-section-heading">
+        <div><p class="section-kicker">本地数据</p><h2>备份与恢复</h2></div>
+      </div>
+      <div class="backup-actions">
+        <button class="secondary-button" id="exportDataButton" type="button">导出备份</button>
+        <button class="secondary-button" id="importDataButton" type="button">恢复备份</button>
+        <input id="importDataInput" type="file" accept="application/json,.json" hidden>
+      </div>
+      <p class="settings-description">备份包含作业、计划、打卡和自定义词语；提示音录音仅保存在当前设备。</p>
+    </section>
+  </section>
+
   <div class="task-entry-modal" id="taskEntryModal" role="dialog" aria-modal="true" aria-labelledby="taskEntryModalTitle" hidden>
     <div class="task-entry-dialog">
       <button class="focus-close" id="taskEntryCloseButton" type="button" aria-label="关闭作业录入">×</button>
@@ -414,6 +446,40 @@
         <button class="secondary-button" id="focusPauseButton" type="button">暂停</button>
         <button class="primary-button" id="focusCompleteButton" type="button">完成这项</button>
       </div>
+    </div>
+  </div>
+
+  <div class="focus-modal" id="breakChoiceModal" role="dialog" aria-modal="true" aria-labelledby="breakChoiceTitle" hidden>
+    <div class="focus-dialog break-choice-dialog">
+      <button class="focus-close" id="breakChoiceCloseButton" type="button" aria-label="关闭休息安排">×</button>
+      <p class="section-kicker">这一关完成啦</p>
+      <h2 id="breakChoiceTitle">我准备什么时候回来？</h2>
+      <div class="break-next-task"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
+      <div class="break-quick-actions">
+        <button class="secondary-button" type="button" data-break-minutes="5">休息 5 分钟</button>
+        <button class="secondary-button" type="button" data-break-minutes="10">休息 10 分钟</button>
+      </div>
+      <div class="break-return-row">
+        <label for="breakReturnTime">吃饭后回来</label>
+        <input id="breakReturnTime" type="time">
+        <button class="secondary-button" id="startTimedBreakButton" type="button">开始倒计时</button>
+      </div>
+      <button class="primary-button break-start-now" id="startNextTaskNowButton" type="button">不休息，开始下一项</button>
+    </div>
+  </div>
+
+  <div class="focus-modal" id="breakTimerModal" role="dialog" aria-modal="true" aria-labelledby="breakTimerTitle" hidden>
+    <div class="focus-dialog break-timer-dialog">
+      <p class="section-kicker">我的休息计划</p>
+      <h2 id="breakTimerTitle">休息一下，等我按时回来</h2>
+      <span class="focus-clock-label">距离回来还有</span>
+      <div class="focus-clock break-clock" id="breakCountdown">05:00</div>
+      <div class="break-next-task"><span>回来后做</span><strong id="breakTimerNextTask"></strong></div>
+      <div class="focus-dialog-actions break-timer-actions">
+        <button class="secondary-button" id="extendBreakButton" type="button">再休息 3 分钟</button>
+        <button class="primary-button" id="startNextTaskButton" type="button">我回来了，开始下一项</button>
+      </div>
+      <button class="text-button break-cancel-button" id="cancelBreakButton" type="button">取消这次提醒</button>
     </div>
   </div>
 

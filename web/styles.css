@@ -93,25 +93,9 @@ h3 { margin-bottom: 0; }
 }
 .quiet-top-entry:hover { border-color: var(--line); background: rgba(255,255,255,.72); }
 
-.settings-panel {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 16px;
-  padding: 18px 20px;
-  border: 1px solid var(--line);
-  border-radius: 21px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.settings-panel[hidden] { display: none; }
-.settings-panel p { margin: 5px 0 0; color: var(--muted); font-size: 0.82rem; }
 .settings-row { gap: 9px; }
 .settings-row label { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
-.parent-tool-groups { display: grid; justify-items: end; gap: 9px; }
-.settings-date-block { display: grid; justify-items: end; gap: 3px; }
+.settings-date-block { display: grid; gap: 3px; }
 .settings-date-mode { color: var(--muted); font-size: .69rem; }
 .settings-date-mode strong { color: #456ba8; }
 .settings-today-button { padding: 7px 9px; }
@@ -777,6 +761,7 @@ body.modal-open { overflow: hidden; }
 
 .history-page[hidden] { display: none; }
 .dictation-page[hidden] { display: none; }
+.settings-page[hidden] { display: none; }
 .history-page-header { display: flex; margin-bottom: 18px; align-items: center; gap: 14px; }
 .history-manage-button { margin-left: auto; }
 .history-back-button {
@@ -867,6 +852,23 @@ body.modal-open { overflow: hidden; }
 .dictation-actions { display: flex; gap: 9px; margin-top: 16px; }
 .dictation-actions button { min-width: 0; }
 
+.settings-page { max-width: 760px; }
+.settings-page .history-page-header { margin-bottom: 16px; }
+.settings-card { display: grid; gap: 15px; margin-bottom: 14px; padding: 22px 24px; }
+.settings-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.settings-section-heading small { color: var(--muted); font-size: .7rem; }
+.settings-page-fields { display: grid; gap: 13px; }
+.settings-page-fields .settings-row { min-height: 48px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: #f8fbff; }
+.settings-page-fields .settings-row label { min-width: 105px; }
+.settings-page-fields .settings-row input { margin-left: auto; }
+.settings-description { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.65; }
+.alarm-status-badge { padding: 6px 10px; border-radius: 999px; color: #456ba8; background: var(--green-soft); font-size: .72rem; white-space: nowrap; }
+.alarm-status-badge.custom { color: #28755e; background: #e6f7f1; }
+.alarm-record-actions { display: flex; gap: 9px; align-items: center; }
+.alarm-record-actions button { min-width: 0; }
+.alarm-record-actions .listening { color: #fff; background: var(--red); box-shadow: 0 8px 18px rgba(221,88,104,.22); }
+.alarm-record-hint { color: var(--muted); font-size: .7rem; }
+
 footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650; text-align: center; }
 .focus-modal {
   position: fixed;
@@ -907,6 +909,22 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 .focus-reminder { margin: 18px 0; color: var(--muted); font-size: .78rem; }
 .focus-dialog-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; }
 .focus-dialog-actions button { width: 100%; min-width: 0; }
+.break-choice-dialog, .break-timer-dialog { width: min(460px, 100%); }
+.break-choice-dialog h2, .break-timer-dialog h2 { margin-bottom: 17px; }
+.break-next-task { display: grid; gap: 4px; margin: 15px 0; padding: 12px 14px; border-radius: 14px; color: #456ba8; background: var(--green-soft); }
+.break-next-task span { color: var(--muted); font-size: .68rem; }
+.break-next-task strong { font-size: .92rem; }
+.break-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.break-return-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 10px; align-items: center; }
+.break-return-row label { color: var(--muted); font-size: .73rem; }
+.break-return-row input { min-width: 0; padding: 10px 8px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: #fff; }
+.break-return-row button { padding: 10px 12px; }
+.break-start-now { width: 100%; margin-top: 14px; }
+.break-clock { color: #4b82ef; }
+.break-timer-dialog.time-up { background: linear-gradient(145deg, #fff9e9, #fff); }
+.break-timer-dialog.time-up .break-clock { color: var(--amber); }
+.break-timer-actions { margin-top: 18px; }
+.break-cancel-button { margin-top: 8px; color: var(--muted); }
 .toast {
   position: fixed;
   bottom: 26px;
@@ -932,9 +950,6 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .summary-stats { padding: 8px 12px 12px; }
   .summary-stats div { min-height: 48px; }
   .summary-stats div:first-child { border-left: 0; }
-  .settings-panel { align-items: stretch; flex-direction: column; }
-  .parent-tool-groups { justify-items: stretch; }
-  .settings-date-block { justify-items: stretch; }
   .settings-row { flex-wrap: wrap; }
   .backup-actions { width: 100%; }
   .backup-actions button { flex: 1; }
@@ -967,6 +982,18 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .section-heading { align-items: flex-start; flex-direction: column; }
   .settings-date-block .settings-row { display: grid; grid-template-columns: auto 1fr auto; }
   .settings-date-block input { min-width: 0; }
+  .settings-card { padding: 17px 14px; }
+  .settings-section-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .settings-page-fields .settings-row { display: grid; grid-template-columns: 1fr auto; }
+  .settings-page-fields .settings-row label { grid-column: 1 / -1; }
+  .settings-page-fields .settings-row input { width: 100%; margin-left: 0; }
+  .settings-date-block .settings-row { grid-template-columns: 1fr auto; }
+  .settings-date-block .settings-row label { grid-column: 1 / -1; }
+  .alarm-record-actions { align-items: stretch; flex-direction: column; }
+  .alarm-record-actions button { width: 100%; }
+  .break-return-row { grid-template-columns: 1fr 1fr; }
+  .break-return-row label { grid-column: 1 / -1; text-align: left; }
+  .break-return-row button { width: 100%; }
   .prep-grid { grid-template-columns: 1fr; gap: 9px; }
   .sport-options { flex-basis: 100%; justify-content: flex-start; padding-left: 42px; }
   .daily-checkins-toggle { min-height: 58px; padding: 10px 12px; }

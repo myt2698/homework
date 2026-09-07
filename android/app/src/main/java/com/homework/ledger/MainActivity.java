@@ -21,6 +21,7 @@ import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.tts.TextToSpeech;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
@@ -70,6 +71,7 @@ public class MainActivity extends Activity {
     private static final String KEY_RECORDS = "records";
     private static final String KEY_WEEKENDS = "weekends";
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
+    private static final String KEY_BREAK_SESSION = "break_session";
     private static final int EXPORT_BACKUP_REQUEST = 301;
     private static final int IMPORT_BACKUP_REQUEST = 302;
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
@@ -103,8 +105,10 @@ public class MainActivity extends Activity {
     };
     private static final int RECORD_AUDIO_PERMISSION_REQUEST = 201;
     private static final int DICTATION_RECORD_AUDIO_PERMISSION_REQUEST = 202;
+    private static final int BREAK_ALARM_RECORD_AUDIO_PERMISSION_REQUEST = 203;
     private static final long VOICE_RECORDING_LIMIT_MS = 120_000L;
     private static final long DICTATION_RECORDING_MIN_MS = 400L;
+    private static final long BREAK_ALARM_RECORDING_MIN_MS = 500L;
     private static final Pattern SUBJECT_PATTERN = Pattern.compile("^(语文|数学|英语|科学|道法|体育|音乐|美术|其他)[\\s：:、，,-]*(.*)$");
     private static final Pattern SUBJECT_ANYWHERE_PATTERN = Pattern.compile("(语文|数学|英语|科学|道法|体育|音乐|美术|其他)(?:作业)?");
     private static final Pattern NUMBERED_TASK_PATTERN = Pattern.compile(
@@ -138,12 +142,28 @@ public class MainActivity extends Activity {
     private JSONObject records;
     private JSONObject weekends;
     private JSONObject dictationCustomWords;
+    private JSONObject breakSession;
     private String startDate;
     private String currentDate;
     private boolean loadingNote;
     private View mainPageView;
     private View historyPageView;
     private View dictationPageView;
+    private View settingsPageView;
+    private TextView settingsCurrentDateView;
+
+    private TextView breakAlarmStatusView;
+    private TextView breakAlarmHintView;
+    private Button breakAlarmRecordButton;
+    private Button breakAlarmPreviewButton;
+    private Button breakAlarmResetButton;
+    private MediaRecorder breakAlarmRecorder;
+    private MediaPlayer breakAlarmPlayer;
+    private File pendingBreakAlarmFile;
+    private long breakAlarmRecordingStartedAt;
+    private boolean startBreakAlarmRecordingAfterPermission;
+    private int remainingBreakAlarmPlays;
+    private TextToSpeech breakAlarmTts;
 
     private Button dictationLessonButton;
     private TextView dictationLessonCountView;
@@ -329,6 +349,12 @@ public class MainActivity extends Activity {
     private AlertDialog taskFocusDialog;
     private AlertDialog taskEntryDialog;
     private AlertDialog weekendTaskPlanDialog;
+    private AlertDialog breakChoiceDialog;
+    private AlertDialog breakTimerDialog;
+    private TextView breakCountdownView;
+    private TextView breakNextTaskView;
+    private Button extendBreakButton;
+    private int breakChoiceTaskIndex = -1;
     private TextView taskFocusElapsedView;
     private TextView taskFocusStepView;
     private TextView taskFocusComparisonView;
@@ -336,6 +362,15 @@ public class MainActivity extends Activity {
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
     private final Runnable dictationNextWord = this::speakCurrentDictationWord;
+    private final Runnable breakTimerTick = new Runnable() {
+        @Override
+        public void run() {
+            renderBreakTimerDialog();
+            if (breakTimerDialog != null && breakTimerDialog.isShowing()) {
+                timerHandler.postDelayed(this, 1000);
+            }
+        }
+    };
     private final Runnable offlineVoiceTimeout = () -> {
         if (offlineVoiceRecognizer == null || !offlineVoiceRecognizer.isRecording()) return;
         stopOfflineVoiceInput();
@@ -477,13 +512,23 @@ public class MainActivity extends Activity {
         records = readRecords();
         weekends = readJson(KEY_WEEKENDS);
         dictationCustomWords = readJson(KEY_DICTATION_CUSTOM);
+        breakSession = readJson(KEY_BREAK_SESSION);
         currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
+
+        breakAlarmTts = new TextToSpeech(this, status -> {
+            if (status == TextToSpeech.SUCCESS && breakAlarmTts != null) {
+                breakAlarmTts.setLanguage(Locale.CHINA);
+                breakAlarmTts.setSpeechRate(0.92f);
+                breakAlarmTts.setPitch(1.08f);
+            }
+        });
 
         setContentView(buildScreen());
         offlineVoiceRecognizer = new OfflineVoiceRecognizer(this);
         initializeOfflineVoiceRecognizer();
         renderAll();
         timerHandler.postDelayed(timerTick, 30000);
+        if (hasActiveBreakSession()) showBreakTimerDialog();
     }
 
     @Override
@@ -491,12 +536,18 @@ public class MainActivity extends Activity {
         timerHandler.removeCallbacks(timerTick);
         timerHandler.removeCallbacks(taskFocusTick);
         timerHandler.removeCallbacks(offlineVoiceTimeout);
+        timerHandler.removeCallbacks(breakTimerTick);
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
         if (taskEntryDialog != null) taskEntryDialog.dismiss();
         if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
+        if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
+        if (breakTimerDialog != null) breakTimerDialog.dismiss();
         stopDictation(false, false);
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
+        stopBreakAlarmRecording(false, false);
+        releaseBreakAlarmPlayer();
+        if (breakAlarmTts != null) breakAlarmTts.shutdown();
         if (offlineVoiceRecognizer != null) offlineVoiceRecognizer.release();
         super.onDestroy();
     }
@@ -506,11 +557,18 @@ public class MainActivity extends Activity {
         stopOfflineVoiceInput();
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
+        stopBreakAlarmRecording(true, false);
+        releaseBreakAlarmPlayer();
         super.onStop();
     }
 
     @Override
     public void onBackPressed() {
+        if (breakTimerDialog != null && breakTimerDialog.isShowing()) return;
+        if (settingsPageView != null && settingsPageView.getVisibility() == View.VISIBLE) {
+            showMainPage();
+            return;
+        }
         if (dictationPageView != null && dictationPageView.getVisibility() == View.VISIBLE) {
             showMainPage();
             return;
@@ -539,6 +597,15 @@ public class MainActivity extends Activity {
             } else if (!granted) {
                 toast("需要麦克风权限才能录制词语人声");
             }
+            return;
+        }
+        if (requestCode == BREAK_ALARM_RECORD_AUDIO_PERMISSION_REQUEST) {
+            boolean granted = grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            boolean shouldStart = startBreakAlarmRecordingAfterPermission;
+            startBreakAlarmRecordingAfterPermission = false;
+            if (granted && shouldStart) beginBreakAlarmRecording();
+            else if (!granted) toast("需要麦克风权限才能录制休息提示音");
             return;
         }
         if (requestCode != RECORD_AUDIO_PERMISSION_REQUEST) return;
@@ -668,12 +735,16 @@ public class MainActivity extends Activity {
         historyPageView.setVisibility(View.GONE);
         dictationPageView = buildDictationPage();
         dictationPageView.setVisibility(View.GONE);
+        settingsPageView = buildSettingsPage();
+        settingsPageView.setVisibility(View.GONE);
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         root.addView(mainPageView, pageParams);
         root.addView(historyPageView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(dictationPageView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(settingsPageView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return root;
     }
@@ -696,7 +767,7 @@ public class MainActivity extends Activity {
         row.addView(dictation);
         row.addView(spaceHorizontal(6));
         Button settings = smallButton("设置");
-        settings.setOnClickListener(v -> showParentToolsDialog());
+        settings.setOnClickListener(v -> showSettingsPage());
         row.addView(settings);
         return row;
     }
@@ -2023,6 +2094,245 @@ public class MainActivity extends Activity {
         taskFocusComparisonView = null;
     }
 
+    private boolean taskCanRunToday(JSONObject task) {
+        String weekendKey = weekendKeyFor(currentDate);
+        if (weekendKey == null) return true;
+        JSONObject weekend = weekendForDate(currentDate, false);
+        if (weekend == null || !weekend.optBoolean("planSaved")) return false;
+        if (currentDate.equals(weekendKey)) return "friday".equals(plannedDayForTask(task));
+        if (currentDate.equals(addDays(weekendKey, 1))) return !"sunday".equals(plannedDayForTask(task));
+        return true;
+    }
+
+    private int nextTaskIndexForToday() {
+        JSONArray tasks = taskArray(false);
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && !"done".equals(task.optString("status")) && taskCanRunToday(task)) return index;
+        }
+        return -1;
+    }
+
+    private int taskIndexById(String id) {
+        JSONArray tasks = taskArray(false);
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && id.equals(task.optString("id"))) return index;
+        }
+        return -1;
+    }
+
+    private boolean hasActiveBreakSession() {
+        return breakSession != null
+                && hasText(breakSession, "taskId")
+                && breakSession.optLong("endAt", 0L) > 0L;
+    }
+
+    private void saveBreakSession() {
+        preferences.edit().putString(KEY_BREAK_SESSION,
+                breakSession == null ? "{}" : breakSession.toString()).apply();
+    }
+
+    private void clearBreakSession() {
+        breakSession = new JSONObject();
+        saveBreakSession();
+        timerHandler.removeCallbacks(breakTimerTick);
+        releaseBreakAlarmPlayer();
+        if (breakTimerDialog != null && breakTimerDialog.isShowing()) breakTimerDialog.dismiss();
+        breakTimerDialog = null;
+        breakCountdownView = null;
+        breakNextTaskView = null;
+        extendBreakButton = null;
+    }
+
+    private void showBreakChoiceDialog(int taskIndex) {
+        JSONArray tasks = taskArray(false);
+        JSONObject task = tasks.optJSONObject(taskIndex);
+        if (task == null) return;
+        if (breakChoiceDialog != null && breakChoiceDialog.isShowing()) breakChoiceDialog.dismiss();
+        breakChoiceTaskIndex = taskIndex;
+        LinearLayout content = vertical();
+        content.setPadding(dp(22), dp(6), dp(22), 0);
+        TextView next = text("回来后做  ·  " + task.optString("subject", "其他")
+                + " · " + task.optString("title", "下一项作业"), 12, Color.rgb(69, 107, 168), true);
+        next.setPadding(dp(13), dp(11), dp(13), dp(11));
+        next.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
+        content.addView(next, matchWrap());
+        TextView help = text("我先决定休息多久，时间到就回来开始这一项。", 11, MUTED, false);
+        help.setPadding(0, dp(11), 0, dp(8));
+        content.addView(help);
+        LinearLayout quick = horizontal();
+        Button five = smallButton("休息 5 分钟");
+        Button ten = smallButton("休息 10 分钟");
+        quick.addView(five, weightedFixed(1, dp(46)));
+        quick.addView(spaceHorizontal(8));
+        quick.addView(ten, weightedFixed(1, dp(46)));
+        content.addView(quick, matchFixed(dp(46)));
+        Button meal = smallButton("选择吃饭后回来的时间");
+        LinearLayout.LayoutParams mealParams = matchFixed(dp(46));
+        mealParams.topMargin = dp(8);
+        content.addView(meal, mealParams);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("这一关完成啦，我什么时候回来？")
+                .setView(content)
+                .setNegativeButton("先关闭", null)
+                .setPositiveButton("不休息，开始下一项", null)
+                .create();
+        breakChoiceDialog = dialog;
+        five.setOnClickListener(v -> startBreakSession(taskIndex, System.currentTimeMillis() + 5 * 60000L));
+        ten.setOnClickListener(v -> startBreakSession(taskIndex, System.currentTimeMillis() + 10 * 60000L));
+        meal.setOnClickListener(v -> {
+            Calendar suggested = Calendar.getInstance();
+            suggested.add(Calendar.MINUTE, 30);
+            new TimePickerDialog(this, (view, hour, minute) -> {
+                Calendar end = Calendar.getInstance();
+                end.set(Calendar.HOUR_OF_DAY, hour);
+                end.set(Calendar.MINUTE, minute);
+                end.set(Calendar.SECOND, 0);
+                end.set(Calendar.MILLISECOND, 0);
+                if (end.getTimeInMillis() <= System.currentTimeMillis()) {
+                    toast("请选择晚于现在的时间");
+                    return;
+                }
+                startBreakSession(taskIndex, end.getTimeInMillis());
+            }, suggested.get(Calendar.HOUR_OF_DAY), suggested.get(Calendar.MINUTE), true).show();
+        });
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> startTaskAfterBreak(task.optString("id"), currentDate));
+        });
+        dialog.setOnDismissListener(ignored -> {
+            if (breakChoiceDialog == dialog) breakChoiceDialog = null;
+        });
+        dialog.show();
+    }
+
+    private void startBreakSession(int taskIndex, long endAt) {
+        JSONObject task = taskArray(false).optJSONObject(taskIndex);
+        if (task == null) return;
+        breakSession = new JSONObject();
+        put(breakSession, "taskId", task.optString("id"));
+        put(breakSession, "date", currentDate);
+        put(breakSession, "startedAt", System.currentTimeMillis());
+        put(breakSession, "endAt", endAt);
+        put(breakSession, "extended", false);
+        put(breakSession, "alerted", false);
+        saveBreakSession();
+        if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
+        showBreakTimerDialog();
+    }
+
+    private void showBreakTimerDialog() {
+        if (!hasActiveBreakSession()) return;
+        String sessionDate = breakSession.optString("date", currentDate);
+        if (!sessionDate.equals(currentDate)) {
+            currentDate = sessionDate;
+            renderAll();
+        }
+        int taskIndex = taskIndexById(breakSession.optString("taskId"));
+        JSONObject task = taskArray(false).optJSONObject(taskIndex);
+        if (task == null || "done".equals(task.optString("status"))) {
+            clearBreakSession();
+            return;
+        }
+        if (breakTimerDialog != null && breakTimerDialog.isShowing()) return;
+        LinearLayout content = vertical();
+        content.setPadding(dp(24), dp(8), dp(24), dp(4));
+        TextView label = text("距离回来还有", 10, MUTED, true);
+        label.setGravity(Gravity.CENTER);
+        content.addView(label);
+        breakCountdownView = text("05:00", 48, GREEN, true);
+        breakCountdownView.setGravity(Gravity.CENTER);
+        breakCountdownView.setPadding(0, dp(3), 0, dp(10));
+        content.addView(breakCountdownView);
+        breakNextTaskView = text("", 12, Color.rgb(69, 107, 168), true);
+        breakNextTaskView.setGravity(Gravity.CENTER);
+        breakNextTaskView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        breakNextTaskView.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
+        content.addView(breakNextTaskView, matchWrap());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("我的休息计划")
+                .setView(content)
+                .setNegativeButton("取消提醒", null)
+                .setNeutralButton("再休息 3 分钟", null)
+                .setPositiveButton("我回来了，开始下一项", null)
+                .create();
+        breakTimerDialog = dialog;
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCancelable(false);
+        dialog.setOnShowListener(ignored -> {
+            extendBreakButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            extendBreakButton.setTextColor(GREEN);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                clearBreakSession();
+                toast("这次休息提醒已取消");
+            });
+            extendBreakButton.setOnClickListener(v -> extendBreakSession());
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> startTaskAfterBreak(
+                    breakSession.optString("taskId"), breakSession.optString("date", currentDate)));
+            timerHandler.removeCallbacks(breakTimerTick);
+            timerHandler.post(breakTimerTick);
+        });
+        dialog.setOnDismissListener(ignored -> {
+            timerHandler.removeCallbacks(breakTimerTick);
+            if (breakTimerDialog == dialog) breakTimerDialog = null;
+        });
+        dialog.show();
+    }
+
+    private void renderBreakTimerDialog() {
+        if (!hasActiveBreakSession() || breakTimerDialog == null || !breakTimerDialog.isShowing()) return;
+        int taskIndex = taskIndexById(breakSession.optString("taskId"));
+        JSONObject task = taskArray(false).optJSONObject(taskIndex);
+        if (task == null || "done".equals(task.optString("status"))) {
+            clearBreakSession();
+            return;
+        }
+        long remaining = Math.max(0L, breakSession.optLong("endAt") - System.currentTimeMillis());
+        long seconds = (remaining + 999L) / 1000L;
+        if (breakCountdownView != null) {
+            breakCountdownView.setText(remaining > 0
+                    ? String.format(Locale.CHINA, "%02d:%02d", seconds / 60L, seconds % 60L) : "时间到");
+            breakCountdownView.setTextColor(remaining > 0 ? GREEN : AMBER);
+        }
+        if (breakNextTaskView != null) breakNextTaskView.setText("回来后做  ·  "
+                + task.optString("subject", "其他") + " · " + task.optString("title", "下一项作业"));
+        if (extendBreakButton != null) {
+            extendBreakButton.setEnabled(!breakSession.optBoolean("extended"));
+            extendBreakButton.setVisibility(!breakSession.optBoolean("extended") ? View.VISIBLE : View.GONE);
+        }
+        Button start = breakTimerDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (start != null) start.setText(remaining > 0 ? "我提前回来了，开始下一项" : "开始下一项");
+        if (remaining == 0L && !breakSession.optBoolean("alerted")) {
+            put(breakSession, "alerted", true);
+            saveBreakSession();
+            playBreakAlarm(2);
+        }
+    }
+
+    private void extendBreakSession() {
+        if (!hasActiveBreakSession() || breakSession.optBoolean("extended")) return;
+        releaseBreakAlarmPlayer();
+        put(breakSession, "endAt", Math.max(System.currentTimeMillis(), breakSession.optLong("endAt")) + 3 * 60000L);
+        put(breakSession, "extended", true);
+        put(breakSession, "alerted", false);
+        saveBreakSession();
+        renderBreakTimerDialog();
+        toast("我把休息延长 3 分钟，只延长这一次");
+    }
+
+    private void startTaskAfterBreak(String taskId, String date) {
+        if (date != null && !date.isEmpty() && !date.equals(currentDate)) currentDate = date;
+        int taskIndex = taskIndexById(taskId);
+        clearBreakSession();
+        if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
+        renderAll();
+        if (taskIndex >= 0) performTaskAction("start", taskIndex);
+    }
+
     private void stopTaskClock(JSONObject task, String nextStatus) {
         if ("active".equals(task.optString("status")) && task.optLong("activeSince", 0L) > 0) {
             put(task, "elapsedMs", taskElapsedMillis(task));
@@ -3187,6 +3497,7 @@ public class MainActivity extends Activity {
         JSONObject task = tasks.optJSONObject(index);
         if (task == null) return;
         boolean showFocusAfterRender = false;
+        int offerBreakTaskIndex = -1;
         if ("delete".equals(action)) {
             if (weekendKey != null && !currentDate.equals(weekendKey)) {
                 toast("周末清单只能在周五修改");
@@ -3248,6 +3559,7 @@ public class MainActivity extends Activity {
             return;
         }
         if ("start".equals(action)) {
+            if (hasActiveBreakSession()) clearBreakSession();
             JSONObject active = activeTask(false);
             if (active != null && active != task) {
                 toast("请先暂停或完成“" + active.optString("title", "当前作业") + "”");
@@ -3333,6 +3645,7 @@ public class MainActivity extends Activity {
                 else if (todayDone >= Math.ceil(todayTotal / 2.0)) toast("我又闯过一关，已经完成一半多啦！");
                 else toast("我又闯过一关！已经完成 " + todayDone + " 项");
             }
+            offerBreakTaskIndex = nextTaskIndexForToday();
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
             JSONArray steps = taskSteps(task);
@@ -3371,6 +3684,7 @@ public class MainActivity extends Activity {
         saveTaskData();
         renderAll();
         if (showFocusAfterRender) showTaskFocusDialog(task, index);
+        else if (offerBreakTaskIndex >= 0) showBreakChoiceDialog(offerBreakTaskIndex);
     }
 
     private void saveTaskData() {
@@ -4212,6 +4526,7 @@ public class MainActivity extends Activity {
         if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) weekendTaskPlanDialog.dismiss();
         mainPageView.setVisibility(View.GONE);
         historyPageView.setVisibility(View.GONE);
+        settingsPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.VISIBLE);
         renderDictationPage();
         if (dictationPageView instanceof ScrollView) ((ScrollView) dictationPageView).scrollTo(0, 0);
@@ -4276,6 +4591,7 @@ public class MainActivity extends Activity {
         renderHistoryAndSummary();
         mainPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.GONE);
+        settingsPageView.setVisibility(View.GONE);
         historyPageView.setVisibility(View.VISIBLE);
         if (historyPageView instanceof ScrollView) ((ScrollView) historyPageView).scrollTo(0, 0);
     }
@@ -4285,10 +4601,13 @@ public class MainActivity extends Activity {
         pendingDictationRecordingWord = null;
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
+        stopBreakAlarmRecording(true, false);
+        releaseBreakAlarmPlayer();
         historyManageMode = false;
         if (historyManageButton != null) historyManageButton.setText("管理记录");
         historyPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.GONE);
+        settingsPageView.setVisibility(View.GONE);
         mainPageView.setVisibility(View.VISIBLE);
         if (mainPageView instanceof ScrollView) ((ScrollView) mainPageView).scrollTo(0, 0);
     }
@@ -5290,71 +5609,293 @@ public class MainActivity extends Activity {
                 }).show();
     }
 
-    private void showParentToolsDialog() {
+    private View buildSettingsPage() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(PAGE);
         LinearLayout content = vertical();
-        content.setPadding(dp(20), dp(4), dp(20), 0);
-        TextView help = text("日期、数据备份和记录管理集中放在这里，不打扰孩子完成今天的计划。",
-                11, MUTED, false);
-        content.addView(help);
+        content.setPadding(dp(16), dp(22), dp(16), dp(28));
+        scroll.addView(content, matchWrap());
 
-        TextView current = text("当前查看：" + formatLongDate(currentDate) + " · " + recordViewModeLabel(currentDate),
-                11, Color.rgb(69, 107, 168), true);
-        current.setPadding(0, dp(14), 0, 0);
-        content.addView(current);
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        Button back = smallButton("返回");
+        back.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        back.setOnClickListener(v -> showMainPage());
+        header.addView(back, fixed(dp(64), dp(40)));
+        header.addView(spaceHorizontal(13));
+        LinearLayout headerCopy = vertical();
+        headerCopy.addView(text("⚙ 安静放在这里", 10, GREEN, true));
+        headerCopy.addView(text("设置", 25, GREEN_DARK, true));
+        TextView description = text("日期、提示音和数据管理集中在这里。", 10, MUTED, false);
+        description.setPadding(0, dp(3), 0, 0);
+        headerCopy.addView(description);
+        header.addView(headerCopy, weightedWrap(1));
+        content.addView(header, matchWrap());
+        content.addView(space(16));
 
+        LinearLayout dateCard = card();
+        dateCard.addView(text("日期", 10, GREEN, true));
+        dateCard.addView(text("查看与统计", 20, INK, true));
+        settingsCurrentDateView = text("", 11, Color.rgb(69, 107, 168), true);
+        settingsCurrentDateView.setPadding(0, dp(10), 0, dp(2));
+        dateCard.addView(settingsCurrentDateView);
         LinearLayout dateActions = horizontal();
         Button recordDate = smallButton("查看其他日期");
+        recordDate.setOnClickListener(v -> showRecordDatePicker());
         dateActions.addView(recordDate, weightedFixed(1, dp(46)));
         dateActions.addView(spaceHorizontal(8));
         Button today = smallButton("回到今天");
-        boolean viewingToday = currentDate.equals(todayIso());
-        today.setEnabled(!viewingToday);
-        today.setAlpha(viewingToday ? 0.45f : 1f);
+        today.setOnClickListener(v -> selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso()));
         dateActions.addView(today, weightedFixed(1, dp(46)));
-        LinearLayout.LayoutParams dateActionParams = matchFixed(dp(46));
-        dateActionParams.topMargin = dp(8);
-        content.addView(dateActions, dateActionParams);
-
+        LinearLayout.LayoutParams dateActionsParams = matchFixed(dp(46));
+        dateActionsParams.topMargin = dp(8);
+        dateCard.addView(dateActions, dateActionsParams);
         Button start = smallButton("设置统计开始日期");
+        start.setOnClickListener(v -> showStartDatePicker());
         LinearLayout.LayoutParams startParams = matchFixed(dp(46));
         startParams.topMargin = dp(8);
-        content.addView(start, startParams);
+        dateCard.addView(start, startParams);
+        content.addView(dateCard, matchWrap());
+        content.addView(space(14));
 
+        LinearLayout alarmCard = card();
+        LinearLayout alarmHeading = horizontal();
+        alarmHeading.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout alarmCopy = vertical();
+        alarmCopy.addView(text("休息结束提醒", 10, GREEN, true));
+        alarmCopy.addView(text("我的“回来写作业”提示音", 19, INK, true));
+        alarmHeading.addView(alarmCopy, weightedWrap(1));
+        breakAlarmStatusView = text("使用默认提示", 10, Color.rgb(69, 107, 168), true);
+        breakAlarmStatusView.setPadding(dp(10), dp(6), dp(10), dp(6));
+        breakAlarmStatusView.setBackground(rounded(GREEN_SOFT, 16, GREEN_SOFT, 0));
+        alarmHeading.addView(breakAlarmStatusView);
+        alarmCard.addView(alarmHeading, matchWrap());
+        TextView alarmDescription = text("我可以录下“作业时间到啦”等一句响亮的话。休息倒计时结束时会连续播放两遍；未录音时使用默认语音。", 11, MUTED, false);
+        alarmDescription.setPadding(0, dp(11), 0, 0);
+        alarmDescription.setLineSpacing(dp(3), 1f);
+        alarmCard.addView(alarmDescription);
+        breakAlarmRecordButton = smallButton("🎙 开始录音");
+        breakAlarmRecordButton.setOnClickListener(v -> toggleBreakAlarmRecording());
+        LinearLayout.LayoutParams recordParams = matchFixed(dp(48));
+        recordParams.topMargin = dp(13);
+        alarmCard.addView(breakAlarmRecordButton, recordParams);
+        LinearLayout previewRow = horizontal();
+        breakAlarmPreviewButton = smallButton("🔊 试听默认提示");
+        breakAlarmPreviewButton.setOnClickListener(v -> playBreakAlarm(1));
+        previewRow.addView(breakAlarmPreviewButton, weightedFixed(1, dp(44)));
+        previewRow.addView(spaceHorizontal(8));
+        breakAlarmResetButton = smallButton("恢复默认");
+        breakAlarmResetButton.setTextColor(RED);
+        breakAlarmResetButton.setOnClickListener(v -> confirmResetBreakAlarm());
+        previewRow.addView(breakAlarmResetButton, weightedFixed(1, dp(44)));
+        LinearLayout.LayoutParams previewParams = matchFixed(dp(44));
+        previewParams.topMargin = dp(8);
+        alarmCard.addView(previewRow, previewParams);
+        breakAlarmHintView = text("建议录 2～5 秒，例如：“作业时间到啦，我要继续下一项！”", 10, MUTED, false);
+        breakAlarmHintView.setPadding(0, dp(9), 0, 0);
+        alarmCard.addView(breakAlarmHintView);
+        content.addView(alarmCard, matchWrap());
+        content.addView(space(14));
+
+        LinearLayout dataCard = card();
+        dataCard.addView(text("本地数据", 10, GREEN, true));
+        dataCard.addView(text("备份与恢复", 20, INK, true));
         Button export = smallButton("导出本地备份");
         export.setOnClickListener(v -> launchBackupExport());
         LinearLayout.LayoutParams exportParams = matchFixed(dp(46));
-        exportParams.topMargin = dp(8);
-        content.addView(export, exportParams);
-
+        exportParams.topMargin = dp(12);
+        dataCard.addView(export, exportParams);
         Button restore = smallButton("从备份恢复");
         restore.setOnClickListener(v -> launchBackupImport());
         LinearLayout.LayoutParams restoreParams = matchFixed(dp(46));
         restoreParams.topMargin = dp(8);
-        content.addView(restore, restoreParams);
+        dataCard.addView(restore, restoreParams);
+        TextView note = text("备份包含作业、计划、打卡和自定义词语；提示音录音仅保存在当前设备。删除记录请进入“足迹—管理记录”。", 10, MUTED, false);
+        note.setPadding(0, dp(11), 0, 0);
+        note.setLineSpacing(dp(3), 1f);
+        dataCard.addView(note);
+        content.addView(dataCard, matchWrap());
+        renderBreakAlarmSettings();
+        return scroll;
+    }
 
-        TextView note = text("备份包含作业、计划、打卡和自定义词语，不包含听写录音文件。删除记录请进入“足迹—管理记录”。",
-                10, MUTED, false);
-        note.setPadding(0, dp(12), 0, 0);
-        content.addView(note);
+    private void showSettingsPage() {
+        stopDictation(false, false);
+        pendingDictationRecordingWord = null;
+        stopDictationWordRecording(true, false);
+        releaseDictationPreviewPlayer();
+        dismissTaskEntryDialog();
+        dismissTaskFocusDialog();
+        if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) weekendTaskPlanDialog.dismiss();
+        mainPageView.setVisibility(View.GONE);
+        historyPageView.setVisibility(View.GONE);
+        dictationPageView.setVisibility(View.GONE);
+        settingsPageView.setVisibility(View.VISIBLE);
+        renderBreakAlarmSettings();
+        if (settingsPageView instanceof ScrollView) ((ScrollView) settingsPageView).scrollTo(0, 0);
+    }
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("家长工具")
-                .setView(content)
-                .setNegativeButton("关闭", null)
-                .create();
-        recordDate.setOnClickListener(v -> {
-            dialog.dismiss();
-            showRecordDatePicker();
-        });
-        today.setOnClickListener(v -> {
-            dialog.dismiss();
-            selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso());
-        });
-        start.setOnClickListener(v -> {
-            dialog.dismiss();
-            showStartDatePicker();
-        });
-        dialog.show();
+    private File breakAlarmFile() {
+        return new File(getFilesDir(), "break-alarm.m4a");
+    }
+
+    private void renderBreakAlarmSettings() {
+        if (settingsCurrentDateView != null) {
+            settingsCurrentDateView.setText("当前查看：" + formatLongDate(currentDate) + " · " + recordViewModeLabel(currentDate));
+        }
+        boolean custom = breakAlarmFile().isFile() && breakAlarmFile().length() > 0;
+        if (breakAlarmStatusView != null) breakAlarmStatusView.setText(custom ? "已使用我的录音" : "使用默认提示");
+        if (breakAlarmPreviewButton != null) breakAlarmPreviewButton.setText(custom ? "🔊 试听我的录音" : "🔊 试听默认提示");
+        if (breakAlarmResetButton != null) breakAlarmResetButton.setVisibility(custom ? View.VISIBLE : View.GONE);
+        if (breakAlarmRecordButton != null && breakAlarmRecorder == null) {
+            breakAlarmRecordButton.setText(custom ? "🎙 重新录音" : "🎙 开始录音");
+        }
+    }
+
+    private void toggleBreakAlarmRecording() {
+        if (breakAlarmRecorder != null) {
+            stopBreakAlarmRecording(true, true);
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            startBreakAlarmRecordingAfterPermission = true;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, BREAK_ALARM_RECORD_AUDIO_PERMISSION_REQUEST);
+            return;
+        }
+        beginBreakAlarmRecording();
+    }
+
+    private void beginBreakAlarmRecording() {
+        releaseBreakAlarmPlayer();
+        File output = new File(getFilesDir(), "break-alarm.m4a.recording");
+        if (output.exists()) output.delete();
+        MediaRecorder recorder = new MediaRecorder();
+        try {
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioSamplingRate(44100);
+            recorder.setAudioEncodingBitRate(128000);
+            recorder.setMaxDuration(8000);
+            recorder.setOutputFile(output.getAbsolutePath());
+            recorder.setOnInfoListener((source, what, extra) -> {
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                    runOnUiThread(() -> stopBreakAlarmRecording(true, true));
+                }
+            });
+            recorder.setOnErrorListener((source, what, extra) -> runOnUiThread(() -> {
+                stopBreakAlarmRecording(false, false);
+                toast("提示音录制失败，请重试");
+            }));
+            recorder.prepare();
+            recorder.start();
+            breakAlarmRecorder = recorder;
+            pendingBreakAlarmFile = output;
+            breakAlarmRecordingStartedAt = System.currentTimeMillis();
+            breakAlarmRecordButton.setText("■ 完成录音");
+            breakAlarmHintView.setText("正在录音……说完后点“完成录音”，最长 8 秒。");
+        } catch (Exception error) {
+            recorder.reset();
+            recorder.release();
+            output.delete();
+            toast("无法开始录音，请检查麦克风权限");
+        }
+    }
+
+    private void stopBreakAlarmRecording(boolean keep, boolean notify) {
+        MediaRecorder recorder = breakAlarmRecorder;
+        File temporary = pendingBreakAlarmFile;
+        if (recorder == null) return;
+        breakAlarmRecorder = null;
+        pendingBreakAlarmFile = null;
+        boolean longEnough = System.currentTimeMillis() - breakAlarmRecordingStartedAt >= BREAK_ALARM_RECORDING_MIN_MS;
+        boolean stopped = false;
+        try {
+            recorder.stop();
+            stopped = true;
+        } catch (RuntimeException ignored) { }
+        recorder.reset();
+        recorder.release();
+        boolean saved = false;
+        if (keep && stopped && longEnough && temporary != null && temporary.isFile() && temporary.length() > 0) {
+            File target = breakAlarmFile();
+            if (target.exists()) target.delete();
+            saved = temporary.renameTo(target);
+        }
+        if (!saved && temporary != null) temporary.delete();
+        if (breakAlarmHintView != null) {
+            breakAlarmHintView.setText(saved ? "录音已保存。试听一下，确认声音清楚、响亮。" : "录音太短或已取消，请重新录一遍。");
+        }
+        renderBreakAlarmSettings();
+        if (notify) toast(saved ? "提示音录音已保存" : "录音太短，请重新录制");
+    }
+
+    private void confirmResetBreakAlarm() {
+        new AlertDialog.Builder(this)
+                .setTitle("恢复默认提示")
+                .setMessage("确定删除我的录音，改用“作业时间到啦”吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("恢复默认", (dialog, which) -> {
+                    releaseBreakAlarmPlayer();
+                    boolean deleted = !breakAlarmFile().exists() || breakAlarmFile().delete();
+                    renderBreakAlarmSettings();
+                    if (breakAlarmHintView != null) breakAlarmHintView.setText("已恢复默认语音：“作业时间到啦”。");
+                    toast(deleted ? "已恢复默认提示" : "无法删除录音，请重试");
+                }).show();
+    }
+
+    private void playBreakAlarm(int repeats) {
+        releaseBreakAlarmPlayer();
+        if (breakAlarmTts != null) breakAlarmTts.stop();
+        File file = breakAlarmFile();
+        if (!file.isFile() || file.length() == 0) {
+            if (breakAlarmTts == null) {
+                toast("作业时间到啦！");
+                return;
+            }
+            Bundle first = new Bundle();
+            first.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f);
+            breakAlarmTts.speak("作业时间到啦", TextToSpeech.QUEUE_FLUSH, first, "break-alarm-1");
+            if (repeats > 1) {
+                Bundle second = new Bundle();
+                second.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f);
+                breakAlarmTts.speak("作业时间到啦", TextToSpeech.QUEUE_ADD, second, "break-alarm-2");
+            }
+            return;
+        }
+        remainingBreakAlarmPlays = Math.max(1, repeats);
+        playBreakAlarmFile();
+    }
+
+    private void playBreakAlarmFile() {
+        if (remainingBreakAlarmPlays <= 0) return;
+        remainingBreakAlarmPlays--;
+        MediaPlayer player = new MediaPlayer();
+        breakAlarmPlayer = player;
+        try {
+            player.setDataSource(breakAlarmFile().getAbsolutePath());
+            player.setVolume(1f, 1f);
+            player.setOnCompletionListener(done -> {
+                done.release();
+                if (breakAlarmPlayer == done) breakAlarmPlayer = null;
+                if (remainingBreakAlarmPlays > 0) timerHandler.postDelayed(this::playBreakAlarmFile, 350);
+            });
+            player.prepare();
+            player.start();
+        } catch (Exception error) {
+            player.release();
+            breakAlarmPlayer = null;
+            toast("无法播放提示音");
+        }
+    }
+
+    private void releaseBreakAlarmPlayer() {
+        remainingBreakAlarmPlays = 0;
+        MediaPlayer player = breakAlarmPlayer;
+        breakAlarmPlayer = null;
+        if (player != null) player.release();
+        if (breakAlarmTts != null) breakAlarmTts.stop();
     }
 
     private String recordViewModeLabel(String date) {
@@ -5460,6 +6001,7 @@ public class MainActivity extends Activity {
             preferences.edit().putString(KEY_START_DATE, startDate).apply();
             if (currentDate.compareTo(startDate) < 0) currentDate = startDate;
             renderAll();
+            renderBreakAlarmSettings();
             toast("开始日期已更新");
         }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH));
         dialog.getDatePicker().setMaxDate(calendarFromIso(todayIso()).getTimeInMillis());
@@ -5484,6 +6026,7 @@ public class MainActivity extends Activity {
         completedTasksExpanded = false;
         currentDate = date;
         renderAll();
+        renderBreakAlarmSettings();
     }
 
     private JSONObject currentRecord(boolean create) {

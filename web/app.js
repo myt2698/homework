@@ -2,6 +2,8 @@
   "use strict";
 
   const STORAGE_KEY = "homework-ledger-v1";
+  const BREAK_SESSION_KEY = "homework-break-session-v1";
+  const BREAK_ALARM_KEY = "homework-break-alarm-v1";
   const RULES = {
     best: { label: "8:30 及以前", amount: 1.5 },
     good: { label: "8:30 后至 8:40", amount: 1 },
@@ -66,7 +68,7 @@
   let state = loadState();
   let toastTimer = null;
   const elements = {
-    mainPage: $("#mainPage"), historyPage: $("#historyPage"), dictationPage: $("#dictationPage"),
+    mainPage: $("#mainPage"), historyPage: $("#historyPage"), dictationPage: $("#dictationPage"), settingsPage: $("#settingsPage"),
     openHistoryButton: $("#openHistoryButton"), closeHistoryButton: $("#closeHistoryButton"),
     openDictationButton: $("#openDictationButton"), closeDictationButton: $("#closeDictationButton"),
     dictationLessonSelect: $("#dictationLessonSelect"), dictationLessonCount: $("#dictationLessonCount"),
@@ -77,7 +79,7 @@
     dictationProgress: $("#dictationProgress"), dictationProgressFill: $("#dictationProgressFill"),
     dictationProgressText: $("#dictationProgressText"), startDictationButton: $("#startDictationButton"),
     stopDictationButton: $("#stopDictationButton"),
-    settingsButton: $("#settingsButton"), settingsPanel: $("#settingsPanel"),
+    settingsButton: $("#settingsButton"), closeSettingsButton: $("#closeSettingsButton"),
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
     exportDataButton: $("#exportDataButton"), importDataButton: $("#importDataButton"),
     importDataInput: $("#importDataInput"), historyManageButton: $("#historyManageButton"),
@@ -123,6 +125,15 @@
     focusModalElapsed: $("#focusModalElapsed"), focusModalEstimate: $("#focusModalEstimate"),
     focusModalComparison: $("#focusModalComparison"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
+    alarmSoundStatus: $("#alarmSoundStatus"), recordAlarmButton: $("#recordAlarmButton"),
+    previewAlarmButton: $("#previewAlarmButton"), resetAlarmButton: $("#resetAlarmButton"),
+    alarmRecordHint: $("#alarmRecordHint"), breakChoiceModal: $("#breakChoiceModal"),
+    breakChoiceCloseButton: $("#breakChoiceCloseButton"), breakChoiceNextTask: $("#breakChoiceNextTask"),
+    breakReturnTime: $("#breakReturnTime"), startTimedBreakButton: $("#startTimedBreakButton"),
+    startNextTaskNowButton: $("#startNextTaskNowButton"), breakTimerModal: $("#breakTimerModal"),
+    breakCountdown: $("#breakCountdown"), breakTimerNextTask: $("#breakTimerNextTask"),
+    extendBreakButton: $("#extendBreakButton"), startNextTaskButton: $("#startNextTaskButton"),
+    cancelBreakButton: $("#cancelBreakButton"),
     resultLabel: $("#resultLabel"), resultAmount: $("#resultAmount"),
     resetDayButton: $("#resetDayButton"), historyList: $("#historyList"),
     emptyState: $("#emptyState"), balance: $("#balance"), periodLabel: $("#periodLabel"),
@@ -145,6 +156,15 @@
   let pointerTaskDrag = null;
   let selectedDictationLesson = DICTATION_LESSONS[0].id;
   let dictationSession = null;
+  let breakChoiceTaskId = null;
+  let breakTimer = null;
+  let breakSession = loadBreakSession();
+  let alarmRecorder = null;
+  let alarmStream = null;
+  let alarmChunks = [];
+  let alarmRecordingStartedAt = 0;
+  let alarmRecordingTimer = null;
+  let alarmPlayback = null;
 
   function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -348,6 +368,255 @@
     focusModalTaskId = null;
     elements.focusModal.hidden = true;
     document.body.style.overflow = "";
+  }
+
+  function loadBreakSession() {
+    try {
+      const value = JSON.parse(localStorage.getItem(BREAK_SESSION_KEY));
+      return value && typeof value === "object" && value.taskId && Number(value.endAt) ? value : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveBreakSession() {
+    if (breakSession) localStorage.setItem(BREAK_SESSION_KEY, JSON.stringify(breakSession));
+    else localStorage.removeItem(BREAK_SESSION_KEY);
+  }
+
+  function customAlarmAudio() {
+    return localStorage.getItem(BREAK_ALARM_KEY) || "";
+  }
+
+  function renderAlarmSettings() {
+    const custom = Boolean(customAlarmAudio());
+    elements.alarmSoundStatus.textContent = custom ? "已使用我的录音" : "使用默认提示";
+    elements.alarmSoundStatus.classList.toggle("custom", custom);
+    elements.resetAlarmButton.hidden = !custom;
+    elements.previewAlarmButton.textContent = custom ? "🔊 试听我的录音" : "🔊 试听默认提示";
+  }
+
+  function stopAlarmPlayback() {
+    if (alarmPlayback) {
+      alarmPlayback.pause();
+      alarmPlayback = null;
+    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+
+  function playDefaultAlarm(repeats = 1) {
+    if (!("speechSynthesis" in window)) return showToast("作业时间到啦！");
+    let remaining = repeats;
+    const speak = () => {
+      if (remaining <= 0) return;
+      remaining -= 1;
+      const message = new SpeechSynthesisUtterance("作业时间到啦");
+      message.lang = "zh-CN";
+      message.rate = 0.92;
+      message.pitch = 1.08;
+      message.volume = 1;
+      const chineseVoice = window.speechSynthesis.getVoices().find((voice) => voice.lang?.toLowerCase().startsWith("zh"));
+      if (chineseVoice) message.voice = chineseVoice;
+      message.onend = () => window.setTimeout(speak, 350);
+      window.speechSynthesis.speak(message);
+    };
+    speak();
+  }
+
+  function playAlarm(repeats = 1) {
+    stopAlarmPlayback();
+    const source = customAlarmAudio();
+    if (!source) return playDefaultAlarm(repeats);
+    let remaining = repeats;
+    const playNext = () => {
+      if (remaining <= 0) return;
+      remaining -= 1;
+      const audio = new Audio(source);
+      alarmPlayback = audio;
+      audio.volume = 1;
+      audio.onended = () => window.setTimeout(playNext, 350);
+      audio.onerror = () => playDefaultAlarm(Math.max(1, remaining + 1));
+      audio.play().catch(() => playDefaultAlarm(Math.max(1, remaining + 1)));
+    };
+    playNext();
+  }
+
+  function finishAlarmRecording() {
+    if (!alarmRecorder || alarmRecorder.state === "inactive") return;
+    alarmRecorder.stop();
+  }
+
+  async function toggleAlarmRecording() {
+    if (alarmRecorder && alarmRecorder.state !== "inactive") return finishAlarmRecording();
+    if (!navigator.mediaDevices?.getUserMedia || !("MediaRecorder" in window)) {
+      elements.alarmRecordHint.textContent = "当前浏览器不能录音，可以继续使用默认提示。";
+      return;
+    }
+    try {
+      alarmStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      alarmChunks = [];
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+        .find((type) => MediaRecorder.isTypeSupported?.(type));
+      alarmRecorder = preferred ? new MediaRecorder(alarmStream, { mimeType: preferred }) : new MediaRecorder(alarmStream);
+      alarmRecordingStartedAt = Date.now();
+      alarmRecorder.ondataavailable = (event) => { if (event.data?.size) alarmChunks.push(event.data); };
+      alarmRecorder.onstop = () => {
+        window.clearTimeout(alarmRecordingTimer);
+        alarmStream?.getTracks().forEach((track) => track.stop());
+        alarmStream = null;
+        elements.recordAlarmButton.classList.remove("listening");
+        elements.recordAlarmButton.textContent = "🎙 重新录音";
+        const duration = Date.now() - alarmRecordingStartedAt;
+        const blob = new Blob(alarmChunks, { type: alarmRecorder?.mimeType || "audio/webm" });
+        if (duration < 500 || !blob.size) {
+          elements.alarmRecordHint.textContent = "录音太短了，请重新录一遍。";
+          alarmRecorder = null;
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            localStorage.setItem(BREAK_ALARM_KEY, String(reader.result));
+            elements.alarmRecordHint.textContent = "录音已保存。试听一下，确认声音清楚、响亮。";
+            renderAlarmSettings();
+          } catch (_) {
+            elements.alarmRecordHint.textContent = "录音太长，无法保存。请录一段更短的提示。";
+          }
+        };
+        reader.readAsDataURL(blob);
+        alarmRecorder = null;
+      };
+      alarmRecorder.start();
+      elements.recordAlarmButton.classList.add("listening");
+      elements.recordAlarmButton.textContent = "■ 完成录音";
+      elements.alarmRecordHint.textContent = "正在录音……说完后点“完成录音”，最长 8 秒。";
+      alarmRecordingTimer = window.setTimeout(finishAlarmRecording, 8000);
+    } catch (_) {
+      alarmStream?.getTracks().forEach((track) => track.stop());
+      alarmStream = null;
+      elements.alarmRecordHint.textContent = "没有取得麦克风权限，可以在浏览器设置中允许后重试。";
+    }
+  }
+
+  function openSettingsPage() {
+    stopDictation(false, false);
+    closeTaskEntryModal();
+    closeWeekendPlanModal();
+    closeTaskStepsEditor();
+    closeFocusModal();
+    elements.mainPage.hidden = true;
+    elements.historyPage.hidden = true;
+    elements.dictationPage.hidden = true;
+    elements.settingsPage.hidden = false;
+    renderAlarmSettings();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeSettingsPage() {
+    finishAlarmRecording();
+    stopAlarmPlayback();
+    elements.settingsPage.hidden = true;
+    elements.mainPage.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function taskCanRunToday(task, date = elements.recordDate.value) {
+    const key = weekendKeyFor(date);
+    if (!key) return true;
+    const weekend = weekendForDate(date);
+    if (!weekend?.planSaved) return false;
+    if (date === key) return plannedDayForTask(task) === "friday";
+    if (date === addDays(key, 1)) return plannedDayForTask(task) !== "sunday";
+    return true;
+  }
+
+  function nextTaskForToday(date = elements.recordDate.value) {
+    return tasksForDate(date).find((task) => task.status !== "done" && taskCanRunToday(task, date)) || null;
+  }
+
+  function closeBreakChoice() {
+    breakChoiceTaskId = null;
+    elements.breakChoiceModal.hidden = true;
+    if (elements.breakTimerModal.hidden) document.body.classList.remove("modal-open");
+  }
+
+  function openBreakChoice(taskId) {
+    const task = taskById(taskId);
+    if (!task) return;
+    breakChoiceTaskId = String(taskId);
+    elements.breakChoiceNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    const suggested = new Date(Date.now() + 30 * 60000);
+    elements.breakReturnTime.value = `${String(suggested.getHours()).padStart(2, "0")}:${String(suggested.getMinutes()).padStart(2, "0")}`;
+    elements.breakChoiceModal.hidden = false;
+    document.body.classList.add("modal-open");
+  }
+
+  function closeBreakTimer() {
+    window.clearInterval(breakTimer);
+    breakTimer = null;
+    elements.breakTimerModal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  function renderBreakTimer() {
+    if (!breakSession) return closeBreakTimer();
+    const task = tasksForDate(breakSession.date).find((item) => String(item.id) === String(breakSession.taskId));
+    if (!task || task.status === "done") return cancelBreak(false);
+    elements.breakTimerNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    const remaining = Math.max(0, Number(breakSession.endAt) - Date.now());
+    const seconds = Math.ceil(remaining / 1000);
+    elements.breakCountdown.textContent = remaining > 0
+      ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
+      : "时间到";
+    elements.breakTimerModal.querySelector(".break-timer-dialog").classList.toggle("time-up", remaining <= 0);
+    elements.extendBreakButton.hidden = Boolean(breakSession.extended);
+    elements.startNextTaskButton.textContent = remaining <= 0 ? "开始下一项" : "我提前回来了，开始下一项";
+    if (remaining <= 0 && !breakSession.alerted) {
+      breakSession.alerted = true;
+      saveBreakSession();
+      playAlarm(2);
+    }
+  }
+
+  function openBreakTimer() {
+    if (!breakSession) return;
+    closeBreakChoice();
+    elements.breakTimerModal.hidden = false;
+    document.body.classList.add("modal-open");
+    renderBreakTimer();
+    window.clearInterval(breakTimer);
+    breakTimer = window.setInterval(renderBreakTimer, 1000);
+  }
+
+  function startBreak(endAt) {
+    if (!breakChoiceTaskId) return;
+    breakSession = {
+      taskId: breakChoiceTaskId,
+      date: elements.recordDate.value,
+      startedAt: Date.now(),
+      endAt,
+      extended: false,
+      alerted: false
+    };
+    saveBreakSession();
+    openBreakTimer();
+  }
+
+  function cancelBreak(notify = true) {
+    breakSession = null;
+    saveBreakSession();
+    stopAlarmPlayback();
+    closeBreakTimer();
+    if (notify) showToast("这次休息提醒已取消");
+  }
+
+  function startNextTaskAfterBreak(taskId = breakSession?.taskId, date = breakSession?.date) {
+    if (!taskId) taskId = breakChoiceTaskId;
+    if (!taskId) return;
+    closeBreakChoice();
+    cancelBreak(false);
+    if (date && elements.recordDate.value !== date) setRecordDate(date);
+    performTaskAction("start", taskId);
   }
 
   const SUBJECT_PATTERN = "语文|数学|英语|科学|道法|体育|音乐|美术|其他";
@@ -679,6 +948,7 @@
     renderHistory();
     elements.mainPage.hidden = true;
     elements.dictationPage.hidden = true;
+    elements.settingsPage.hidden = true;
     elements.historyPage.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -835,6 +1105,7 @@
     closeWeekendPlanModal();
     closeFocusModal();
     elements.historyPage.hidden = true;
+    elements.settingsPage.hidden = true;
     elements.mainPage.hidden = true;
     elements.dictationPage.hidden = false;
     renderDictation();
@@ -1606,6 +1877,7 @@
     const weekend = key ? weekendForDate(date, true) : null;
     const tasks = tasksForDate();
     let openFocusAfterRender = false;
+    let offerBreakTaskId = null;
     if (action === "delete") {
       if (key && date !== key) return showToast("周末清单只能在周五修改");
       const owner = taskOwnerForDate(elements.recordDate.value, true);
@@ -1637,6 +1909,7 @@
     const record = currentRecord(true);
     if (!key && record.finishTime && action !== "undo") return showToast("当天已经结算，如需修改可先撤销一项完成");
     if (action === "start") {
+      if (breakSession) cancelBreak(false);
       const active = activeTaskForDate();
       if (active && active !== task) return showToast(`请先暂停或完成“${active.title}”`);
       task.status = "active";
@@ -1703,6 +1976,8 @@
         else if (todayDone >= Math.ceil(todayTasks.length / 2)) showToast("我又闯过一关，已经完成一半多啦！");
         else showToast(`我又闯过一关！已经完成 ${todayDone} 项`);
       }
+      const nextTask = nextTaskForToday(date);
+      if (nextTask) offerBreakTaskId = String(nextTask.id);
     } else if (action === "undo") {
       task.status = "paused";
       const steps = taskSteps(task);
@@ -1728,6 +2003,7 @@
     persist();
     render();
     if (openFocusAfterRender) openFocusModal(id);
+    else if (offerBreakTaskId) openBreakChoice(offerBreakTaskId);
   }
 
   function updateSpeechState(listening, message) {
@@ -1871,10 +2147,15 @@
     showToast(weekend.penaltyConfirmed ? "周末未完成已结算" : "已撤销未完成结算");
   }
 
-  elements.settingsButton.addEventListener("click", () => {
-    const willOpen = elements.settingsPanel.hidden;
-    elements.settingsPanel.hidden = !willOpen;
-    elements.settingsButton.setAttribute("aria-expanded", String(willOpen));
+  elements.settingsButton.addEventListener("click", openSettingsPage);
+  elements.closeSettingsButton.addEventListener("click", closeSettingsPage);
+  elements.recordAlarmButton.addEventListener("click", toggleAlarmRecording);
+  elements.previewAlarmButton.addEventListener("click", () => playAlarm(1));
+  elements.resetAlarmButton.addEventListener("click", () => {
+    stopAlarmPlayback();
+    localStorage.removeItem(BREAK_ALARM_KEY);
+    elements.alarmRecordHint.textContent = "已恢复默认语音：“作业时间到啦”。";
+    renderAlarmSettings();
   });
   elements.exportDataButton.addEventListener("click", exportBackup);
   elements.importDataButton.addEventListener("click", () => elements.importDataInput.click());
@@ -1942,11 +2223,14 @@
   });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (!elements.stepEditorModal.hidden) closeTaskStepsEditor();
+    if (!elements.breakTimerModal.hidden) return;
+    if (!elements.breakChoiceModal.hidden) closeBreakChoice();
+    else if (!elements.stepEditorModal.hidden) closeTaskStepsEditor();
     else if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
     else if (!elements.dictationPage.hidden) closeDictationPage();
     else if (!elements.historyPage.hidden) closeHistoryPage();
+    else if (!elements.settingsPage.hidden) closeSettingsPage();
   });
   elements.weekendTaskPlanList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-plan-day]");
@@ -2058,6 +2342,35 @@
   elements.focusCompleteButton.addEventListener("click", () => {
     if (focusModalTaskId) performTaskAction("complete", focusModalTaskId);
   });
+  elements.breakChoiceCloseButton.addEventListener("click", closeBreakChoice);
+  elements.breakChoiceModal.addEventListener("click", (event) => {
+    if (event.target === elements.breakChoiceModal) closeBreakChoice();
+  });
+  elements.breakChoiceModal.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-break-minutes]");
+    if (button) startBreak(Date.now() + Number(button.dataset.breakMinutes) * 60000);
+  });
+  elements.startTimedBreakButton.addEventListener("click", () => {
+    if (!elements.breakReturnTime.value) return showToast("先选择准备回来的时间");
+    const [hours, minutes] = elements.breakReturnTime.value.split(":").map(Number);
+    const end = new Date();
+    end.setHours(hours, minutes, 0, 0);
+    if (end.getTime() <= Date.now()) return showToast("请选择晚于现在的时间");
+    startBreak(end.getTime());
+  });
+  elements.startNextTaskNowButton.addEventListener("click", () => startNextTaskAfterBreak(breakChoiceTaskId, elements.recordDate.value));
+  elements.startNextTaskButton.addEventListener("click", () => startNextTaskAfterBreak());
+  elements.extendBreakButton.addEventListener("click", () => {
+    if (!breakSession || breakSession.extended) return;
+    stopAlarmPlayback();
+    breakSession.endAt = Math.max(Date.now(), Number(breakSession.endAt)) + 3 * 60000;
+    breakSession.extended = true;
+    breakSession.alerted = false;
+    saveBreakSession();
+    renderBreakTimer();
+    showToast("我把休息延长 3 分钟，只延长这一次");
+  });
+  elements.cancelBreakButton.addEventListener("click", () => cancelBreak(true));
   elements.resetDayButton.addEventListener("click", () => {
     const date = elements.recordDate.value;
     if (!isMeaningful(state.records[date])) return showToast("这一天还没有记录");
@@ -2094,7 +2407,9 @@
     .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);
   renderDictation();
+  renderAlarmSettings();
   render();
+  if (breakSession) openBreakTimer();
   setInterval(() => {
     updateFocusModal();
     const active = activeTaskForDate();
