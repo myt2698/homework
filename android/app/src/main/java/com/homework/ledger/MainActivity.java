@@ -763,7 +763,7 @@ public class MainActivity extends Activity {
         weekendRangeView.setPadding(0, dp(4), 0, dp(13));
         card.addView(weekendRangeView);
 
-        weekendConfirmedCard = weekendCheckCard("周末作业已全部确认", "已核对钉钉和成长记录册", 0);
+        weekendConfirmedCard = weekendCheckCard("周末作业已全部确认", "已核对钉钉并补全成长记录册", 0);
         card.addView(weekendConfirmedCard, matchFixed(dp(70)));
         card.addView(space(8));
         dailySeparatedCard = weekendCheckCard("已区分每日任务", "阅读、跳绳等不计入一次性作业", 1);
@@ -966,7 +966,7 @@ public class MainActivity extends Activity {
         card.setPadding(dp(12), dp(14), dp(12), dp(14));
         recordHeadingView = text("今天进行到哪里了？", 21, INK, true);
 
-        ledgerCard = prepCard("先核对钉钉和成长记录册", "确认今天的作业已经完整");
+        ledgerCard = prepCard("核对钉钉，补全成长记录册", "把钉钉里新增的作业补充进去");
         card.addView(ledgerCard, matchFixed(dp(72)));
         card.addView(space(10));
 
@@ -1651,7 +1651,7 @@ public class MainActivity extends Activity {
         }
         JSONObject dailyRecord = currentRecord(false);
         if (dailyRecord == null || !dailyRecord.optBoolean("ledgerConfirmed")) {
-            toast("请先核对钉钉和成长记录册");
+            toast("请先核对钉钉，并补全成长记录册");
             return;
         }
         String draft = taskDraftInput.getText().toString().trim();
@@ -2048,7 +2048,7 @@ public class MainActivity extends Activity {
         boolean confirmed = taskListConfirmed();
         JSONObject dailyRecord = currentRecord(false);
         if (!confirmed && (dailyRecord == null || !dailyRecord.optBoolean("ledgerConfirmed"))) {
-            toast("请先核对钉钉和成长记录册");
+            toast("请先核对钉钉，并补全成长记录册");
             return;
         }
         if (confirmed && activeTask(false) != null) {
@@ -2272,7 +2272,7 @@ public class MainActivity extends Activity {
                 : orderPendingWeekend ? "还差一步：确定顺序"
                 : "作业清单");
         taskPanelHelpView.setText(!confirmed
-                ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "先确认钉钉和成长记录册中的完整内容。"
+                ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "核对钉钉，并把新增作业补到成长记录册。"
                 : sortingMode ? "这是我的计划，我可以决定先做哪一项。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : "");
@@ -2304,7 +2304,7 @@ public class MainActivity extends Activity {
         emptyTaskView.setText(weekendMode && !isFriday
                 ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
                 : ledgerReady ? "还没有作业，点击“录入作业”开始。"
-                : "先核对钉钉和成长记录册，再录入作业。");
+                : "核对钉钉并补全成长记录册后，再录入作业。");
         taskConfirmButton.setVisibility(confirmed && canEditList && allPending ? View.VISIBLE : View.GONE);
         taskConfirmButton.setText("修改作业清单");
         taskOrderButton.setVisibility(canArrangeOrder ? View.VISIBLE : View.GONE);
@@ -2320,12 +2320,12 @@ public class MainActivity extends Activity {
                 : weekendMode && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
                 : !canEditList
                 ? planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
-                : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
+                : !ledgerReady ? "第 1 步：核对钉钉，补全成长记录册。"
                 : confirmed
                 ? allDoneCount == tasks.length() && tasks.length() > 0
                     ? weekendMode ? "周末清单已全部完成并自动结算。"
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
-                        ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
+                        ? "最后一项完成时已自动结算。" : "清单已完成，补全成长记录册后自动结算。"
                     : weekendMode ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
                 : tasks.length() > 0 ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。");
 
@@ -3296,7 +3296,7 @@ public class MainActivity extends Activity {
                     toast("已全部完成，自动" + kind + " " + amountText(result.amount));
                 } else {
                     record.remove("finishTime");
-                    toast("作业已全部完成，确认成长记录册后自动结算");
+                    toast("作业已全部完成，补全成长记录册后自动结算");
                 }
             } else if (completedAll) {
                 put(weekend, "allDoneDate", currentDate);
@@ -3448,7 +3448,7 @@ public class MainActivity extends Activity {
         ledgerCheckView = check;
         ledgerTitleView = titleView;
         ledgerStatusView = status;
-        item.setOnClickListener(v -> togglePrep("ledgerConfirmed", "ledgerAt", "成长记录册状态已更新"));
+        item.setOnClickListener(v -> togglePrep("ledgerConfirmed", "ledgerAt", "钉钉和成长记录册核对状态已更新"));
         return item;
     }
 
@@ -4371,7 +4371,7 @@ public class MainActivity extends Activity {
         boolean confirmed = weekend.optBoolean("confirmed", false);
         styleWeekendCheck(weekendConfirmedCard, weekendConfirmedCheck, confirmed);
         weekendConfirmedStatus.setText(confirmed
-                ? fallbackTime(weekend, "confirmedAt") + " 确认全部作业" : "已核对钉钉和成长记录册");
+                ? fallbackTime(weekend, "confirmedAt") + " 确认全部作业" : "已核对钉钉并补全成长记录册");
         styleWeekendCheck(dailySeparatedCard, dailySeparatedCheck, weekend.optBoolean("dailySeparated", false));
         styleWeekendCheck(specialSeparatedCard, specialSeparatedCheck, weekend.optBoolean("specialSeparated", false));
 
@@ -4615,7 +4615,7 @@ public class MainActivity extends Activity {
                         ? record.optString("tasksFinishedAt") : currentTime());
                 Result result = resultFor(record);
                 String kind = result.amount < 0 ? "扣款" : result.amount == 0 ? "结算" : "奖励";
-                message = "成长记录册已确认，自动" + kind + " " + amountText(result.amount);
+                message = "成长记录册已补全，自动" + kind + " " + amountText(result.amount);
             } else {
                 record.remove("finishTime");
             }
@@ -4708,7 +4708,7 @@ public class MainActivity extends Activity {
                 return;
             }
             if (!weekendMode && !record.optBoolean("ledgerConfirmed", false)) {
-                toast("请先确认成长记录册已经补全");
+                toast("请先核对钉钉，并补全成长记录册");
                 return;
             }
             put(record, "finishTime", now);
@@ -4803,9 +4803,9 @@ public class MainActivity extends Activity {
         stylePrep(ledgerCard, ledgerCheckView, ledgerConfirmed);
         String weekendKey = weekendKeyFor(currentDate);
         ledgerCard.setVisibility(weekendKey != null && !currentDate.equals(weekendKey) ? View.GONE : View.VISIBLE);
-        ledgerTitleView.setText(ledgerConfirmed ? "作业已核对" : "先核对钉钉和成长记录册");
+        ledgerTitleView.setText(ledgerConfirmed ? "我已核对钉钉，也补全了成长记录册" : "核对钉钉，补全成长记录册");
         ledgerStatusView.setText(ledgerConfirmed
-                ? fallbackTime(record, "ledgerAt") + " 完成" : "确认今天的作业已经完整");
+                ? fallbackTime(record, "ledgerAt") + " 完成" : "把钉钉里新增的作业补充进去");
         ViewGroup.LayoutParams ledgerParams = ledgerCard.getLayoutParams();
         if (ledgerParams != null) {
             ledgerParams.height = dp(ledgerConfirmed ? 56 : 72);
@@ -5196,7 +5196,7 @@ public class MainActivity extends Activity {
                 return;
             }
             if (!values[3].isEmpty() && !weekendMode && !current.optBoolean("ledgerConfirmed", false)) {
-                toast("请先确认成长记录册已经补全");
+                toast("请先核对钉钉，并补全成长记录册");
                 return;
             }
             boolean any = false;

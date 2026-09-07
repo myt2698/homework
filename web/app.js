@@ -993,7 +993,7 @@
     elements.emptyTaskList.hidden = tasks.length > 0 || canEnterTasks;
     elements.emptyTaskList.textContent = key && !isFriday
       ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
-      : ledgerReady ? "还没有作业，点击“录入作业”开始。" : "先核对钉钉和成长记录册，再录入作业。";
+      : ledgerReady ? "还没有作业，点击“录入作业”开始。" : "核对钉钉并补全成长记录册后，再录入作业。";
     elements.taskListFooter.hidden = !confirmed;
     elements.confirmTaskListButton.hidden = !confirmed || !canEditList || !allPending;
     elements.confirmTaskListButton.textContent = "修改作业清单";
@@ -1008,11 +1008,11 @@
       : key && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
       : !canEditList
       ? weekend?.planSaved ? "清单来自周五，按计划日期逐项完成。" : "请先回到周五保存周末安排。"
-      : !ledgerReady ? "第 1 步：先核对钉钉和成长记录册。"
+      : !ledgerReady ? "第 1 步：核对钉钉，补全成长记录册。"
         : confirmed
       ? doneCount === tasks.length && tasks.length
         ? key ? "周末清单已全部完成并自动结算。"
-          : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，确认成长记录册后自动结算。"
+          : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，补全成长记录册后自动结算。"
         : key ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
       : tasks.length ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。";
     const questMode = confirmed && orderSaved && (!key || weekend.planSaved);
@@ -1205,9 +1205,9 @@
     });
     elements.ledgerButton.setAttribute("aria-pressed", String(Boolean(record.ledgerConfirmed)));
     elements.ledgerTitle.textContent = record.ledgerConfirmed
-      ? "作业已核对" : "先核对钉钉和成长记录册";
+      ? "我已核对钉钉，也补全了成长记录册" : "核对钉钉，补全成长记录册";
     elements.ledgerStatus.textContent = record.ledgerConfirmed
-      ? `${record.ledgerAt || "已"} 完成` : "确认今天的作业已经完整";
+      ? `${record.ledgerAt || "已"} 完成` : "把钉钉里新增的作业补充进去";
     setPrepState(elements.readingButton, record.readingDone);
     setPrepState(elements.mathThinkingButton, record.mathThinkingDone);
     setPrepState(elements.englishReadingButton, record.englishReadingDone);
@@ -1259,7 +1259,7 @@
       if (record[field]) {
         record.finishTime = record.tasksFinishedAt || currentTime();
         const result = ruleForFinish(record.finishTime);
-        return saveAndRender(`成长记录册已确认，自动${result.amount < 0 ? "扣款" : result.amount === 0 ? "结算" : "奖励"} ${amountText(result.amount, false)}`);
+        return saveAndRender(`成长记录册已补全，自动${result.amount < 0 ? "扣款" : result.amount === 0 ? "结算" : "奖励"} ${amountText(result.amount, false)}`);
       }
       delete record.finishTime;
     }
@@ -1309,7 +1309,7 @@
       if (weekendMode && (!weekend?.confirmed || !weekend?.planSaved))
         return showToast("请先确认作业并保存周末计划");
       if (!weekendMode && !record.ledgerConfirmed)
-        return showToast("请先确认成长记录册已经补全");
+        return showToast("请先核对钉钉，并补全成长记录册");
       record.finishTime = now;
       delete record.ruleId;
       if (weekendMode) {
@@ -1353,7 +1353,7 @@
     if (values[3] && weekendMode && (!weekend?.confirmed || !weekend?.planSaved))
       return showToast("请先确认作业并保存周末计划");
     if (values[3] && !weekendMode && !currentRecord()?.ledgerConfirmed)
-      return showToast("请先确认成长记录册已经补全");
+      return showToast("请先核对钉钉，并补全成长记录册");
     const record = currentRecord(true);
     TIME_FIELDS.forEach((field, index) => {
       if (values[index]) record[field] = values[index]; else delete record[field];
@@ -1375,7 +1375,7 @@
     const date = elements.recordDate.value;
     const key = weekendKeyFor(date);
     if (key && date !== key) return showToast("周六、周日直接使用周五清单，不需要重新录入");
-    if (!currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉和成长记录册");
+    if (!currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉，并补全成长记录册");
     const parsed = parseTaskDraft(elements.taskDraft.value.trim(), selectedTaskSubject);
     if (!parsed.length) return showToast("请先说出或输入作业内容");
     const owner = taskOwnerForDate(elements.recordDate.value, true);
@@ -1420,7 +1420,7 @@
     const tasks = tasksForDate();
     if (!tasks.length) return showToast("请先录入作业");
     const confirmed = taskListConfirmed();
-    if (!confirmed && !currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉和成长记录册");
+    if (!confirmed && !currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉，并补全成长记录册");
     if (confirmed && activeTaskForDate()) return showToast("请先暂停当前作业再修改清单");
     if (confirmed && tasks.some((task) => (task.status || "pending") !== "pending"))
       return showToast("已经开始闯关，不能再修改清单");
@@ -1669,7 +1669,7 @@
           showToast(`已全部完成，自动${result.amount < 0 ? "扣款" : result.amount === 0 ? "结算" : "奖励"} ${amountText(result.amount, false)}`);
         } else {
           delete record.finishTime;
-          showToast("作业已全部完成，确认成长记录册后自动结算");
+          showToast("作业已全部完成，补全成长记录册后自动结算");
         }
       } else if (completedAll && key) {
         weekend.allDoneDate = date;
@@ -1954,7 +1954,7 @@
     const button = event.target.closest("button[data-sport]");
     if (button) toggleSport(button.dataset.sport);
   });
-  elements.ledgerButton.addEventListener("click", () => togglePrep("ledgerConfirmed", "ledgerAt", "成长记录册状态已更新"));
+  elements.ledgerButton.addEventListener("click", () => togglePrep("ledgerConfirmed", "ledgerAt", "钉钉和成长记录册核对状态已更新"));
   elements.readingButton.addEventListener("click", () => togglePrep("readingDone", "readingAt", "中文阅读状态已更新"));
   elements.mathThinkingButton.addEventListener("click", () => togglePrep("mathThinkingDone", "mathThinkingAt", "数学思维状态已更新"));
   elements.englishReadingButton.addEventListener("click", () => togglePrep("englishReadingDone", "englishReadingAt", "英文阅读状态已更新"));
