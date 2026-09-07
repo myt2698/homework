@@ -2646,6 +2646,7 @@ public class MainActivity extends Activity {
         input.setGravity(Gravity.TOP | Gravity.START);
         input.setMinLines(4);
         input.setMaxLines(8);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
         input.setHint("例如：\n1. 读题并圈关键词\n2. 完成练习\n3. 检查订正");
         StringBuilder existing = new StringBuilder();
         JSONArray oldSteps = taskSteps(task);
@@ -2664,7 +2665,7 @@ public class MainActivity extends Activity {
         inputParams.topMargin = dp(10);
         content.addView(input, inputParams);
         new AlertDialog.Builder(this)
-                .setTitle("把长作业拆成小步骤")
+                .setTitle("把作业拆成小步骤")
                 .setView(content)
                 .setNegativeButton("取消", null)
                 .setPositiveButton("保存", (dialog, which) -> {

@@ -597,6 +597,47 @@ body.modal-open { overflow: hidden; }
 .task-entry-dialog-status { margin: 6px 42px 0 0; color: var(--muted); font-size: .76rem; }
 .task-entry-dialog .task-entry { margin-top: 18px; }
 
+.step-editor-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  padding: 18px;
+  place-items: center;
+  background: rgba(36,50,74,.48);
+  backdrop-filter: blur(5px);
+}
+.step-editor-modal[hidden] { display: none; }
+.step-editor-dialog {
+  position: relative;
+  width: min(520px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0,0,0,.28);
+}
+.step-editor-dialog h2 { margin-right: 42px; font-size: 1.18rem; }
+.step-editor-task { margin: 12px 0 0; color: var(--ink); font-size: .88rem; font-weight: 800; line-height: 1.55; }
+.step-editor-help { margin: 6px 0 14px; color: var(--muted); font-size: .74rem; line-height: 1.55; }
+.step-editor-dialog textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 13px 14px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  outline: none;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: .86rem;
+  line-height: 1.7;
+}
+.step-editor-dialog textarea:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
+.step-editor-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; margin-top: 16px; }
+.step-editor-actions button { width: 100%; min-width: 0; }
+
 .weekend-task-planner {
   padding: 20px;
   border: 1px solid #f3d58e;
@@ -898,10 +939,11 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 
 @media (max-width: 500px) {
   .app-shell { width: min(100% - 16px, 440px); padding-top: 11px; }
-  .weekend-plan-modal, .task-entry-modal { padding: 8px; }
+  .weekend-plan-modal, .task-entry-modal, .step-editor-modal { padding: 8px; }
   .weekend-plan-dialog { max-height: calc(100vh - 16px); border-radius: 20px; }
   .weekend-plan-dialog .weekend-task-planner { padding: 22px 14px 16px; border-radius: 20px; }
   .task-entry-dialog { max-height: calc(100vh - 16px); padding: 24px 14px 16px; border-radius: 20px; }
+  .step-editor-dialog { padding: 24px 16px 16px; border-radius: 20px; }
   .card { padding: 14px 12px; border-radius: 18px; }
   .topbar { margin-bottom: 10px; padding: 0 2px; }
   .topbar-actions { gap: 2px; }

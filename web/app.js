@@ -104,6 +104,9 @@
     taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
+    stepEditorModal: $("#stepEditorModal"), stepEditorCloseButton: $("#stepEditorCloseButton"),
+    stepEditorTaskTitle: $("#stepEditorTaskTitle"), stepEditorInput: $("#stepEditorInput"),
+    stepEditorCancelButton: $("#stepEditorCancelButton"), stepEditorSaveButton: $("#stepEditorSaveButton"),
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
@@ -132,6 +135,7 @@
   let speechListening = false;
   let selectedTaskSubject = "语文";
   let focusModalTaskId = null;
+  let stepEditorTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
   let dailyCheckinsExpanded = false;
@@ -631,10 +635,32 @@
     document.body.classList.remove("modal-open");
   }
 
+  function openTaskStepsEditor(id) {
+    const task = taskById(id);
+    if (!task || task.status !== "pending") return showToast("作业开始后不能再修改步骤");
+    stepEditorTaskId = String(id);
+    elements.stepEditorTaskTitle.textContent = `${task.subject || "其他"} · ${task.title || "当前作业"}`;
+    elements.stepEditorInput.value = taskSteps(task)
+      .map((step, index) => `${index + 1}. ${step.title}`)
+      .join("\n");
+    elements.stepEditorModal.hidden = false;
+    document.body.classList.add("modal-open");
+    elements.stepEditorInput.focus();
+    elements.stepEditorInput.setSelectionRange(elements.stepEditorInput.value.length, elements.stepEditorInput.value.length);
+  }
+
+  function closeTaskStepsEditor() {
+    if (elements.stepEditorModal.hidden) return;
+    elements.stepEditorModal.hidden = true;
+    stepEditorTaskId = null;
+    document.body.classList.remove("modal-open");
+  }
+
   function openHistoryPage() {
     stopDictation(false, false);
     closeTaskEntryModal();
     closeWeekendPlanModal();
+    closeTaskStepsEditor();
     closeFocusModal();
     historyManageMode = false;
     document.body.classList.remove("history-manage-mode");
@@ -1455,26 +1481,27 @@
       .filter(Boolean);
   }
 
-  function editTaskSteps(id) {
-    const task = taskById(id);
-    if (!task || task.status !== "pending") return showToast("作业开始后不能再修改步骤");
-    const existing = taskSteps(task);
-    const draft = window.prompt("输入作业步骤，可用 1. 2. 3. 或换行分开；清空可取消拆分。",
-      existing.map((step, index) => `${index + 1}. ${step.title}`).join("\n"));
-    if (draft === null) return;
-    const titles = parseStepTitles(draft);
+  function saveTaskSteps() {
+    const task = taskById(stepEditorTaskId);
+    if (!task || task.status !== "pending") {
+      closeTaskStepsEditor();
+      return showToast("这项作业已经不能修改步骤");
+    }
+    const titles = parseStepTitles(elements.stepEditorInput.value);
+    let message = "已取消步骤拆分";
     if (titles.length) {
       task.steps = titles.map((title, index) => ({ id: `${task.id}-step-${index}`, title, done: false }));
-      showToast(`已拆成 ${titles.length} 个步骤`);
+      message = `已拆成 ${titles.length} 个步骤`;
     } else {
       delete task.steps;
-      showToast("已取消步骤拆分");
     }
     const owner = taskOwnerForDate(elements.recordDate.value, true);
     owner.orderSaved = false;
     delete owner.orderSavedAt;
     persist();
+    closeTaskStepsEditor();
     renderTasks();
+    showToast(message);
   }
 
   function toggleTaskOrder() {
@@ -1884,6 +1911,12 @@
   elements.taskEntryModal.addEventListener("click", (event) => {
     if (event.target === elements.taskEntryModal) closeTaskEntryModal();
   });
+  elements.stepEditorCloseButton.addEventListener("click", closeTaskStepsEditor);
+  elements.stepEditorCancelButton.addEventListener("click", closeTaskStepsEditor);
+  elements.stepEditorSaveButton.addEventListener("click", saveTaskSteps);
+  elements.stepEditorModal.addEventListener("click", (event) => {
+    if (event.target === elements.stepEditorModal) closeTaskStepsEditor();
+  });
   elements.weekendPlanEntry.addEventListener("click", openWeekendPlanModal);
   elements.weekendPlanCloseButton.addEventListener("click", closeWeekendPlanModal);
   elements.weekendPlanModal.addEventListener("click", (event) => {
@@ -1891,7 +1924,8 @@
   });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
+    if (!elements.stepEditorModal.hidden) closeTaskStepsEditor();
+    else if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
     else if (!elements.dictationPage.hidden) closeDictationPage();
     else if (!elements.historyPage.hidden) closeHistoryPage();
@@ -1932,7 +1966,7 @@
   elements.taskList.addEventListener("click", (event) => {
     const planningButton = event.target.closest("button[data-plan-action]");
     if (planningButton) {
-      if (planningButton.dataset.planAction === "steps") editTaskSteps(planningButton.dataset.taskId);
+      if (planningButton.dataset.planAction === "steps") openTaskStepsEditor(planningButton.dataset.taskId);
       return;
     }
     const mealButton = event.target.closest("button[data-meal-after]");
