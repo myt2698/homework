@@ -18,6 +18,10 @@
         </div>
       </div>
       <div class="topbar-actions">
+        <button class="icon-button quiet-top-entry" id="openHistoryButton" type="button" aria-label="成长足迹">
+          <span aria-hidden="true">👣</span>
+          <span>足迹</span>
+        </button>
         <button class="icon-button dictation-top-entry" id="openDictationButton" type="button" aria-label="听写练习">
           <span aria-hidden="true">🔊</span>
           <span>听写</span>
@@ -38,34 +42,6 @@
         <label for="startDate">开始日期</label>
         <input id="startDate" type="date">
         <button class="small-button" id="saveSettingsButton" type="button">保存</button>
-      </div>
-    </section>
-
-    <section class="summary-card" aria-labelledby="balanceLabel">
-      <div class="summary-main">
-        <p id="balanceLabel">我的成长能量 ⭐</p>
-        <p class="balance" id="balance">¥ 0.00</p>
-        <p class="period" id="periodLabel">从今天开始</p>
-        <button class="summary-history-entry" id="openHistoryButton" type="button">
-          <span aria-hidden="true">🌈</span>
-          <strong>成长足迹</strong>
-          <small>查看记录</small>
-          <b aria-hidden="true">›</b>
-        </button>
-      </div>
-      <div class="summary-stats">
-        <div>
-          <strong id="recordDays">0</strong>
-          <span>认真完成</span>
-        </div>
-        <div>
-          <strong id="rewardDays">0</strong>
-          <span>收获奖励</span>
-        </div>
-        <div>
-          <strong id="deductionTotal">¥0.00</strong>
-          <span>需要加油</span>
-        </div>
       </div>
     </section>
 
@@ -209,9 +185,30 @@
       <div>
         <p class="eyebrow">🌈 每一步都算数</p>
         <h1 id="historyPageTitle">成长足迹</h1>
-        <p class="hero-cheer">回头看看，你已经完成了很多关。</p>
+        <p class="hero-cheer">偶尔回头看看，你已经完成了很多关。</p>
       </div>
     </header>
+    <section class="summary-card" aria-labelledby="balanceLabel">
+      <div class="summary-main">
+        <p id="balanceLabel">我的成长能量 ⭐</p>
+        <p class="balance" id="balance">¥ 0.00</p>
+        <p class="period" id="periodLabel">从今天开始</p>
+      </div>
+      <div class="summary-stats">
+        <div>
+          <strong id="recordDays">0</strong>
+          <span>认真完成</span>
+        </div>
+        <div>
+          <strong id="rewardDays">0</strong>
+          <span>收获奖励</span>
+        </div>
+        <div>
+          <strong id="deductionTotal">¥0.00</strong>
+          <span>需要加油</span>
+        </div>
+      </div>
+    </section>
     <section class="card history-card">
       <div class="section-heading compact">
         <div>
