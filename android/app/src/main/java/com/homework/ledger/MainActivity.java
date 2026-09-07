@@ -178,8 +178,8 @@ public class MainActivity extends Activity {
     private TextView rewardDaysView;
     private TextView deductionView;
     private TextView recordHeadingView;
-    private Button recordDateButton;
-    private TextView viewModeView;
+    private LinearLayout historicalDateNotice;
+    private TextView historicalDateLabel;
 
     private LinearLayout weekendCard;
     private Space weekendSpacer;
@@ -657,8 +657,9 @@ public class MainActivity extends Activity {
         scrollView.addView(content, matchWrap());
         content.addView(buildHeader());
         content.addView(space(10));
-        content.addView(buildDateStrip());
-        content.addView(space(10));
+        LinearLayout.LayoutParams noticeParams = matchWrap();
+        noticeParams.bottomMargin = dp(10);
+        content.addView(buildHistoricalDateNotice(), noticeParams);
         weekendCard = buildWeekendCard();
         weekendSpacer = space(0);
         content.addView(buildProcessCard());
@@ -700,23 +701,19 @@ public class MainActivity extends Activity {
         return row;
     }
 
-    private View buildDateStrip() {
+    private View buildHistoricalDateNotice() {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(10), dp(7), dp(9), dp(7));
-        row.setBackground(rounded(SURFACE, 16, LINE, 1));
-        LinearLayout copy = vertical();
-        copy.addView(text("当前查看", 10, MUTED, false));
-        viewModeView = text("平日记录", 13, INK, true);
-        copy.addView(viewModeView);
-        row.addView(copy, weightedWrap(1));
-        recordDateButton = smallButton("选择日期");
-        recordDateButton.setOnClickListener(v -> showRecordDatePicker());
-        row.addView(recordDateButton);
-        row.addView(spaceHorizontal(5));
-        Button todayButton = textButton("今天");
-        todayButton.setOnClickListener(v -> selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso()));
-        row.addView(todayButton);
+        row.setPadding(dp(12), dp(9), dp(12), dp(9));
+        row.setBackground(rounded(AMBER_SOFT, 13, Color.rgb(241, 207, 129), 1));
+        row.addView(text("正在查看", 10, Color.rgb(118, 87, 33), false));
+        row.addView(spaceHorizontal(7));
+        historicalDateLabel = text("", 11, Color.rgb(118, 87, 33), true);
+        row.addView(historicalDateLabel, weightedWrap(1));
+        row.addView(text("回到今天", 10, GREEN, true));
+        row.setOnClickListener(v -> selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso()));
+        row.setVisibility(View.GONE);
+        historicalDateNotice = row;
         return row;
     }
 
@@ -4358,9 +4355,6 @@ public class MainActivity extends Activity {
         boolean weekendMode = key != null;
         weekendCard.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
         weekendSpacer.setVisibility(weekendMode ? View.VISIBLE : View.GONE);
-        viewModeView.setText(!weekendMode ? "平日记录"
-                : currentDate.equals(key) ? "周五任务"
-                : currentDate.equals(addDays(key, 1)) ? "周六按计划完成" : "周日按计划完成");
         if (!weekendMode) return;
 
         JSONObject weekend = weekendForDate(currentDate, false);
@@ -4730,7 +4724,9 @@ public class MainActivity extends Activity {
     }
 
     private void renderAll() {
-        recordDateButton.setText(formatLongDate(currentDate));
+        boolean viewingToday = currentDate.equals(todayIso());
+        historicalDateNotice.setVisibility(viewingToday ? View.GONE : View.VISIBLE);
+        historicalDateLabel.setText(viewingToday ? "" : formatLongDate(currentDate));
         renderWeekend();
         renderTasks();
         renderWeekendTaskPlanner();
@@ -5301,11 +5297,28 @@ public class MainActivity extends Activity {
                 11, MUTED, false);
         content.addView(help);
 
-        Button date = smallButton("设置统计开始日期");
-        date.setOnClickListener(v -> showStartDatePicker());
-        LinearLayout.LayoutParams dateParams = matchFixed(dp(46));
-        dateParams.topMargin = dp(14);
-        content.addView(date, dateParams);
+        TextView current = text("当前查看：" + formatLongDate(currentDate) + " · " + recordViewModeLabel(currentDate),
+                11, Color.rgb(69, 107, 168), true);
+        current.setPadding(0, dp(14), 0, 0);
+        content.addView(current);
+
+        LinearLayout dateActions = horizontal();
+        Button recordDate = smallButton("查看其他日期");
+        dateActions.addView(recordDate, weightedFixed(1, dp(46)));
+        dateActions.addView(spaceHorizontal(8));
+        Button today = smallButton("回到今天");
+        boolean viewingToday = currentDate.equals(todayIso());
+        today.setEnabled(!viewingToday);
+        today.setAlpha(viewingToday ? 0.45f : 1f);
+        dateActions.addView(today, weightedFixed(1, dp(46)));
+        LinearLayout.LayoutParams dateActionParams = matchFixed(dp(46));
+        dateActionParams.topMargin = dp(8);
+        content.addView(dateActions, dateActionParams);
+
+        Button start = smallButton("设置统计开始日期");
+        LinearLayout.LayoutParams startParams = matchFixed(dp(46));
+        startParams.topMargin = dp(8);
+        content.addView(start, startParams);
 
         Button export = smallButton("导出本地备份");
         export.setOnClickListener(v -> launchBackupExport());
@@ -5324,11 +5337,31 @@ public class MainActivity extends Activity {
         note.setPadding(0, dp(12), 0, 0);
         content.addView(note);
 
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("家长工具")
                 .setView(content)
                 .setNegativeButton("关闭", null)
-                .show();
+                .create();
+        recordDate.setOnClickListener(v -> {
+            dialog.dismiss();
+            showRecordDatePicker();
+        });
+        today.setOnClickListener(v -> {
+            dialog.dismiss();
+            selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso());
+        });
+        start.setOnClickListener(v -> {
+            dialog.dismiss();
+            showStartDatePicker();
+        });
+        dialog.show();
+    }
+
+    private String recordViewModeLabel(String date) {
+        String key = weekendKeyFor(date);
+        if (key == null) return "平日记录";
+        if (date.equals(key)) return "周五任务";
+        return date.equals(addDays(key, 1)) ? "周六按计划完成" : "周日按计划完成";
     }
 
     private void launchBackupExport() {

@@ -82,6 +82,7 @@
     exportDataButton: $("#exportDataButton"), importDataButton: $("#importDataButton"),
     importDataInput: $("#importDataInput"), historyManageButton: $("#historyManageButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
+    historicalDateNotice: $("#historicalDateNotice"), historicalDateLabel: $("#historicalDateLabel"),
     recordHeading: $("#recordHeading"),
     weekendPlanEntry: $("#weekendPlanEntry"), weekendPlanEntryTitle: $("#weekendPlanEntryTitle"),
     weekendPlanEntryStatus: $("#weekendPlanEntryStatus"), weekendPlanModal: $("#weekendPlanModal"),
@@ -1238,6 +1239,13 @@
   function render() {
     elements.startDate.value = state.startDate;
     elements.recordDate.min = state.startDate;
+    const today = todayIso();
+    const viewingToday = elements.recordDate.value === today;
+    elements.historicalDateNotice.hidden = viewingToday;
+    elements.historicalDateLabel.textContent = viewingToday ? "" : formatDate(elements.recordDate.value);
+    elements.historicalDateNotice.setAttribute("aria-label", viewingToday
+      ? "当前查看今天" : `正在查看${formatDate(elements.recordDate.value)}，点击回到今天`);
+    elements.todayButton.disabled = viewingToday;
     renderSummary();
     renderWeekend();
     renderTasks();
@@ -1882,6 +1890,7 @@
   });
   elements.recordDate.addEventListener("change", () => setRecordDate(elements.recordDate.value));
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
+  elements.historicalDateNotice.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
   elements.openHistoryButton.addEventListener("click", openHistoryPage);
   elements.closeHistoryButton.addEventListener("click", closeHistoryPage);
   elements.historyManageButton.addEventListener("click", () => {

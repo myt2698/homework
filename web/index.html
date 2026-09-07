@@ -39,6 +39,14 @@
         <p>日期、数据备份和记录管理集中放在这里，不打扰孩子完成今天的计划。</p>
       </div>
       <div class="parent-tool-groups">
+        <div class="settings-date-block">
+          <div class="settings-row">
+            <label for="recordDate">查看记录日期</label>
+            <input id="recordDate" type="date" aria-label="记录日期">
+            <button class="text-button bordered settings-today-button" id="todayButton" type="button">回到今天</button>
+          </div>
+          <small class="settings-date-mode">当前类型：<strong id="viewModeLabel">平日记录</strong></small>
+        </div>
         <div class="settings-row">
           <label for="startDate">统计开始日期</label>
           <input id="startDate" type="date">
@@ -52,16 +60,11 @@
       </div>
     </section>
 
-    <section class="date-strip">
-      <div>
-        <span>当前查看</span>
-        <strong id="viewModeLabel">平日记录</strong>
-      </div>
-      <div class="date-control">
-        <input id="recordDate" type="date" aria-label="记录日期">
-        <button id="todayButton" type="button">今天</button>
-      </div>
-    </section>
+    <button class="historical-date-notice" id="historicalDateNotice" type="button" hidden>
+      <span>正在查看</span>
+      <strong id="historicalDateLabel"></strong>
+      <small>回到今天</small>
+    </button>
 
     <section class="card record-card">
       <div class="section-heading" hidden>
