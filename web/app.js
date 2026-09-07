@@ -920,7 +920,7 @@
     elements.taskPanelTitle.hidden = questMode;
     elements.taskPanelHelp.hidden = questMode;
     elements.taskSummary.textContent = !confirmed && tasks.length
-      ? `${tasks.length} 项待确认` : progressTotal ? `${progressDone} / ${progressTotal} 项完成` : "0 项";
+      ? `${tasks.length} 项待确认` : progressTotal ? questMode ? `${progressDone} / ${progressTotal}` : `${progressDone} / ${progressTotal} 项完成` : "0 项";
     elements.activeTaskBanner.hidden = !active || questMode;
     if (active) {
       elements.activeTaskTitle.textContent = `${active.subject} · ${active.title}`;
@@ -1015,17 +1015,8 @@
     }
 
     const progress = progressTotal ? Math.round(progressDone / progressTotal * 100) : 100;
-    const remainingCount = Math.max(0, progressTotal - progressDone);
-    let encouragement = "先完成一小项，作业就会开始变少啦！";
-    if (progressDone > 0 && progress < 50) encouragement = "已经闯过第一关，作业没有想象中那么难！";
-    else if (progress >= 50 && progress < 80) encouragement = "已经完成一半多啦，胜利正在靠近！";
-    else if (progress >= 80 && progress < 100) encouragement = `快到终点了，只剩 ${remainingCount} 项！`;
-    else if (progress === 100) encouragement = "全部通关，今天的坚持太棒了！";
-
     const progressHtml = `<div class="quest-progress${progress === 100 ? " complete" : ""}">
-      <div class="quest-progress-head"><div><span>${progress === 100 ? "🏆 今日通关" : `第 ${progressDone + 1} 关 · 共 ${progressTotal} 关`}</span><strong>${progress === 100 ? "全部完成啦！" : `还剩 ${remainingCount} 项`}</strong></div><b>${progress}%</b></div>
-      <div class="quest-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div>
-      <p>${encouragement}</p>
+      <div class="quest-progress-track" role="progressbar" aria-label="今日作业进度：已完成 ${progressDone} 项，共 ${progressTotal} 项" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div>
     </div>`;
 
     if (progress === 100) {
@@ -1065,9 +1056,9 @@
     });
     elements.ledgerButton.setAttribute("aria-pressed", String(Boolean(record.ledgerConfirmed)));
     elements.ledgerTitle.textContent = record.ledgerConfirmed
-      ? "已核对钉钉和成长记录册" : "先核对钉钉和成长记录册";
+      ? "作业已核对" : "先核对钉钉和成长记录册";
     elements.ledgerStatus.textContent = record.ledgerConfirmed
-      ? `${record.ledgerAt || "已"} 完成核对，可以录入清单` : "确认今天的作业已经完整";
+      ? `${record.ledgerAt || "已"} 完成` : "确认今天的作业已经完整";
     setPrepState(elements.readingButton, record.readingDone);
     setPrepState(elements.mathThinkingButton, record.mathThinkingDone);
     setPrepState(elements.englishReadingButton, record.englishReadingDone);
