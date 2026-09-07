@@ -910,14 +910,15 @@
       ? ledgerReady ? tasks.length ? "作业已录入，等待确认" : "今天的作业" : "先核对今天的作业"
       : sortingMode ? "安排你的闯关顺序"
       : orderPendingWeekend ? "还差一步：确定顺序"
-        : questMode ? "今天一关一关来" : "选一项，轻松开始吧";
+        : "选一项，轻松开始吧";
     elements.taskPanelHelp.textContent = !confirmed
       ? ledgerReady ? tasks.length ? "检查有没有遗漏，确认后就可以安排顺序。" : "全部录好后，再一起核对。" : ""
       : sortingMode
       ? "这是你的计划，想先做哪一项由你决定。"
       : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
-        : questMode ? "不用一次想完，只看眼前这一项。"
-          : "一次专心做一项，每完成一项都很棒！";
+        : "一次专心做一项，每完成一项都很棒！";
+    elements.taskPanelTitle.hidden = questMode;
+    elements.taskPanelHelp.hidden = questMode;
     elements.taskSummary.textContent = !confirmed && tasks.length
       ? `${tasks.length} 项待确认` : progressTotal ? `${progressDone} / ${progressTotal} 项完成` : "0 项";
     elements.activeTaskBanner.hidden = !active || questMode;
@@ -1037,7 +1038,7 @@
 
     const upcoming = questRemaining.filter((task) => task !== questCurrent).slice(0, 2);
     const later = questRemaining.filter((task) => task !== questCurrent && !upcoming.includes(task));
-    const currentHtml = questCurrent ? `<div class="quest-section-title"><span>🎯 现在只做这一关</span><small>不用想后面的，先把眼前这一项做好</small></div>${taskCard(questCurrent, { current: true })}` : "";
+    const currentHtml = questCurrent ? taskCard(questCurrent, { current: true }) : "";
     const upcomingHtml = upcoming.length ? `<div class="quest-section-title compact"><span>接下来</span><small>提前看一眼就好</small></div><div class="quest-preview-list">${upcoming.map((task) => taskCard(task, { compact: true, allowActions: false })).join("")}</div>` : "";
     const laterHtml = later.length ? `<button class="quest-toggle" type="button" data-list-toggle="later">${taskListExpanded ? "收起后面的作业" : `稍后还有 ${later.length} 项`} <span>${taskListExpanded ? "⌃" : "⌄"}</span></button>
       ${taskListExpanded ? `<div class="quest-collapsed-list">${later.map((task) => taskCard(task, { compact: true, allowActions: false })).join("")}</div>` : ""}` : "";
