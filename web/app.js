@@ -119,7 +119,8 @@
     focusModal: $("#focusModal"), focusCloseButton: $("#focusCloseButton"),
     focusModalSubject: $("#focusModalSubject"), focusModalTitle: $("#focusModalTitle"),
     focusModalStep: $("#focusModalStep"), focusModalStepTitle: $("#focusModalStepTitle"),
-    focusModalElapsed: $("#focusModalElapsed"), focusModalStartedAt: $("#focusModalStartedAt"),
+    focusModalElapsed: $("#focusModalElapsed"), focusModalEstimate: $("#focusModalEstimate"),
+    focusModalComparison: $("#focusModalComparison"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
     resultLabel: $("#resultLabel"), resultAmount: $("#resultAmount"),
     resetDayButton: $("#resetDayButton"), historyList: $("#historyList"),
@@ -302,6 +303,12 @@
       ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
       : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   }
+  function taskEstimateComparisonLabel(task) {
+    const difference = estimatedMinutes(task) * 60000 - taskElapsedMs(task);
+    if (difference > 0) return `距估时约 ${Math.max(1, Math.ceil(difference / 60000))} 分钟`;
+    if (difference > -60000) return "刚到预计时间";
+    return `已超过约 ${Math.max(1, Math.floor(Math.abs(difference) / 60000))} 分钟`;
+  }
   function stopTaskClock(task, nextStatus) {
     if (task.status === "active" && Number(task.activeSince)) {
       task.elapsedMs = taskElapsedMs(task);
@@ -323,6 +330,8 @@
     elements.focusModalStep.hidden = !step;
     elements.focusModalStepTitle.textContent = step?.title || "";
     elements.focusModalElapsed.textContent = taskClockLabel(task);
+    elements.focusModalEstimate.textContent = `${estimatedMinutes(task)} 分钟`;
+    elements.focusModalComparison.textContent = taskEstimateComparisonLabel(task);
     elements.focusModalStartedAt.textContent = task.startedAt || "--:--";
     elements.focusCompleteButton.textContent = step
       ? taskSteps(task).filter((item) => !item.done).length === 1 ? "完成最后一步" : "完成本步"

@@ -331,6 +331,7 @@ public class MainActivity extends Activity {
     private AlertDialog weekendTaskPlanDialog;
     private TextView taskFocusElapsedView;
     private TextView taskFocusStepView;
+    private TextView taskFocusComparisonView;
     private JSONObject taskFocusTask;
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
@@ -362,6 +363,9 @@ public class MainActivity extends Activity {
                 return;
             }
             if (taskFocusElapsedView != null) taskFocusElapsedView.setText(taskClockLabel(taskFocusTask));
+            if (taskFocusComparisonView != null) {
+                taskFocusComparisonView.setText(taskEstimateComparisonLabel(taskFocusTask));
+            }
             timerHandler.postDelayed(this, 1000);
         }
     };
@@ -1912,6 +1916,17 @@ public class MainActivity extends Activity {
                 : String.format(Locale.CHINA, "%02d:%02d", minutes, remainder);
     }
 
+    private String taskEstimateComparisonLabel(JSONObject task) {
+        long difference = estimatedMinutes(task) * 60000L - taskElapsedMillis(task);
+        if (difference > 0L) {
+            long minutes = Math.max(1L, (difference + 59999L) / 60000L);
+            return "距估时约 " + minutes + " 分钟";
+        }
+        if (difference > -60000L) return "刚到预计时间";
+        long minutes = Math.max(1L, Math.abs(difference) / 60000L);
+        return "已超过约 " + minutes + " 分钟";
+    }
+
     private void showTaskFocusDialog(JSONObject task, int taskIndex) {
         dismissTaskFocusDialog();
         taskFocusTask = task;
@@ -1938,12 +1953,27 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams stepParams = matchWrap();
         stepParams.topMargin = dp(12);
         content.addView(taskFocusStepView, stepParams);
+        TextView elapsedLabel = text("已用时间", 10, MUTED, true);
+        elapsedLabel.setGravity(Gravity.CENTER);
+        elapsedLabel.setPadding(0, dp(15), 0, 0);
+        content.addView(elapsedLabel);
         taskFocusElapsedView = text(taskClockLabel(task), 48, GREEN, true);
         taskFocusElapsedView.setGravity(Gravity.CENTER);
-        taskFocusElapsedView.setPadding(0, dp(16), 0, dp(8));
+        taskFocusElapsedView.setPadding(0, dp(2), 0, dp(8));
         content.addView(taskFocusElapsedView);
+        LinearLayout estimateCard = horizontal();
+        estimateCard.setGravity(Gravity.CENTER_VERTICAL);
+        estimateCard.setPadding(dp(12), dp(10), dp(12), dp(10));
+        estimateCard.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
+        TextView estimate = text("预计用时  " + estimatedMinutes(task) + " 分钟", 11, MUTED, true);
+        estimateCard.addView(estimate, weightedWrap(1));
+        taskFocusComparisonView = text(taskEstimateComparisonLabel(task), 11, Color.rgb(69, 107, 168), true);
+        taskFocusComparisonView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        estimateCard.addView(taskFocusComparisonView, weightedWrap(1));
+        content.addView(estimateCard, matchWrap());
         TextView started = text("开始时间  " + task.optString("startedAt", "--:--"), 12, MUTED, false);
         started.setGravity(Gravity.CENTER);
+        started.setPadding(0, dp(12), 0, 0);
         content.addView(started);
         TextView reminder = text("专心完成这一项，你已经开始得很棒啦！", 11, MUTED, false);
         reminder.setGravity(Gravity.CENTER);
@@ -1966,6 +1996,7 @@ public class MainActivity extends Activity {
                 taskFocusTask = null;
                 taskFocusElapsedView = null;
                 taskFocusStepView = null;
+                taskFocusComparisonView = null;
             }
         });
         dialog.setOnShowListener(ignored -> {
@@ -1992,6 +2023,7 @@ public class MainActivity extends Activity {
         taskFocusTask = null;
         taskFocusElapsedView = null;
         taskFocusStepView = null;
+        taskFocusComparisonView = null;
     }
 
     private void stopTaskClock(JSONObject task, String nextStatus) {
