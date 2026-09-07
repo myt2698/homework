@@ -35,13 +35,20 @@
 
     <section class="settings-panel" id="settingsPanel" hidden>
       <div>
-        <h2>统计设置</h2>
-        <p>开始日期之前的记录会保留，但不计入当前统计。</p>
+        <h2>家长工具</h2>
+        <p>日期、数据备份和记录管理集中放在这里，不打扰孩子完成今天的计划。</p>
       </div>
-      <div class="settings-row">
-        <label for="startDate">开始日期</label>
-        <input id="startDate" type="date">
-        <button class="small-button" id="saveSettingsButton" type="button">保存</button>
+      <div class="parent-tool-groups">
+        <div class="settings-row">
+          <label for="startDate">统计开始日期</label>
+          <input id="startDate" type="date">
+          <button class="small-button" id="saveSettingsButton" type="button">保存</button>
+        </div>
+        <div class="backup-actions">
+          <button class="secondary-button" id="exportDataButton" type="button">导出备份</button>
+          <button class="secondary-button" id="importDataButton" type="button">恢复备份</button>
+          <input id="importDataInput" type="file" accept="application/json,.json" hidden>
+        </div>
       </div>
     </section>
 
@@ -187,6 +194,7 @@
         <h1 id="historyPageTitle">成长足迹</h1>
         <p class="hero-cheer">偶尔回头看看，你已经完成了很多关。</p>
       </div>
+      <button class="secondary-button history-manage-button" id="historyManageButton" type="button" aria-pressed="false">管理记录</button>
     </header>
     <section class="summary-card" aria-labelledby="balanceLabel">
       <div class="summary-main">
@@ -208,6 +216,21 @@
           <span>需要加油</span>
         </div>
       </div>
+    </section>
+    <section class="card weekly-review-card" aria-labelledby="weeklyReviewTitle">
+      <div class="section-heading compact">
+        <div>
+          <p class="section-kicker">本周计划复盘</p>
+          <h2 id="weeklyReviewTitle">看看时间估得准不准</h2>
+        </div>
+        <strong id="weeklyReviewRange"></strong>
+      </div>
+      <div class="weekly-review-grid">
+        <div><span>按计划完成</span><strong id="weeklyPlanDays">0 天</strong></div>
+        <div><span>预计用时</span><strong id="weeklyEstimatedTime">0 分钟</strong></div>
+        <div><span>实际用时</span><strong id="weeklyActualTime">0 分钟</strong></div>
+      </div>
+      <p id="weeklyReviewInsight">完成几项作业后，这里会帮助你了解自己的时间。</p>
     </section>
     <section class="card history-card">
       <div class="section-heading compact">
@@ -357,6 +380,10 @@
       <p class="section-kicker">专注计时中</p>
       <span class="focus-subject" id="focusModalSubject">语文</span>
       <h2 id="focusModalTitle">当前作业</h2>
+      <div class="focus-step" id="focusModalStep" hidden>
+        <span>当前步骤</span>
+        <strong id="focusModalStepTitle"></strong>
+      </div>
       <div class="focus-clock" id="focusModalElapsed">00:00</div>
       <div class="focus-start-row"><span>开始时间</span><strong id="focusModalStartedAt">--:--</strong></div>
       <p class="focus-reminder">现在只做这一项，认真完成后再看下一项。</p>

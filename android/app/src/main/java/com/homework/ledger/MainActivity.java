@@ -7,6 +7,7 @@ import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.ClipData;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -15,6 +16,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
@@ -43,7 +45,10 @@ import org.json.JSONException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -65,9 +70,12 @@ public class MainActivity extends Activity {
     private static final String KEY_RECORDS = "records";
     private static final String KEY_WEEKENDS = "weekends";
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
+    private static final int EXPORT_BACKUP_REQUEST = 301;
+    private static final int IMPORT_BACKUP_REQUEST = 302;
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
     private static final String[] SPORTS = {"跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
+    private static final int[] ESTIMATE_OPTIONS = {5, 10, 15, 20, 30};
     private static final String DICTATION_VOICE_GUIDANCE =
             "使用家长逐词录制的人声；每个词连续播放两遍，两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
     private static final String[][] DICTATION_LESSONS = {
@@ -301,11 +309,19 @@ public class MainActivity extends Activity {
 
     private LinearLayout historyList;
     private TextView emptyHistoryView;
+    private Button historyManageButton;
+    private TextView weeklyReviewRangeView;
+    private TextView weeklyPlanDaysView;
+    private TextView weeklyEstimatedTimeView;
+    private TextView weeklyActualTimeView;
+    private TextView weeklyReviewInsightView;
+    private boolean historyManageMode;
 
     private AlertDialog taskFocusDialog;
     private AlertDialog taskEntryDialog;
     private AlertDialog weekendTaskPlanDialog;
     private TextView taskFocusElapsedView;
+    private TextView taskFocusStepView;
     private JSONObject taskFocusTask;
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
@@ -628,8 +644,6 @@ public class MainActivity extends Activity {
         scrollView.addView(content, matchWrap());
         content.addView(buildHeader());
         content.addView(space(16));
-        content.addView(buildSummaryCard());
-        content.addView(space(14));
         content.addView(buildDateStrip());
         content.addView(space(14));
         weekendCard = buildWeekendCard();
@@ -659,12 +673,16 @@ public class MainActivity extends Activity {
         titles.addView(eyebrow);
         titles.addView(text("🌟 作业小账本", 28, GREEN_DARK, true));
         row.addView(titles, weightedWrap(1));
+        Button history = smallButton("足迹");
+        history.setOnClickListener(v -> showHistoryPage());
+        row.addView(history);
+        row.addView(spaceHorizontal(6));
         Button dictation = smallButton("🔊 听写");
         dictation.setOnClickListener(v -> showDictationPage());
         row.addView(dictation);
         row.addView(spaceHorizontal(6));
         Button settings = smallButton("设置");
-        settings.setOnClickListener(v -> showStartDatePicker());
+        settings.setOnClickListener(v -> showParentToolsDialog());
         row.addView(settings);
         return row;
     }
@@ -706,19 +724,6 @@ public class MainActivity extends Activity {
         deductionView = addStat(stats, "¥0.00", "需要加油");
         card.addView(stats, matchWrap());
 
-        LinearLayout historyEntry = horizontal();
-        historyEntry.setGravity(Gravity.CENTER_VERTICAL);
-        historyEntry.setPadding(dp(12), dp(9), dp(12), dp(9));
-        historyEntry.setBackground(rounded(Color.argb(38, 255, 255, 255), 14,
-                Color.argb(62, 255, 255, 255), 1));
-        historyEntry.setClickable(true);
-        historyEntry.setFocusable(true);
-        historyEntry.setOnClickListener(v -> showHistoryPage());
-        historyEntry.addView(text("🌈  成长足迹", 13, Color.WHITE, true), weightedWrap(1));
-        historyEntry.addView(text("查看记录  ›", 11, Color.argb(190, 255, 255, 255), true));
-        LinearLayout.LayoutParams historyEntryParams = matchFixed(dp(44));
-        historyEntryParams.topMargin = dp(18);
-        card.addView(historyEntry, historyEntryParams);
         return card;
     }
 
@@ -1637,6 +1642,7 @@ public class MainActivity extends Activity {
             put(task, "addedSequence", index);
             put(task, "status", "pending");
             put(task, "elapsedMs", 0L);
+            put(task, "estimatedMinutes", 15);
             if (weekendKey != null) put(task, "plannedDay", "saturday");
             tasks.put(task);
         }
@@ -1811,6 +1817,66 @@ public class MainActivity extends Activity {
         return (seconds / 60) + " 分 " + String.format(Locale.CHINA, "%02d", seconds % 60) + " 秒";
     }
 
+    private int estimatedMinutes(JSONObject task) {
+        int value = task == null ? 15 : task.optInt("estimatedMinutes", 15);
+        for (int option : ESTIMATE_OPTIONS) if (option == value) return value;
+        return 15;
+    }
+
+    private int taskActualMinutes(JSONObject task) {
+        long elapsed = taskElapsedMillis(task);
+        return elapsed > 0 ? Math.max(1, Math.round(elapsed / 60000f)) : 0;
+    }
+
+    private int remainingEstimatedMinutes(JSONArray tasks, List<Integer> indexes) {
+        int total = 0;
+        for (int index : indexes) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null || "done".equals(task.optString("status"))) continue;
+            int spent = "active".equals(task.optString("status"))
+                    ? (int) (taskElapsedMillis(task) / 60000L) : 0;
+            total += Math.max(0, estimatedMinutes(task) - spent);
+        }
+        return total;
+    }
+
+    private JSONArray taskSteps(JSONObject task) {
+        JSONArray steps = task == null ? null : task.optJSONArray("steps");
+        return steps == null ? new JSONArray() : steps;
+    }
+
+    private JSONObject currentTaskStep(JSONObject task) {
+        JSONArray steps = taskSteps(task);
+        for (int index = 0; index < steps.length(); index++) {
+            JSONObject step = steps.optJSONObject(index);
+            if (step != null && !step.optBoolean("done") && !step.optString("title", "").trim().isEmpty()) {
+                return step;
+            }
+        }
+        return null;
+    }
+
+    private int remainingTaskStepCount(JSONObject task) {
+        JSONArray steps = taskSteps(task);
+        int remaining = 0;
+        for (int index = 0; index < steps.length(); index++) {
+            JSONObject step = steps.optJSONObject(index);
+            if (step != null && !step.optBoolean("done")) remaining++;
+        }
+        return remaining;
+    }
+
+    private String taskStepSummary(JSONObject task) {
+        JSONArray steps = taskSteps(task);
+        if (steps.length() == 0) return "";
+        int done = 0;
+        for (int index = 0; index < steps.length(); index++) {
+            JSONObject step = steps.optJSONObject(index);
+            if (step != null && step.optBoolean("done")) done++;
+        }
+        return done + " / " + steps.length() + " 步";
+    }
+
     private String taskClockLabel(JSONObject task) {
         long seconds = taskElapsedMillis(task) / 1000L;
         long hours = seconds / 3600L;
@@ -1837,6 +1903,16 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, dp(8), 0, 0);
         content.addView(title);
+        JSONObject currentStep = currentTaskStep(task);
+        taskFocusStepView = text(currentStep == null ? "" : "当前步骤  ·  " + currentStep.optString("title"),
+                12, Color.rgb(69, 107, 168), true);
+        taskFocusStepView.setGravity(Gravity.CENTER);
+        taskFocusStepView.setPadding(dp(12), dp(9), dp(12), dp(9));
+        taskFocusStepView.setBackground(rounded(GREEN_SOFT, 12, GREEN_SOFT, 0));
+        taskFocusStepView.setVisibility(currentStep == null ? View.GONE : View.VISIBLE);
+        LinearLayout.LayoutParams stepParams = matchWrap();
+        stepParams.topMargin = dp(12);
+        content.addView(taskFocusStepView, stepParams);
         taskFocusElapsedView = text(taskClockLabel(task), 48, GREEN, true);
         taskFocusElapsedView.setGravity(Gravity.CENTER);
         taskFocusElapsedView.setPadding(0, dp(16), 0, dp(8));
@@ -1853,7 +1929,8 @@ public class MainActivity extends Activity {
                 .setView(content)
                 .setNegativeButton("暂时收起", null)
                 .setNeutralButton("暂停", null)
-                .setPositiveButton("完成这项", null)
+                .setPositiveButton(currentStep == null ? "完成这项"
+                        : remainingTaskStepCount(task) == 1 ? "完成最后一步" : "完成本步", null)
                 .create();
         taskFocusDialog = dialog;
         dialog.setCanceledOnTouchOutside(false);
@@ -1863,6 +1940,7 @@ public class MainActivity extends Activity {
                 taskFocusDialog = null;
                 taskFocusTask = null;
                 taskFocusElapsedView = null;
+                taskFocusStepView = null;
             }
         });
         dialog.setOnShowListener(ignored -> {
@@ -1888,6 +1966,7 @@ public class MainActivity extends Activity {
         taskFocusDialog = null;
         taskFocusTask = null;
         taskFocusElapsedView = null;
+        taskFocusStepView = null;
     }
 
     private void stopTaskClock(JSONObject task, String nextStatus) {
@@ -2131,12 +2210,13 @@ public class MainActivity extends Activity {
                 ? ledgerReady ? tasks.length() > 0 ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
                 : sortingMode ? "安排你的闯关顺序"
                 : orderPendingWeekend ? "还差一步：确定顺序"
-                : questMode ? "今天一关一关来" : "选一项，轻松开始吧");
+                : "作业清单");
         taskPanelHelpView.setText(!confirmed
                 ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "先确认钉钉和成长记录册中的完整内容。"
                 : sortingMode ? "这是你的计划，想先做哪一项由你决定。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
-                : questMode ? "不用一次想完，只看眼前这一项。" : "一次专心做一项，每完成一项都很棒！");
+                : "");
+        taskPanelHelpView.setVisibility(questMode ? View.GONE : View.VISIBLE);
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
         taskEntryLauncher.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
         taskEntryPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
@@ -2209,16 +2289,33 @@ public class MainActivity extends Activity {
         if (questMode) {
             int progress = progressTotal == 0 ? 100 : Math.round(progressDone * 100f / progressTotal);
             int remaining = Math.max(0, progressTotal - progressDone);
-            taskQuestStageView.setText(progress == 100 ? "🏆 今日通关" : "第 " + (progressDone + 1) + " 关 · 共 " + progressTotal + " 关");
-            taskQuestRemainingView.setText(progress == 100 ? "全部完成啦！" : "还剩 " + remaining + " 项");
+            taskQuestStageView.setText(progress == 100 ? "🏆 今日通关" : "今日进度");
+            taskQuestRemainingView.setText(progress == 100 ? "全部完成啦！" : progressDone + " / " + progressTotal + " 项完成");
             taskQuestPercentView.setText(progress + "%");
             taskQuestProgressBar.setProgress(progress);
-            String encouragement = "先完成一小项，作业就会开始变少啦！";
-            if (progressDone > 0 && progress < 50) encouragement = "已经闯过第一关，作业没有想象中那么难！";
-            else if (progress >= 50 && progress < 80) encouragement = "已经完成一半多啦，胜利正在靠近！";
-            else if (progress >= 80 && progress < 100) encouragement = "快到终点了，只剩 " + remaining + " 项！";
-            else if (progress == 100) encouragement = "全部通关，今天的坚持太棒了！";
-            taskQuestMessageView.setText(encouragement);
+            JSONObject owner = taskOwner(false);
+            int currentTaskIndex = -1;
+            for (int taskIndex : questIndexes) {
+                JSONObject candidate = tasks.optJSONObject(taskIndex);
+                if (candidate != null && !"done".equals(candidate.optString("status"))) {
+                    currentTaskIndex = taskIndex;
+                    if ("active".equals(candidate.optString("status"))) break;
+                }
+            }
+            int mealBoundaryIndex = -1;
+            String mealAfterId = owner == null ? "" : owner.optString("mealAfterTaskId");
+            for (int taskIndex = 0; taskIndex < tasks.length(); taskIndex++) {
+                JSONObject candidate = tasks.optJSONObject(taskIndex);
+                if (candidate != null && candidate.optString("id").equals(mealAfterId)) {
+                    mealBoundaryIndex = taskIndex;
+                    break;
+                }
+            }
+            String phase = mealBoundaryIndex >= 0 && currentTaskIndex >= 0
+                    ? currentTaskIndex <= mealBoundaryIndex ? "饭前计划" : "饭后计划"
+                    : "今日计划";
+            taskQuestMessageView.setText(progress == 100 ? "全部通关，今天的坚持太棒了！"
+                    : phase + " · 预计还需 " + remainingEstimatedMinutes(tasks, questIndexes) + " 分钟");
             int questFill = progress == 100 ? Color.rgb(255, 248, 217) : Color.rgb(237, 244, 255);
             int questStroke = progress == 100 ? Color.rgb(240, 212, 124) : Color.rgb(191, 212, 251);
             taskQuestProgressPanel.setBackground(rounded(questFill, 16, questStroke, 1));
@@ -2228,7 +2325,7 @@ public class MainActivity extends Activity {
         if (!confirmed) return;
         if (sortingMode) {
             taskSummaryView.setText(tasks.length() + " 关待安排");
-            addOrderIntro();
+            addOrderIntro(tasks, weekendMode);
             if (weekendMode) {
                 addSortableTaskGroup(tasks, "friday", "周五闯关顺序", "放学后先完成这一部分");
                 addSortableTaskGroup(tasks, "saturday", "周六闯关顺序", "完成周六计划");
@@ -2280,7 +2377,6 @@ public class MainActivity extends Activity {
         if (remainingIndexes.isEmpty()) {
             addQuestVictory();
         } else {
-            addQuestSection("🎯 现在只做这一关", "不用想后面的，先把眼前这一项做好");
             addTaskCard(tasks, currentIndex, true, canEditList, weekendMode, isFriday,
                     planSaved, weekendKey, true, true, false, true);
             List<Integer> upcoming = new ArrayList<>();
@@ -2290,7 +2386,6 @@ public class MainActivity extends Activity {
                 if (upcoming.size() < 2) upcoming.add(index); else later.add(index);
             }
             if (!upcoming.isEmpty()) {
-                addQuestSection("接下来", "提前看一眼就好");
                 for (int index : upcoming) addTaskCard(tasks, index, true, canEditList, weekendMode,
                         isFriday, planSaved, weekendKey, false, false, true, false);
             }
@@ -2311,8 +2406,14 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void addOrderIntro() {
-        TextView intro = text("🧭 先选一项容易开始的热身，再安排最需要动脑的作业。", 10,
+    private void addOrderIntro(JSONArray tasks, boolean weekendMode) {
+        int totalEstimate = 0;
+        for (int index = 0; index < tasks.length(); index++) {
+            totalEstimate += estimatedMinutes(tasks.optJSONObject(index));
+        }
+        String detail = "预计净学习 " + totalEstimate + " 分钟。排好顺序，设置每项预计用时"
+                + (weekendMode ? "。" : "，并选择饭前完成到哪一项。");
+        TextView intro = text(detail, 10,
                 Color.rgb(83, 115, 166), true);
         intro.setPadding(dp(12), dp(10), dp(12), dp(10));
         intro.setBackground(rounded(Color.rgb(243, 247, 255), 13, Color.rgb(156, 188, 245), 1));
@@ -2348,6 +2449,7 @@ public class MainActivity extends Activity {
         if (task == null) return;
         String subjectName = task.optString("subject", "其他");
         int subjectColor = taskSubjectColor(subjectName);
+        LinearLayout wrapper = vertical();
         LinearLayout item = horizontal();
         item.setGravity(Gravity.CENTER_VERTICAL);
         item.setPadding(dp(10), dp(10), dp(10), dp(10));
@@ -2366,7 +2468,9 @@ public class MainActivity extends Activity {
         String planLabel = weekendKeyFor(currentDate) == null ? "" : "  [" + plannedDayLabel(task) + "]";
         copy.addView(text(subjectName + " · " + task.optString("title", "未命名作业") + planLabel,
                 12, INK, true));
-        TextView meta = text("长按拖动，或用右侧箭头调整", 9, MUTED, false);
+        String stepSummary = taskStepSummary(task);
+        TextView meta = text("预计 " + estimatedMinutes(task) + " 分钟"
+                + (stepSummary.isEmpty() ? "" : " · " + stepSummary), 9, MUTED, false);
         meta.setPadding(0, dp(3), 0, 0);
         copy.addView(meta);
         item.addView(copy, weightedWrap(1));
@@ -2410,9 +2514,159 @@ public class MainActivity extends Activity {
             }
             return true;
         });
+        wrapper.addView(item, matchWrap());
+
+        LinearLayout tools = horizontal();
+        Button estimate = smallButton("预计 " + estimatedMinutes(task) + " 分钟");
+        estimate.setTextSize(10);
+        estimate.setOnClickListener(v -> showEstimatePicker(task));
+        tools.addView(estimate, weightedFixed(1, dp(38)));
+        tools.addView(spaceHorizontal(6));
+        Button steps = smallButton(taskSteps(task).length() > 0 ? "修改步骤" : "拆成步骤");
+        steps.setTextSize(10);
+        steps.setOnClickListener(v -> showTaskStepsEditor(task));
+        tools.addView(steps, weightedFixed(1, dp(38)));
+        if (weekendKeyFor(currentDate) == null) {
+            tools.addView(spaceHorizontal(6));
+            JSONObject owner = taskOwner(false);
+            boolean selected = owner != null && task.optString("id")
+                    .equals(owner.optString("mealAfterTaskId"));
+            Button meal = smallButton(selected ? "✓ 饭前到这里" : "饭前到这里");
+            meal.setTextSize(10);
+            meal.setTextColor(selected ? Color.rgb(139, 100, 27) : GREEN);
+            meal.setBackground(rounded(selected ? Color.rgb(255, 245, 216) : SURFACE,
+                    11, selected ? Color.rgb(223, 175, 76) : LINE, 1));
+            meal.setOnClickListener(v -> toggleMealAfterTask(task));
+            tools.addView(meal, weightedFixed(1, dp(38)));
+        }
+        LinearLayout.LayoutParams toolsParams = matchWrap();
+        toolsParams.topMargin = dp(7);
+        wrapper.addView(tools, toolsParams);
+
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(8);
-        taskListContainer.addView(item, params);
+        taskListContainer.addView(wrapper, params);
+        JSONObject owner = taskOwner(false);
+        if (weekendKeyFor(currentDate) == null && owner != null
+                && task.optString("id").equals(owner.optString("mealAfterTaskId"))) {
+            TextView divider = text("🍚  吃饭    饭后从下一项继续", 10, Color.rgb(133, 99, 38), true);
+            divider.setPadding(dp(11), dp(8), dp(11), dp(8));
+            divider.setBackground(rounded(Color.rgb(255, 250, 240), 10,
+                    Color.rgb(224, 189, 112), 1));
+            LinearLayout.LayoutParams dividerParams = matchWrap();
+            dividerParams.topMargin = dp(5);
+            taskListContainer.addView(divider, dividerParams);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        if (requestCode == EXPORT_BACKUP_REQUEST) {
+            writeBackup(uri);
+        } else if (requestCode == IMPORT_BACKUP_REQUEST) {
+            readBackup(uri);
+        }
+    }
+
+    private void showEstimatePicker(JSONObject task) {
+        String[] labels = new String[ESTIMATE_OPTIONS.length];
+        for (int index = 0; index < ESTIMATE_OPTIONS.length; index++) {
+            labels[index] = ESTIMATE_OPTIONS[index] + " 分钟";
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("这项作业预计多久？")
+                .setItems(labels, (dialog, which) -> {
+                    put(task, "estimatedMinutes", ESTIMATE_OPTIONS[which]);
+                    JSONObject owner = taskOwner(true);
+                    owner.remove("orderSaved");
+                    owner.remove("orderSavedAt");
+                    saveTaskData();
+                    renderTasks();
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void toggleMealAfterTask(JSONObject task) {
+        if (weekendKeyFor(currentDate) != null) return;
+        JSONObject owner = taskOwner(true);
+        String taskId = task.optString("id");
+        if (taskId.equals(owner.optString("mealAfterTaskId"))) owner.remove("mealAfterTaskId");
+        else put(owner, "mealAfterTaskId", taskId);
+        owner.remove("orderSaved");
+        owner.remove("orderSavedAt");
+        saveTaskData();
+        renderTasks();
+    }
+
+    private List<String> parseStepTitles(String value) {
+        List<String> numbered = numberedTaskParts(value == null ? "" : value);
+        String[] pieces = numbered == null
+                ? (value == null ? "" : value).split("[\\n；;]+")
+                : numbered.toArray(new String[0]);
+        List<String> result = new ArrayList<>();
+        for (String piece : pieces) {
+            String clean = piece.trim().replaceFirst("^[-•]\\s*", "");
+            if (!clean.isEmpty()) result.add(clean);
+        }
+        return result;
+    }
+
+    private void showTaskStepsEditor(JSONObject task) {
+        EditText input = new EditText(this);
+        input.setTextSize(14);
+        input.setTextColor(INK);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setMinLines(4);
+        input.setMaxLines(8);
+        input.setHint("例如：\n1. 读题并圈关键词\n2. 完成练习\n3. 检查订正");
+        StringBuilder existing = new StringBuilder();
+        JSONArray oldSteps = taskSteps(task);
+        for (int index = 0; index < oldSteps.length(); index++) {
+            JSONObject step = oldSteps.optJSONObject(index);
+            if (step == null) continue;
+            if (existing.length() > 0) existing.append('\n');
+            existing.append(index + 1).append(". ").append(step.optString("title"));
+        }
+        input.setText(existing.toString());
+        input.setSelection(input.length());
+        LinearLayout content = vertical();
+        content.setPadding(dp(20), dp(4), dp(20), 0);
+        content.addView(text("用 1. 2. 3. 或换行分开；清空后保存可取消拆分。", 10, MUTED, false));
+        LinearLayout.LayoutParams inputParams = matchWrap();
+        inputParams.topMargin = dp(10);
+        content.addView(input, inputParams);
+        new AlertDialog.Builder(this)
+                .setTitle("把长作业拆成小步骤")
+                .setView(content)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    List<String> titles = parseStepTitles(input.getText().toString());
+                    if (titles.isEmpty()) {
+                        task.remove("steps");
+                        toast("已取消步骤拆分");
+                    } else {
+                        JSONArray steps = new JSONArray();
+                        for (int index = 0; index < titles.size(); index++) {
+                            JSONObject step = new JSONObject();
+                            put(step, "id", task.optString("id") + "-step-" + index);
+                            put(step, "title", titles.get(index));
+                            put(step, "done", false);
+                            steps.put(step);
+                        }
+                        put(task, "steps", steps);
+                        toast("已拆成 " + titles.size() + " 个步骤");
+                    }
+                    JSONObject owner = taskOwner(true);
+                    owner.remove("orderSaved");
+                    owner.remove("orderSavedAt");
+                    saveTaskData();
+                    renderTasks();
+                })
+                .show();
     }
 
     private Button orderArrowButton(String label, boolean enabled, Runnable action) {
@@ -2529,12 +2783,16 @@ public class MainActivity extends Activity {
         if ("done".equals(status)) title.setAlpha(0.6f);
         titleRow.addView(title, weightedWrap(1));
         taskCopy.addView(titleRow, matchWrap());
-        String meta = "待开始";
-        if ("active".equals(status)) meta = "正在进行 · " + taskDurationLabel(task);
-        else if ("paused".equals(status)) meta = "已暂停 · 已用 " + taskDurationLabel(task);
+        String estimateLabel = "预计 " + estimatedMinutes(task) + " 分钟";
+        String stepSummary = taskStepSummary(task);
+        String stepSuffix = stepSummary.isEmpty() ? "" : " · " + stepSummary;
+        String meta = estimateLabel + stepSuffix;
+        if ("active".equals(status)) meta = estimateLabel + " · 已用 " + taskDurationLabel(task) + stepSuffix;
+        else if ("paused".equals(status)) meta = estimateLabel + " · 已用 " + taskDurationLabel(task) + stepSuffix;
         else if ("done".equals(status)) meta = (hasText(task, "completedDate") ? formatShortDate(task.optString("completedDate")) + " " : "")
-                + task.optString("completedAt", "已") + " 完成 · 用时 " + taskDurationLabel(task);
-        else if (weekendMode && planSaved && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成";
+                + task.optString("completedAt", "已") + " 完成 · " + estimateLabel
+                + " · 实际 " + taskActualMinutes(task) + " 分钟" + stepSuffix;
+        else if (weekendMode && planSaved && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成 · " + estimateLabel;
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
         metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
         taskCopy.addView(metaView);
@@ -2546,10 +2804,12 @@ public class MainActivity extends Activity {
                     () -> performTaskAction("delete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "active".equals(status)) {
             addTaskActionButton(actions, "暂停", false, false, () -> performTaskAction("pause", taskIndex));
-            addTaskActionButton(actions, "完成", true, false, () -> performTaskAction("complete", taskIndex));
+            addTaskActionButton(actions, currentTaskStep(task) == null ? "完成" : "完成本步", true, false,
+                    () -> performTaskAction("complete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "paused".equals(status)) {
             addTaskActionButton(actions, "继续", true, false, () -> performTaskAction("start", taskIndex));
-            addTaskActionButton(actions, "完成", false, false, () -> performTaskAction("complete", taskIndex));
+            addTaskActionButton(actions, currentTaskStep(task) == null ? "完成" : "完成本步", false, false,
+                    () -> performTaskAction("complete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "done".equals(status)) {
             addTaskActionButton(actions, "撤销完成", false, false, () -> performTaskAction("undo", taskIndex));
         } else if (confirmed && canDoToday && allowActions) {
@@ -2562,9 +2822,32 @@ public class MainActivity extends Activity {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }
         item.addView(mainRow, matchWrap());
+        if (current && taskSteps(task).length() > 0) addTaskStepsList(item, task);
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(current ? 7 : 8);
         target.addView(item, params);
+    }
+
+    private void addTaskStepsList(LinearLayout target, JSONObject task) {
+        JSONArray steps = taskSteps(task);
+        JSONObject currentStep = currentTaskStep(task);
+        LinearLayout list = vertical();
+        list.setPadding(dp(10), dp(8), dp(10), dp(8));
+        list.setBackground(rounded(Color.argb(175, 255, 255, 255), 10,
+                Color.argb(175, 255, 255, 255), 0));
+        for (int index = 0; index < steps.length(); index++) {
+            JSONObject step = steps.optJSONObject(index);
+            if (step == null) continue;
+            boolean done = step.optBoolean("done");
+            boolean active = step == currentStep;
+            TextView row = text((done ? "✓  " : active ? "→  " : "    ") + step.optString("title"),
+                    10, done ? Color.rgb(84, 133, 116) : active ? INK : MUTED, active);
+            if (index > 0) row.setPadding(0, dp(5), 0, 0);
+            list.addView(row);
+        }
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(9);
+        target.addView(list, params);
     }
 
     private void renderWeekendTaskPlanner() {
@@ -2866,6 +3149,9 @@ public class MainActivity extends Activity {
                 weekend.remove("planSavedAt");
             }
             JSONObject owner = taskOwner(true);
+            if (task.optString("id").equals(owner.optString("mealAfterTaskId"))) {
+                owner.remove("mealAfterTaskId");
+            }
             owner.remove("orderSaved");
             owner.remove("orderSavedAt");
             cleanupCurrentRecord();
@@ -2924,6 +3210,20 @@ public class MainActivity extends Activity {
             dismissTaskFocusDialog();
             toast("已暂停，可以休息或选择下一项");
         } else if ("complete".equals(action)) {
+            JSONObject step = currentTaskStep(task);
+            if (step != null) {
+                put(step, "done", true);
+                put(step, "completedAt", currentTime());
+                JSONObject nextStep = currentTaskStep(task);
+                if (nextStep != null) {
+                    saveTaskData();
+                    renderAll();
+                    dismissTaskFocusDialog();
+                    showTaskFocusDialog(task, index);
+                    toast("完成一步，接下来：" + nextStep.optString("title"));
+                    return;
+                }
+            }
             stopTaskClock(task, "done");
             dismissTaskFocusDialog();
             put(task, "completedAt", currentTime());
@@ -2947,6 +3247,9 @@ public class MainActivity extends Activity {
                 weekend.remove("penaltyConfirmed");
                 Result result = weekendResultFor(weekendKey, weekend);
                 toast("周末作业已全部完成，" + result.label + " " + amountText(result.amount));
+            } else if (weekendKey == null && task.optString("id")
+                    .equals(taskOwner(false).optString("mealAfterTaskId"))) {
+                toast("饭前计划完成，可以准备吃饭啦");
             } else {
                 int todayTotal = 0;
                 int todayDone = 0;
@@ -2978,6 +3281,24 @@ public class MainActivity extends Activity {
             }
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
+            JSONArray steps = taskSteps(task);
+            if (steps.length() > 0) {
+                boolean allStepsDone = true;
+                for (int stepIndex = 0; stepIndex < steps.length(); stepIndex++) {
+                    JSONObject step = steps.optJSONObject(stepIndex);
+                    if (step == null || !step.optBoolean("done")) {
+                        allStepsDone = false;
+                        break;
+                    }
+                }
+                if (allStepsDone) {
+                    JSONObject lastStep = steps.optJSONObject(steps.length() - 1);
+                    if (lastStep != null) {
+                        put(lastStep, "done", false);
+                        lastStep.remove("completedAt");
+                    }
+                }
+            }
             task.remove("completedAt");
             task.remove("completedDate");
             if (weekendKey == null) {
@@ -3860,8 +4181,19 @@ public class MainActivity extends Activity {
         cheer.setPadding(0, dp(3), 0, 0);
         copy.addView(cheer);
         header.addView(copy, weightedWrap(1));
+        historyManageButton = smallButton("管理记录");
+        historyManageButton.setOnClickListener(v -> {
+            historyManageMode = !historyManageMode;
+            historyManageButton.setText(historyManageMode ? "完成管理" : "管理记录");
+            renderHistoryAndSummary();
+        });
+        header.addView(historyManageButton);
         content.addView(header, matchWrap());
         content.addView(space(16));
+        content.addView(buildSummaryCard());
+        content.addView(space(14));
+        content.addView(buildWeeklyReviewCard());
+        content.addView(space(14));
         content.addView(buildHistoryCard());
         content.addView(space(16));
         TextView footer = text("🌱 每一条记录，都是认真坚持的证明", 11, MUTED, true);
@@ -3875,6 +4207,8 @@ public class MainActivity extends Activity {
         pendingDictationRecordingWord = null;
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
+        historyManageMode = false;
+        if (historyManageButton != null) historyManageButton.setText("管理记录");
         renderHistoryAndSummary();
         mainPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.GONE);
@@ -3887,6 +4221,8 @@ public class MainActivity extends Activity {
         pendingDictationRecordingWord = null;
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
+        historyManageMode = false;
+        if (historyManageButton != null) historyManageButton.setText("管理记录");
         historyPageView.setVisibility(View.GONE);
         dictationPageView.setVisibility(View.GONE);
         mainPageView.setVisibility(View.VISIBLE);
@@ -3909,6 +4245,45 @@ public class MainActivity extends Activity {
         emptyHistoryView.setPadding(dp(6), dp(28), dp(6), dp(20));
         card.addView(emptyHistoryView, matchWrap());
         return card;
+    }
+
+    private View buildWeeklyReviewCard() {
+        LinearLayout review = card();
+        LinearLayout heading = horizontal();
+        heading.setGravity(Gravity.TOP);
+        LinearLayout copy = vertical();
+        copy.addView(text("本周计划复盘", 10, GREEN, true));
+        copy.addView(text("看看时间估得准不准", 18, INK, true));
+        heading.addView(copy, weightedWrap(1));
+        weeklyReviewRangeView = text("", 10, MUTED, true);
+        heading.addView(weeklyReviewRangeView);
+        review.addView(heading, matchWrap());
+        review.addView(space(13));
+
+        LinearLayout stats = horizontal();
+        weeklyPlanDaysView = addWeeklyReviewStat(stats, "按计划完成");
+        weeklyEstimatedTimeView = addWeeklyReviewStat(stats, "预计用时");
+        weeklyActualTimeView = addWeeklyReviewStat(stats, "实际用时");
+        review.addView(stats, matchWrap());
+        weeklyReviewInsightView = text("完成几项作业后，这里会帮助你了解自己的时间。", 11, MUTED, false);
+        weeklyReviewInsightView.setPadding(0, dp(13), 0, 0);
+        review.addView(weeklyReviewInsightView);
+        return review;
+    }
+
+    private TextView addWeeklyReviewStat(LinearLayout parent, String label) {
+        LinearLayout item = vertical();
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(5), dp(11), dp(5), dp(11));
+        item.setBackground(rounded(Color.rgb(245, 248, 254), 13, Color.rgb(245, 248, 254), 0));
+        item.addView(text(label, 9, MUTED, false));
+        TextView value = text("0 分钟", 14, Color.rgb(49, 93, 159), true);
+        value.setPadding(0, dp(4), 0, 0);
+        item.addView(value);
+        LinearLayout.LayoutParams params = weightedWrap(1);
+        if (parent.getChildCount() > 0) params.leftMargin = dp(7);
+        parent.addView(item, params);
+        return value;
     }
 
     private void renderWeekend() {
@@ -4476,6 +4851,94 @@ public class MainActivity extends Activity {
                     : buildHistoryRow(date, records.optJSONObject(date)));
             if (index < entries.size() - 1) historyList.addView(divider());
         }
+        renderWeeklyReview();
+    }
+
+    private void renderWeeklyReview() {
+        if (weeklyReviewRangeView == null) return;
+        Calendar today = calendarFromIso(todayIso());
+        int offset = (today.get(Calendar.DAY_OF_WEEK) + 5) % 7;
+        String weekStart = addDays(todayIso(), -offset);
+        String weekEnd = addDays(weekStart, 6);
+        List<JSONObject> plannedTasks = new ArrayList<>();
+        List<String> plannedDates = new ArrayList<>();
+
+        Iterator<String> recordKeys = records.keys();
+        while (recordKeys.hasNext()) {
+            String date = recordKeys.next();
+            if (date.compareTo(weekStart) < 0 || date.compareTo(weekEnd) > 0) continue;
+            JSONObject record = records.optJSONObject(date);
+            JSONArray tasks = record == null ? null : record.optJSONArray("tasks");
+            if (tasks == null) continue;
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task != null) {
+                    plannedTasks.add(task);
+                    plannedDates.add(date);
+                }
+            }
+        }
+        Iterator<String> weekendKeys = weekends.keys();
+        while (weekendKeys.hasNext()) {
+            String key = weekendKeys.next();
+            JSONObject weekend = weekends.optJSONObject(key);
+            JSONArray tasks = weekend == null ? null : weekend.optJSONArray("tasks");
+            if (tasks == null) continue;
+            for (int index = 0; index < tasks.length(); index++) {
+                JSONObject task = tasks.optJSONObject(index);
+                if (task == null) continue;
+                String plannedDate = plannedDateForTask(key, task);
+                if (plannedDate.compareTo(weekStart) >= 0 && plannedDate.compareTo(weekEnd) <= 0) {
+                    plannedTasks.add(task);
+                    plannedDates.add(plannedDate);
+                }
+            }
+        }
+
+        List<String> uniqueDays = new ArrayList<>();
+        for (String date : plannedDates) if (!uniqueDays.contains(date)) uniqueDays.add(date);
+        int onPlanDays = 0;
+        for (String date : uniqueDays) {
+            boolean allOnPlan = true;
+            for (int index = 0; index < plannedTasks.size(); index++) {
+                if (!date.equals(plannedDates.get(index))) continue;
+                JSONObject task = plannedTasks.get(index);
+                if (!"done".equals(task.optString("status"))
+                        || hasText(task, "completedDate") && task.optString("completedDate").compareTo(date) > 0) {
+                    allOnPlan = false;
+                    break;
+                }
+            }
+            if (allOnPlan) onPlanDays++;
+        }
+        int estimated = 0;
+        int actual = 0;
+        int completed = 0;
+        for (JSONObject task : plannedTasks) {
+            if (!"done".equals(task.optString("status"))) continue;
+            completed++;
+            estimated += estimatedMinutes(task);
+            actual += taskActualMinutes(task);
+        }
+        weeklyReviewRangeView.setText(formatShortDate(weekStart) + "—" + formatShortDate(weekEnd));
+        weeklyPlanDaysView.setText(onPlanDays + " 天");
+        weeklyEstimatedTimeView.setText(estimated + " 分钟");
+        weeklyActualTimeView.setText(actual + " 分钟");
+        if (completed == 0) {
+            weeklyReviewInsightView.setText("完成几项作业后，这里会帮助你了解自己的时间。");
+            return;
+        }
+        int difference = actual - estimated;
+        int tolerance = Math.max(5, Math.round(estimated * 0.2f));
+        if (Math.abs(difference) <= tolerance) {
+            weeklyReviewInsightView.setText("这周的预计时间和实际时间很接近，估时越来越准了。");
+        } else if (difference > 0) {
+            weeklyReviewInsightView.setText("完成这些作业比预计多用了 " + difference
+                    + " 分钟，下次可以给长作业多留一点时间。");
+        } else {
+            weeklyReviewInsightView.setText("完成这些作业比预计少用了 " + Math.abs(difference)
+                    + " 分钟，你对自己的速度越来越了解了。");
+        }
     }
 
     private View buildHistoryRow(String date, JSONObject record) {
@@ -4508,7 +4971,7 @@ public class MainActivity extends Activity {
         delete.setTextColor(RED);
         delete.setOnClickListener(v -> confirmDelete(date));
         actions.addView(view);
-        actions.addView(delete);
+        if (historyManageMode) actions.addView(delete);
         row.addView(actions, matchWrap());
         return row;
     }
@@ -4558,7 +5021,7 @@ public class MainActivity extends Activity {
         delete.setTextColor(RED);
         delete.setOnClickListener(v -> confirmDeleteWeekend(key));
         actions.addView(view);
-        actions.addView(delete);
+        if (historyManageMode) actions.addView(delete);
         row.addView(actions, matchWrap());
         return row;
     }
@@ -4740,6 +5203,132 @@ public class MainActivity extends Activity {
                     renderAll();
                     toast("周末计划已删除");
                 }).show();
+    }
+
+    private void showParentToolsDialog() {
+        LinearLayout content = vertical();
+        content.setPadding(dp(20), dp(4), dp(20), 0);
+        TextView help = text("日期、数据备份和记录管理集中放在这里，不打扰孩子完成今天的计划。",
+                11, MUTED, false);
+        content.addView(help);
+
+        Button date = smallButton("设置统计开始日期");
+        date.setOnClickListener(v -> showStartDatePicker());
+        LinearLayout.LayoutParams dateParams = matchFixed(dp(46));
+        dateParams.topMargin = dp(14);
+        content.addView(date, dateParams);
+
+        Button export = smallButton("导出本地备份");
+        export.setOnClickListener(v -> launchBackupExport());
+        LinearLayout.LayoutParams exportParams = matchFixed(dp(46));
+        exportParams.topMargin = dp(8);
+        content.addView(export, exportParams);
+
+        Button restore = smallButton("从备份恢复");
+        restore.setOnClickListener(v -> launchBackupImport());
+        LinearLayout.LayoutParams restoreParams = matchFixed(dp(46));
+        restoreParams.topMargin = dp(8);
+        content.addView(restore, restoreParams);
+
+        TextView note = text("备份包含作业、计划、打卡和自定义词语，不包含听写录音文件。删除记录请进入“足迹—管理记录”。",
+                10, MUTED, false);
+        note.setPadding(0, dp(12), 0, 0);
+        content.addView(note);
+
+        new AlertDialog.Builder(this)
+                .setTitle("家长工具")
+                .setView(content)
+                .setNegativeButton("关闭", null)
+                .show();
+    }
+
+    private void launchBackupExport() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        intent.putExtra(Intent.EXTRA_TITLE, "作业小账本备份-" + todayIso() + ".json");
+        startActivityForResult(intent, EXPORT_BACKUP_REQUEST);
+    }
+
+    private void launchBackupImport() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        startActivityForResult(intent, IMPORT_BACKUP_REQUEST);
+    }
+
+    private JSONObject backupPayload() {
+        JSONObject state = new JSONObject();
+        put(state, "startDate", startDate);
+        put(state, "records", records);
+        put(state, "weekends", weekends);
+        put(state, "dictationCustom", dictationCustomWords);
+        JSONObject payload = new JSONObject();
+        put(payload, "format", "homework-ledger-backup");
+        put(payload, "version", 2);
+        put(payload, "exportedAt", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.CHINA)
+                .format(Calendar.getInstance().getTime()));
+        put(payload, "state", state);
+        return payload;
+    }
+
+    private void writeBackup(Uri uri) {
+        try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+            if (output == null) throw new IllegalStateException("output unavailable");
+            output.write(backupPayload().toString(2).getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            toast("备份文件已导出");
+        } catch (Exception exception) {
+            toast("导出失败，请重新选择保存位置");
+        }
+    }
+
+    private void readBackup(Uri uri) {
+        try (InputStream input = getContentResolver().openInputStream(uri);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            if (input == null) throw new IllegalStateException("input unavailable");
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            JSONObject parsed = new JSONObject(output.toString(StandardCharsets.UTF_8.name()));
+            JSONObject source = "homework-ledger-backup".equals(parsed.optString("format"))
+                    ? parsed.optJSONObject("state") : parsed;
+            if (source == null || source.optJSONObject("records") == null
+                    || source.optJSONObject("weekends") == null) {
+                throw new JSONException("invalid backup");
+            }
+            confirmBackupRestore(source);
+        } catch (Exception exception) {
+            toast("备份文件无法识别，请选择本应用导出的文件");
+        }
+    }
+
+    private void confirmBackupRestore(JSONObject source) {
+        new AlertDialog.Builder(this)
+                .setTitle("恢复本地备份")
+                .setMessage("恢复会替换当前全部记录，确定继续吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("恢复", (dialog, which) -> {
+                    String restoredStart = source.optString("startDate", todayIso());
+                    if (!restoredStart.matches("\\d{4}-\\d{2}-\\d{2}")) restoredStart = todayIso();
+                    startDate = restoredStart.compareTo(todayIso()) > 0 ? todayIso() : restoredStart;
+                    records = source.optJSONObject("records");
+                    weekends = source.optJSONObject("weekends");
+                    JSONObject restoredWords = source.optJSONObject("dictationCustom");
+                    dictationCustomWords = restoredWords == null ? new JSONObject() : restoredWords;
+                    currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
+                    preferences.edit()
+                            .putString(KEY_START_DATE, startDate)
+                            .putString(KEY_RECORDS, records.toString())
+                            .putString(KEY_WEEKENDS, weekends.toString())
+                            .putString(KEY_DICTATION_CUSTOM, dictationCustomWords.toString())
+                            .apply();
+                    dismissTaskEntryDialog();
+                    dismissTaskFocusDialog();
+                    renderAll();
+                    toast("备份已恢复");
+                })
+                .show();
     }
 
     private void showStartDatePicker() {

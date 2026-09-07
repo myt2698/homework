@@ -11,6 +11,7 @@
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
   const SPORTS = ["跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"];
   const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
+  const ESTIMATE_OPTIONS = [5, 10, 15, 20, 30];
   const DICTATION_LESSONS = [
     { id: "lesson-1", label: "第1课", words: "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波".split(" ") },
     { id: "lesson-2", label: "第2课", words: "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡".split(" ") },
@@ -78,6 +79,8 @@
     stopDictationButton: $("#stopDictationButton"),
     settingsButton: $("#settingsButton"), settingsPanel: $("#settingsPanel"),
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
+    exportDataButton: $("#exportDataButton"), importDataButton: $("#importDataButton"),
+    importDataInput: $("#importDataInput"), historyManageButton: $("#historyManageButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
     recordHeading: $("#recordHeading"),
     weekendPlanEntry: $("#weekendPlanEntry"), weekendPlanEntryTitle: $("#weekendPlanEntryTitle"),
@@ -112,13 +115,17 @@
     confirmTaskListButton: $("#confirmTaskListButton"), dayResult: $("#dayResult"),
     focusModal: $("#focusModal"), focusCloseButton: $("#focusCloseButton"),
     focusModalSubject: $("#focusModalSubject"), focusModalTitle: $("#focusModalTitle"),
+    focusModalStep: $("#focusModalStep"), focusModalStepTitle: $("#focusModalStepTitle"),
     focusModalElapsed: $("#focusModalElapsed"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
     resultLabel: $("#resultLabel"), resultAmount: $("#resultAmount"),
     resetDayButton: $("#resetDayButton"), historyList: $("#historyList"),
     emptyState: $("#emptyState"), balance: $("#balance"), periodLabel: $("#periodLabel"),
     recordDays: $("#recordDays"), rewardDays: $("#rewardDays"),
-    deductionTotal: $("#deductionTotal"), toast: $("#toast")
+    deductionTotal: $("#deductionTotal"), weeklyReviewRange: $("#weeklyReviewRange"),
+    weeklyPlanDays: $("#weeklyPlanDays"), weeklyEstimatedTime: $("#weeklyEstimatedTime"),
+    weeklyActualTime: $("#weeklyActualTime"), weeklyReviewInsight: $("#weeklyReviewInsight"),
+    toast: $("#toast")
   };
 
   let speechRecognition = null;
@@ -128,6 +135,7 @@
   let taskListExpanded = false;
   let completedTasksExpanded = false;
   let dailyCheckinsExpanded = false;
+  let historyManageMode = false;
   let pointerTaskDrag = null;
   let selectedDictationLesson = DICTATION_LESSONS[0].id;
   let dictationSession = null;
@@ -154,6 +162,11 @@
     const date = parseIsoDate(value);
     date.setDate(date.getDate() + count);
     return isoFromDate(date);
+  }
+  function weekRange(value = todayIso()) {
+    const day = parseIsoDate(value).getDay();
+    const start = addDays(value, -((day + 6) % 7));
+    return { start, end: addDays(start, 6) };
   }
   function weekendKeyFor(date) {
     const day = parseIsoDate(date).getDay();
@@ -251,6 +264,31 @@
     if (seconds < 60) return `${seconds} 秒`;
     return `${Math.floor(seconds / 60)} 分 ${String(seconds % 60).padStart(2, "0")} 秒`;
   }
+  function estimatedMinutes(task) {
+    const value = Number(task?.estimatedMinutes);
+    return ESTIMATE_OPTIONS.includes(value) ? value : 15;
+  }
+  function taskActualMinutes(task) {
+    const elapsed = taskElapsedMs(task, false);
+    return elapsed > 0 ? Math.max(1, Math.round(elapsed / 60000)) : 0;
+  }
+  function remainingEstimatedMinutes(tasks) {
+    return tasks.reduce((sum, task) => {
+      if ((task.status || "pending") === "done") return sum;
+      const spent = task.status === "active" ? Math.floor(taskElapsedMs(task) / 60000) : 0;
+      return sum + Math.max(0, estimatedMinutes(task) - spent);
+    }, 0);
+  }
+  function taskSteps(task) {
+    return Array.isArray(task?.steps)
+      ? task.steps.filter((step) => step && typeof step.title === "string" && step.title.trim()) : [];
+  }
+  function currentTaskStep(task) { return taskSteps(task).find((step) => !step.done) || null; }
+  function taskStepSummary(task) {
+    const steps = taskSteps(task);
+    if (!steps.length) return "";
+    return `${steps.filter((step) => step.done).length} / ${steps.length} 步`;
+  }
   function taskClockLabel(task) {
     const seconds = Math.floor(taskElapsedMs(task) / 1000);
     const hours = Math.floor(seconds / 3600);
@@ -277,8 +315,14 @@
     if (!task || task.status !== "active") return closeFocusModal();
     elements.focusModalSubject.textContent = task.subject || "其他";
     elements.focusModalTitle.textContent = task.title || "当前作业";
+    const step = currentTaskStep(task);
+    elements.focusModalStep.hidden = !step;
+    elements.focusModalStepTitle.textContent = step?.title || "";
     elements.focusModalElapsed.textContent = taskClockLabel(task);
     elements.focusModalStartedAt.textContent = task.startedAt || "--:--";
+    elements.focusCompleteButton.textContent = step
+      ? taskSteps(task).filter((item) => !item.done).length === 1 ? "完成最后一步" : "完成本步"
+      : "完成这项";
   }
   function openFocusModal(id) {
     focusModalTaskId = String(id);
@@ -445,6 +489,48 @@
     elements.deductionTotal.textContent = `¥${deductions.toFixed(2)}`;
   }
 
+  function renderWeeklyReview() {
+    const range = weekRange();
+    const planned = [];
+    Object.entries(state.records).forEach(([date, record]) => {
+      if (date < range.start || date > range.end || !Array.isArray(record?.tasks)) return;
+      record.tasks.forEach((task) => planned.push({ task, plannedDate: date }));
+    });
+    Object.entries(state.weekends).forEach(([key, weekend]) => {
+      if (!Array.isArray(weekend?.tasks)) return;
+      weekend.tasks.forEach((task) => {
+        const plannedDate = plannedDateForTask(key, task);
+        if (plannedDate >= range.start && plannedDate <= range.end) planned.push({ task, plannedDate });
+      });
+    });
+    const byDay = new Map();
+    planned.forEach((entry) => {
+      if (!byDay.has(entry.plannedDate)) byDay.set(entry.plannedDate, []);
+      byDay.get(entry.plannedDate).push(entry.task);
+    });
+    const planDays = [...byDay.entries()].filter(([plannedDate, tasks]) => tasks.length
+      && tasks.every((task) => task.status === "done"
+        && (!task.completedDate || task.completedDate <= plannedDate))).length;
+    const completed = planned.map((entry) => entry.task).filter((task) => task.status === "done");
+    const estimated = completed.reduce((sum, task) => sum + estimatedMinutes(task), 0);
+    const actual = completed.reduce((sum, task) => sum + taskActualMinutes(task), 0);
+    elements.weeklyReviewRange.textContent = `${Number(range.start.slice(5, 7))}月${Number(range.start.slice(8, 10))}日—${Number(range.end.slice(5, 7))}月${Number(range.end.slice(8, 10))}日`;
+    elements.weeklyPlanDays.textContent = `${planDays} 天`;
+    elements.weeklyEstimatedTime.textContent = `${estimated} 分钟`;
+    elements.weeklyActualTime.textContent = `${actual} 分钟`;
+    if (!completed.length) {
+      elements.weeklyReviewInsight.textContent = "完成几项作业后，这里会帮助你了解自己的时间。";
+      return;
+    }
+    const difference = actual - estimated;
+    const tolerance = Math.max(5, Math.round(estimated * 0.2));
+    elements.weeklyReviewInsight.textContent = Math.abs(difference) <= tolerance
+      ? "这周的预计时间和实际时间很接近，估时越来越准了。"
+      : difference > 0
+        ? `完成这些作业比预计多用了 ${difference} 分钟，下次可以给长作业多留一点时间。`
+        : `完成这些作业比预计少用了 ${Math.abs(difference)} 分钟，你对自己的速度越来越了解了。`;
+  }
+
   function latestStatus(record) {
     if (record?.finishTime) return `${record.finishTime} 完成 · 有效 ${focusDuration(record)} 分钟`;
     if (record?.ruleId) return "旧版手动记录";
@@ -550,6 +636,10 @@
     closeTaskEntryModal();
     closeWeekendPlanModal();
     closeFocusModal();
+    historyManageMode = false;
+    document.body.classList.remove("history-manage-mode");
+    elements.historyManageButton.setAttribute("aria-pressed", "false");
+    elements.historyManageButton.textContent = "管理记录";
     renderHistory();
     elements.mainPage.hidden = true;
     elements.dictationPage.hidden = true;
@@ -558,6 +648,8 @@
   }
 
   function closeHistoryPage() {
+    historyManageMode = false;
+    document.body.classList.remove("history-manage-mode");
     elements.historyPage.hidden = true;
     elements.mainPage.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -842,6 +934,7 @@
     const canEditList = !key || isFriday;
     const ledgerReady = key && !isFriday ? true : Boolean(recordFor(date)?.ledgerConfirmed);
     const tasks = tasksForDate(date);
+    const owner = taskOwnerForDate(date);
     const confirmed = taskListConfirmed(date);
     const doneCount = tasks.filter((task) => task.status === "done").length;
     const active = activeTaskForDate(date);
@@ -941,14 +1034,16 @@
       let buttons = "";
       const canDoToday = canDoTaskToday(task);
       const allowActions = options.allowActions !== false;
+      const steps = taskSteps(task);
+      const step = currentTaskStep(task);
       if (options.sortable) {
         buttons = `<button class="order-arrow" type="button" data-order-action="up" data-task-id="${escapeHtml(String(task.id))}" aria-label="向前移动"${options.moveUp ? "" : " disabled"}>↑</button>
           <button class="order-arrow" type="button" data-order-action="down" data-task-id="${escapeHtml(String(task.id))}" aria-label="向后移动"${options.moveDown ? "" : " disabled"}>↓</button>`;
       } else if (confirmed && canDoToday && allowActions) {
         if (status === "active") {
-          buttons = taskButton("暂停", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
+          buttons = taskButton("暂停", "pause", task.id) + taskButton(step ? "完成本步" : "完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
-          buttons = taskButton("继续", "start", task.id, "primary-task-action") + taskButton("完成", "complete", task.id);
+          buttons = taskButton("继续", "start", task.id, "primary-task-action") + taskButton(step ? "完成本步" : "完成", "complete", task.id);
         } else if (status === "done") {
           buttons = taskButton("撤销完成", "undo", task.id);
         } else {
@@ -959,16 +1054,26 @@
       } else if (!confirmed && canEditList) {
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");
       }
-      const meta = options.sortable ? "按住左侧手柄拖动，或用右侧箭头调整"
+      const estimateText = `预计 ${estimatedMinutes(task)} 分钟`;
+      const stepText = taskStepSummary(task);
+      const meta = options.sortable ? `拖动或用箭头排序${stepText ? ` · ${stepText}` : ""}`
         : status === "done"
-        ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · 用时 ${taskDurationLabel(task)}`
-        : status === "active" ? `正在进行 · ${taskDurationLabel(task)}`
-          : status === "paused" ? `已暂停 · 已用 ${taskDurationLabel(task)}`
-            : key && weekend.planSaved && !canDoToday ? `计划${plannedDayLabel(task)}完成` : "待开始";
+        ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · ${estimateText} · 实际 ${taskActualMinutes(task)} 分钟${stepText ? ` · ${stepText}` : ""}`
+        : status === "active" ? `${estimateText} · 已用 ${taskDurationLabel(task)}${stepText ? ` · ${stepText}` : ""}`
+          : status === "paused" ? `${estimateText} · 已用 ${taskDurationLabel(task)}${stepText ? ` · ${stepText}` : ""}`
+            : key && weekend.planSaved && !canDoToday ? `计划${plannedDayLabel(task)}完成 · ${estimateText}` : `${estimateText}${stepText ? ` · ${stepText}` : ""}`;
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && plannedDateForTask(key, task) === date;
       const sortAttributes = options.sortable
         ? ` sortable" data-sort-task-id="${escapeHtml(String(task.id))}` : "";
+      const planningTools = options.sortable ? `<div class="task-planning-tools">
+        <label>预计用时<select data-estimate-task-id="${escapeHtml(String(task.id))}" aria-label="${escapeHtml(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map((minutes) => `<option value="${minutes}"${estimatedMinutes(task) === minutes ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label>
+        <button type="button" data-plan-action="steps" data-task-id="${escapeHtml(String(task.id))}">${steps.length ? "修改步骤" : "拆成步骤"}</button>
+        ${!key ? `<button type="button" data-meal-after="${escapeHtml(String(task.id))}" class="${String(owner?.mealAfterTaskId || "") === String(task.id) ? "selected" : ""}">${String(owner?.mealAfterTaskId || "") === String(task.id) ? "✓ 饭前到这里" : "饭前到这里"}</button>` : ""}
+      </div>` : "";
+      const stepsHtml = options.current && steps.length ? `<ol class="task-step-list">${steps.map((item) => `<li class="${item.done ? "done" : item === step ? "current" : ""}"><span>${item.done ? "✓" : item === step ? "→" : ""}</span>${escapeHtml(item.title)}</li>`).join("")}</ol>` : "";
+      const mealDivider = options.sortable && !key && String(owner?.mealAfterTaskId || "") === String(task.id)
+        ? `<div class="meal-divider"><span>🍚</span><strong>吃饭</strong><small>饭后从下一项继续</small></div>` : "";
       return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${sortAttributes}" data-subject="${escapeHtml(task.subject || "其他")}">
         <div class="task-main-row">
           ${options.sortable ? `<button class="drag-handle" type="button" data-drag-handle aria-label="按住拖动作业排序" title="按住拖动">⠿</button><span class="order-number">${options.orderNumber}</span>` : ""}
@@ -978,7 +1083,8 @@
           </div>
           <div class="task-buttons">${buttons}</div>
         </div>
-      </article>`;
+        ${stepsHtml}${planningTools}
+      </article>${mealDivider}`;
     };
 
     const pendingTasks = pendingTaskOrder(tasks);
@@ -1005,7 +1111,8 @@
         : groupHtml("", tasks, "");
       elements.taskSummary.textContent = `${tasks.length} 关待安排`;
       elements.activeTaskBanner.hidden = true;
-      elements.taskList.innerHTML = `<div class="order-intro">🧭 先选一项容易开始的热身，再安排最需要动脑的作业。</div>${orderBody}`;
+      const totalEstimate = tasks.reduce((sum, task) => sum + estimatedMinutes(task), 0);
+      elements.taskList.innerHTML = `<div class="order-intro">预计净学习 ${totalEstimate} 分钟。排好顺序，设置每项预计用时${key ? "。" : "，并选择饭前完成到哪一项。"}</div>${orderBody}`;
       return;
     }
 
@@ -1015,8 +1122,15 @@
     }
 
     const progress = progressTotal ? Math.round(progressDone / progressTotal * 100) : 100;
+    const remainingMinutes = remainingEstimatedMinutes(questRemaining);
+    const mealBoundary = !key && owner?.mealAfterTaskId
+      ? tasks.findIndex((task) => String(task.id) === String(owner.mealAfterTaskId)) : -1;
+    const currentIndex = questCurrent ? tasks.indexOf(questCurrent) : -1;
+    const mealPhase = mealBoundary >= 0 && currentIndex >= 0
+      ? currentIndex <= mealBoundary ? "饭前计划" : "饭后计划" : "今日计划";
     const progressHtml = `<div class="quest-progress${progress === 100 ? " complete" : ""}">
       <div class="quest-progress-track" role="progressbar" aria-label="今日作业进度：已完成 ${progressDone} 项，共 ${progressTotal} 项" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div>
+      ${progress < 100 ? `<div class="quest-time-summary"><span>${mealPhase}</span><strong>预计还需 ${remainingMinutes} 分钟</strong></div>` : ""}
     </div>`;
 
     if (progress === 100) {
@@ -1094,6 +1208,7 @@
     renderTasks();
     renderCurrentRecord();
     renderHistory();
+    renderWeeklyReview();
   }
   function saveAndRender(message) {
     cleanupCurrentRecord();
@@ -1239,6 +1354,7 @@
       title: task.title,
       status: "pending",
       elapsedMs: 0,
+      estimatedMinutes: 15,
       ...(key ? { plannedDay: "saturday" } : {})
     }))));
     if (key) {
@@ -1306,6 +1422,59 @@
     render();
     if (confirmed) openTaskEntryModal();
     showToast(confirmed ? "可以修改作业清单了" : `清单已确认，共 ${tasks.length} 项`);
+  }
+
+  function setTaskEstimate(id, value) {
+    const task = taskById(id);
+    const minutes = Number(value);
+    if (!task || task.status !== "pending" || !ESTIMATE_OPTIONS.includes(minutes)) return;
+    task.estimatedMinutes = minutes;
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    owner.orderSaved = false;
+    delete owner.orderSavedAt;
+    persist();
+    renderTasks();
+  }
+
+  function toggleMealAfter(id) {
+    if (weekendKeyFor(elements.recordDate.value)) return showToast("周末作业已经按日期分段，不再设置饭前分界");
+    const task = taskById(id);
+    if (!task || task.status !== "pending") return;
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    owner.mealAfterTaskId = String(owner.mealAfterTaskId || "") === String(id) ? "" : String(id);
+    owner.orderSaved = false;
+    delete owner.orderSavedAt;
+    persist();
+    renderTasks();
+  }
+
+  function parseStepTitles(value) {
+    const numbered = numberedTaskParts(value);
+    return (numbered || value.split(/[\n；;]+/))
+      .map((item) => item.trim().replace(/^[-•]\s*/, ""))
+      .filter(Boolean);
+  }
+
+  function editTaskSteps(id) {
+    const task = taskById(id);
+    if (!task || task.status !== "pending") return showToast("作业开始后不能再修改步骤");
+    const existing = taskSteps(task);
+    const draft = window.prompt("输入作业步骤，可用 1. 2. 3. 或换行分开；清空可取消拆分。",
+      existing.map((step, index) => `${index + 1}. ${step.title}`).join("\n"));
+    if (draft === null) return;
+    const titles = parseStepTitles(draft);
+    if (titles.length) {
+      task.steps = titles.map((title, index) => ({ id: `${task.id}-step-${index}`, title, done: false }));
+      showToast(`已拆成 ${titles.length} 个步骤`);
+    } else {
+      delete task.steps;
+      showToast("已取消步骤拆分");
+    }
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    owner.orderSaved = false;
+    delete owner.orderSavedAt;
+    persist();
+    renderTasks();
   }
 
   function toggleTaskOrder() {
@@ -1397,6 +1566,7 @@
       if (key && date !== key) return showToast("周末清单只能在周五修改");
       const owner = taskOwnerForDate(elements.recordDate.value, true);
       owner.tasks = tasks.filter((item) => String(item.id) !== String(id));
+      if (String(owner.mealAfterTaskId || "") === String(id)) delete owner.mealAfterTaskId;
       if (key) {
         delete owner.planSaved;
         delete owner.planSavedAt;
@@ -1436,6 +1606,19 @@
       closeFocusModal();
       showToast("已暂停，可以休息或选择下一项");
     } else if (action === "complete") {
+      const step = currentTaskStep(task);
+      if (step) {
+        step.done = true;
+        step.completedAt = currentTime();
+        const nextStep = currentTaskStep(task);
+        if (nextStep) {
+          persist();
+          render();
+          updateFocusModal();
+          showToast(`完成一步，接下来：${nextStep.title}`);
+          return;
+        }
+      }
       stopTaskClock(task, "done");
       closeFocusModal();
       task.completedAt = currentTime();
@@ -1458,6 +1641,8 @@
         delete weekend.penaltyConfirmed;
         const result = weekendResultFor(key, weekend);
         showToast(`周末作业已全部完成，${result.label} ${amountText(result.amount, false)}`);
+      } else if (!key && String(taskOwnerForDate(date)?.mealAfterTaskId || "") === String(task.id)) {
+        showToast("饭前计划完成，可以准备吃饭啦");
       } else {
         const todayTasks = !key ? tasks : date === key
           ? tasks.filter((item) => plannedDayForTask(item) === "friday")
@@ -1476,6 +1661,11 @@
       }
     } else if (action === "undo") {
       task.status = "paused";
+      const steps = taskSteps(task);
+      if (steps.length && steps.every((step) => step.done)) {
+        steps[steps.length - 1].done = false;
+        delete steps[steps.length - 1].completedAt;
+      }
       delete task.completedAt;
       delete task.completedDate;
       if (key) {
@@ -1510,6 +1700,45 @@
     });
     elements.addTasksButton.textContent = `生成${subject}清单`;
     elements.taskDraft.placeholder = `例如：1. ${subject}背诵第3课  2. 练习册第12页  3. 阅读课文`;
+  }
+
+  function exportBackup() {
+    const payload = { format: "homework-ledger-backup", version: 2, exportedAt: new Date().toISOString(), state };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `作业小账本备份-${todayIso()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    link.remove();
+    showToast("备份文件已导出");
+  }
+
+  async function importBackup(file) {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const source = parsed?.format === "homework-ledger-backup" ? parsed.state : parsed;
+      if (!source || typeof source !== "object" || !source.records || !source.weekends) throw new Error("invalid");
+      if (!window.confirm("恢复备份会替换当前全部记录，确定继续吗？")) return;
+      const parsedStart = /^\d{4}-\d{2}-\d{2}$/.test(source.startDate) ? source.startDate : todayIso();
+      state = {
+        startDate: parsedStart > todayIso() ? todayIso() : parsedStart,
+        records: source.records && typeof source.records === "object" ? source.records : {},
+        weekends: source.weekends && typeof source.weekends === "object" ? source.weekends : {},
+        dictationCustom: source.dictationCustom && typeof source.dictationCustom === "object" ? source.dictationCustom : {}
+      };
+      persist();
+      elements.recordDate.value = todayIso() < state.startDate ? state.startDate : todayIso();
+      closeFocusModal();
+      render();
+      showToast("备份已恢复");
+    } catch (_) {
+      showToast("备份文件无法识别，请选择本应用导出的文件");
+    } finally {
+      elements.importDataInput.value = "";
+    }
   }
 
   function toggleVoiceInput() {
@@ -1603,6 +1832,9 @@
     elements.settingsPanel.hidden = !willOpen;
     elements.settingsButton.setAttribute("aria-expanded", String(willOpen));
   });
+  elements.exportDataButton.addEventListener("click", exportBackup);
+  elements.importDataButton.addEventListener("click", () => elements.importDataInput.click());
+  elements.importDataInput.addEventListener("change", () => importBackup(elements.importDataInput.files?.[0]));
   elements.saveSettingsButton.addEventListener("click", () => {
     if (!elements.startDate.value) return;
     if (elements.startDate.value > todayIso()) return showToast("开始日期不能晚于今天");
@@ -1616,6 +1848,12 @@
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
   elements.openHistoryButton.addEventListener("click", openHistoryPage);
   elements.closeHistoryButton.addEventListener("click", closeHistoryPage);
+  elements.historyManageButton.addEventListener("click", () => {
+    historyManageMode = !historyManageMode;
+    document.body.classList.toggle("history-manage-mode", historyManageMode);
+    elements.historyManageButton.setAttribute("aria-pressed", String(historyManageMode));
+    elements.historyManageButton.textContent = historyManageMode ? "完成管理" : "管理记录";
+  });
   elements.openDictationButton.addEventListener("click", openDictationPage);
   elements.closeDictationButton.addEventListener("click", closeDictationPage);
   elements.dictationLessonSelect.addEventListener("change", () => {
@@ -1692,6 +1930,16 @@
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
   elements.taskList.addEventListener("click", (event) => {
+    const planningButton = event.target.closest("button[data-plan-action]");
+    if (planningButton) {
+      if (planningButton.dataset.planAction === "steps") editTaskSteps(planningButton.dataset.taskId);
+      return;
+    }
+    const mealButton = event.target.closest("button[data-meal-after]");
+    if (mealButton) {
+      toggleMealAfter(mealButton.dataset.mealAfter);
+      return;
+    }
     const orderButton = event.target.closest("button[data-order-action]");
     if (orderButton) {
       moveTaskOneStep(orderButton.dataset.taskId, orderButton.dataset.orderAction === "up" ? -1 : 1);
@@ -1706,6 +1954,10 @@
     }
     const button = event.target.closest("button[data-task-action]");
     if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
+  });
+  elements.taskList.addEventListener("change", (event) => {
+    const select = event.target.closest("select[data-estimate-task-id]");
+    if (select) setTaskEstimate(select.dataset.estimateTaskId, select.value);
   });
   elements.taskList.addEventListener("pointerdown", (event) => {
     const handle = event.target.closest("[data-drag-handle]");
@@ -1775,6 +2027,7 @@
       setRecordDate(target);
       document.querySelector(".record-card").scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (action === "delete") {
+      if (!historyManageMode) return showToast("请先进入管理记录模式");
       if (!window.confirm(`确定删除 ${formatDate(date)} 的记录吗？`)) return;
       if (kind === "weekend") delete state.weekends[date];
       else delete state.records[date];
