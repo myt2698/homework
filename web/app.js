@@ -89,11 +89,13 @@
     weekendPlanHint: $("#weekendPlanHint"), saveWeekendTaskPlanButton: $("#saveWeekendTaskPlanButton"),
     weekendPenaltyButton: $("#weekendPenaltyButton"), weekendResult: $("#weekendResult"),
     weekendResultLabel: $("#weekendResultLabel"), weekendResultAmount: $("#weekendResultAmount"),
+    dailyCheckinsToggle: $("#dailyCheckinsToggle"), dailyCheckinsBody: $("#dailyCheckinsBody"),
+    dailyCheckinsSummary: $("#dailyCheckinsSummary"),
     sportCard: $("#sportCard"), sportStatus: $("#sportStatus"), sportOptions: $("#sportOptions"),
     readingButton: $("#readingButton"), readingStatus: $("#readingStatus"),
     mathThinkingButton: $("#mathThinkingButton"), mathThinkingStatus: $("#mathThinkingStatus"),
     englishReadingButton: $("#englishReadingButton"), englishReadingStatus: $("#englishReadingStatus"),
-    ledgerButton: $("#ledgerButton"), ledgerStatus: $("#ledgerStatus"),
+    ledgerButton: $("#ledgerButton"), ledgerTitle: $("#ledgerTitle"), ledgerStatus: $("#ledgerStatus"),
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryCloseButton: $("#taskEntryCloseButton"),
     taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
@@ -102,7 +104,7 @@
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
-    taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
+    taskPanel: $("#taskPanel"), taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
     taskOrderButton: $("#taskOrderButton"),
     activeTaskBanner: $("#activeTaskBanner"), activeTaskTitle: $("#activeTaskTitle"),
     activeTaskTime: $("#activeTaskTime"), taskList: $("#taskList"),
@@ -125,6 +127,7 @@
   let focusModalTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
+  let dailyCheckinsExpanded = false;
   let pointerTaskDrag = null;
   let selectedDictationLesson = DICTATION_LESSONS[0].id;
   let dictationSession = null;
@@ -451,7 +454,7 @@
     if (record?.ledgerConfirmed) return "成长记录册已补全";
     const dailyCheckins = [];
     if (sportsForRecord(record).length) dailyCheckins.push("运动");
-    if (record?.readingDone) dailyCheckins.push("阅读");
+    if (record?.readingDone) dailyCheckins.push("中文阅读");
     if (record?.mathThinkingDone) dailyCheckins.push("数学思维");
     if (record?.englishReadingDone) dailyCheckins.push("英文阅读");
     if (dailyCheckins.length) return `${dailyCheckins.join("、")}已打卡`;
@@ -513,6 +516,8 @@
 
   function setPrepState(button, selected) {
     button.setAttribute("aria-pressed", String(Boolean(selected)));
+    const action = button.querySelector(".habit-action");
+    if (action) action.textContent = selected ? "已完成" : "打卡";
   }
 
   function openWeekendPlanModal() {
@@ -846,6 +851,7 @@
     const sortingMode = canArrangeOrder && !orderSaved;
     const orderPendingWeekend = confirmed && Boolean(key && !isFriday && weekend.planSaved && !orderSaved);
     const canEnterTasks = !confirmed && canEditList && ledgerReady;
+    elements.taskPanel.hidden = !ledgerReady && !confirmed && tasks.length === 0;
     elements.taskEntryLauncher.hidden = !canEnterTasks;
     elements.taskEntry.hidden = !canEnterTasks;
     const entryStatus = tasks.length
@@ -901,12 +907,12 @@
     const progressTotal = questMode ? questTasks.length : tasks.length;
     const progressDone = questMode ? questDone.length : doneCount;
     elements.taskPanelTitle.textContent = !confirmed
-      ? ledgerReady ? tasks.length ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
+      ? ledgerReady ? tasks.length ? "作业已录入，等待确认" : "今天的作业" : "先核对今天的作业"
       : sortingMode ? "安排你的闯关顺序"
       : orderPendingWeekend ? "还差一步：确定顺序"
         : questMode ? "今天一关一关来" : "选一项，轻松开始吧";
     elements.taskPanelHelp.textContent = !confirmed
-      ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "先确认钉钉和成长记录册中的完整内容。"
+      ? ledgerReady ? tasks.length ? "检查有没有遗漏，确认后就可以安排顺序。" : "全部录好后，再一起核对。" : ""
       : sortingMode
       ? "这是你的计划，想先做哪一项由你决定。"
       : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
@@ -1057,17 +1063,27 @@
       button.setAttribute("aria-pressed", String(sports.includes(button.dataset.sport)));
     });
     elements.ledgerButton.setAttribute("aria-pressed", String(Boolean(record.ledgerConfirmed)));
+    elements.ledgerTitle.textContent = record.ledgerConfirmed
+      ? "已核对钉钉和成长记录册" : "先核对钉钉和成长记录册";
     elements.ledgerStatus.textContent = record.ledgerConfirmed
-      ? `${record.ledgerAt || "已"} 完成核对，可以录入清单` : "先确定今天全部作业，再录入清单";
+      ? `${record.ledgerAt || "已"} 完成核对，可以录入清单` : "确认今天的作业已经完整";
     setPrepState(elements.readingButton, record.readingDone);
     setPrepState(elements.mathThinkingButton, record.mathThinkingDone);
     setPrepState(elements.englishReadingButton, record.englishReadingDone);
     elements.readingStatus.textContent = record.readingDone
-      ? `${record.readingAt || "已"} 完成阅读` : "完成阅读后打卡";
+      ? `${record.readingAt || "已"} 完成中文阅读` : "完成中文阅读后打卡";
     elements.mathThinkingStatus.textContent = record.mathThinkingDone
       ? `${record.mathThinkingAt || "已"} 完成数学思维` : "完成数学思维练习后打卡";
     elements.englishReadingStatus.textContent = record.englishReadingDone
       ? `${record.englishReadingAt || "已"} 完成英文阅读` : "完成英文阅读后打卡";
+    const dailyDoneCount = Number(sports.length > 0) + Number(Boolean(record.readingDone))
+      + Number(Boolean(record.mathThinkingDone)) + Number(Boolean(record.englishReadingDone));
+    elements.dailyCheckinsToggle.setAttribute("aria-expanded", String(dailyCheckinsExpanded));
+    elements.dailyCheckinsToggle.classList.toggle("complete", dailyDoneCount === 4);
+    elements.dailyCheckinsBody.hidden = !dailyCheckinsExpanded;
+    elements.dailyCheckinsSummary.textContent = dailyDoneCount === 4
+      ? "4 / 4 已完成 · 今天也坚持下来啦"
+      : `${dailyDoneCount} / 4 已完成 · ${dailyDoneCount ? "继续加油" : "完成作业后再来打卡"}`;
 
     const result = weekendMode && !includeDailyInLedger(date, record) ? null : resultFor(record);
     elements.dayResult.hidden = !result;
@@ -1656,12 +1672,17 @@
   });
   elements.saveWeekendTaskPlanButton.addEventListener("click", saveWeekendTaskPlan);
   elements.weekendPenaltyButton.addEventListener("click", toggleWeekendPenalty);
+  elements.dailyCheckinsToggle.addEventListener("click", () => {
+    dailyCheckinsExpanded = !dailyCheckinsExpanded;
+    elements.dailyCheckinsToggle.setAttribute("aria-expanded", String(dailyCheckinsExpanded));
+    elements.dailyCheckinsBody.hidden = !dailyCheckinsExpanded;
+  });
   elements.sportOptions.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-sport]");
     if (button) toggleSport(button.dataset.sport);
   });
   elements.ledgerButton.addEventListener("click", () => togglePrep("ledgerConfirmed", "ledgerAt", "成长记录册状态已更新"));
-  elements.readingButton.addEventListener("click", () => togglePrep("readingDone", "readingAt", "阅读打卡状态已更新"));
+  elements.readingButton.addEventListener("click", () => togglePrep("readingDone", "readingAt", "中文阅读状态已更新"));
   elements.mathThinkingButton.addEventListener("click", () => togglePrep("mathThinkingDone", "mathThinkingAt", "数学思维状态已更新"));
   elements.englishReadingButton.addEventListener("click", () => togglePrep("englishReadingDone", "englishReadingAt", "英文阅读状态已更新"));
   elements.voiceTaskButton.addEventListener("click", toggleVoiceInput);
