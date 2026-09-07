@@ -734,7 +734,7 @@ public class MainActivity extends Activity {
         LinearLayout stats = horizontal();
         completedDaysView = addStat(stats, "0", "认真完成");
         rewardDaysView = addStat(stats, "0", "收获奖励");
-        deductionView = addStat(stats, "¥0.00", "需要加油");
+        deductionView = addStat(stats, "¥0.00", "扣减合计");
         card.addView(stats, matchWrap());
 
         return card;
@@ -999,7 +999,7 @@ public class MainActivity extends Activity {
         dailyCheckinsToggle.addView(spaceHorizontal(10));
         LinearLayout dailyCopy = vertical();
         dailyCopy.addView(text("今日习惯", 14, INK, true));
-        dailyCheckinsSummaryView = text("0 / 4 已完成 · 完成作业后再来打卡", 10, MUTED, false);
+        dailyCheckinsSummaryView = text("0 / 4 已完成 · 我做完作业再来打卡", 10, MUTED, false);
         dailyCheckinsSummaryView.setPadding(0, dp(3), 0, 0);
         dailyCopy.addView(dailyCheckinsSummaryView);
         dailyCheckinsToggle.addView(dailyCopy, weightedWrap(1));
@@ -1133,9 +1133,9 @@ public class MainActivity extends Activity {
         TextView kicker = text("作业清单", 10, GREEN, true);
         kicker.setLetterSpacing(0.1f);
         copy.addView(kicker);
-        taskPanelTitleView = text("选一项，轻松开始吧", 17, INK, true);
+        taskPanelTitleView = text("我选一项，轻松开始！", 17, INK, true);
         copy.addView(taskPanelTitleView);
-        taskPanelHelpView = text("一次专心做一项，每完成一项都很棒！", 10, MUTED, false);
+        taskPanelHelpView = text("我一次专心做一项，每完成一项都在前进！", 10, MUTED, false);
         taskPanelHelpView.setPadding(0, dp(4), 0, 0);
         copy.addView(taskPanelHelpView);
         head.addView(copy, weightedWrap(1));
@@ -1975,7 +1975,7 @@ public class MainActivity extends Activity {
         started.setGravity(Gravity.CENTER);
         started.setPadding(0, dp(12), 0, 0);
         content.addView(started);
-        TextView reminder = text("专心完成这一项，你已经开始得很棒啦！", 11, MUTED, false);
+        TextView reminder = text("我先做好这一项，完成后再去下一关！", 11, MUTED, false);
         reminder.setGravity(Gravity.CENTER);
         reminder.setPadding(0, dp(16), 0, dp(4));
         content.addView(reminder);
@@ -2143,7 +2143,7 @@ public class MainActivity extends Activity {
         completedTasksExpanded = false;
         saveTaskData();
         renderAll();
-        toast(weekendKey == null ? "顺序已确定，开始第一关吧！" : "周末闯关顺序已确定！");
+        toast(weekendKey == null ? "顺序已确定，我要开始第一关啦！" : "周末闯关顺序已确定！");
     }
 
     private void reorderTask(int fromIndex, int targetIndex) {
@@ -2268,12 +2268,12 @@ public class MainActivity extends Activity {
                 : progressDone + " / " + progressTotal + " 项完成");
         taskPanelTitleView.setText(!confirmed
                 ? ledgerReady ? tasks.length() > 0 ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
-                : sortingMode ? "安排你的闯关顺序"
+                : sortingMode ? "安排我的闯关顺序"
                 : orderPendingWeekend ? "还差一步：确定顺序"
                 : "作业清单");
         taskPanelHelpView.setText(!confirmed
                 ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "先确认钉钉和成长记录册中的完整内容。"
-                : sortingMode ? "这是你的计划，想先做哪一项由你决定。"
+                : sortingMode ? "这是我的计划，我可以决定先做哪一项。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : "");
         taskPanelTitleView.setVisibility(questMode ? View.GONE : View.VISIBLE);
@@ -2785,11 +2785,11 @@ public class MainActivity extends Activity {
         TextView icon = text("🎉", 32, INK, false);
         icon.setGravity(Gravity.CENTER);
         victory.addView(icon);
-        TextView title = text("太棒了，全部通关！", 16, Color.rgb(114, 83, 28), true);
+        TextView title = text("我全部通关啦！", 16, Color.rgb(114, 83, 28), true);
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, dp(5), 0, 0);
         victory.addView(title);
-        TextView detail = text("看起来很多的作业，也被你一项一项完成啦。", 10, MUTED, false);
+        TextView detail = text("看起来很多的作业，也被我一项一项完成啦。", 10, MUTED, false);
         detail.setGravity(Gravity.CENTER);
         detail.setPadding(0, dp(5), 0, 0);
         victory.addView(detail);
@@ -3265,7 +3265,7 @@ public class MainActivity extends Activity {
         } else if ("pause".equals(action)) {
             stopTaskClock(task, "paused");
             dismissTaskFocusDialog();
-            toast("已暂停，可以休息或选择下一项");
+            toast("我先暂停一下，可以休息或选择下一项");
         } else if ("complete".equals(action)) {
             JSONObject step = currentTaskStep(task);
             if (step != null) {
@@ -3331,10 +3331,10 @@ public class MainActivity extends Activity {
                     if ("done".equals(todayTask.optString("status"))) todayDone++;
                 }
                 int remaining = Math.max(0, todayTotal - todayDone);
-                if (remaining == 0) toast("今天安排的作业已通关，太棒了！");
-                else if (remaining <= 2) toast("太棒了，快到终点了，只剩 " + remaining + " 项！");
-                else if (todayDone >= Math.ceil(todayTotal / 2.0)) toast("成功闯过一关，已经完成一半多啦！");
-                else toast("成功闯过一关！已经完成 " + todayDone + " 项");
+                if (remaining == 0) toast("我完成今天安排的作业啦！");
+                else if (remaining <= 2) toast("我快到终点了，只剩 " + remaining + " 项！");
+                else if (todayDone >= Math.ceil(todayTotal / 2.0)) toast("我又闯过一关，已经完成一半多啦！");
+                else toast("我又闯过一关！已经完成 " + todayDone + " 项");
             }
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
@@ -3528,7 +3528,7 @@ public class MainActivity extends Activity {
         LinearLayout headerCopy = vertical();
         headerCopy.addView(text("🔊 四上语文词语表", 10, GREEN, true));
         headerCopy.addView(text("听写练习", 25, GREEN_DARK, true));
-        TextView cheer = text("选好课程，放下手机，认真听写吧。", 10, MUTED, false);
+        TextView cheer = text("我选好课程，放下手机，认真听写。", 10, MUTED, false);
         cheer.setPadding(0, dp(3), 0, 0);
         headerCopy.addView(cheer);
         header.addView(headerCopy, weightedWrap(1));
@@ -3608,7 +3608,7 @@ public class MainActivity extends Activity {
         hiddenTitle.setGravity(Gravity.CENTER);
         hiddenTitle.setPadding(0, dp(7), 0, 0);
         dictationHiddenWords.addView(hiddenTitle);
-        TextView hiddenHelp = text("专心听，不偷看，写完后再核对。", 10, MUTED, false);
+        TextView hiddenHelp = text("我专心听，不偷看，写完再核对。", 10, MUTED, false);
         hiddenHelp.setGravity(Gravity.CENTER);
         hiddenHelp.setPadding(0, dp(4), 0, 0);
         dictationHiddenWords.addView(hiddenHelp);
@@ -4117,10 +4117,10 @@ public class MainActivity extends Activity {
         dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在播放家长录音第 "
                 + repeatNumber + " 遍");
         dictationTimingView.setText(repeatNumber == 1
-                ? "认真听，1秒后会再播放一遍。"
+                ? "我要认真听，1秒后会再播放一遍。"
                 : activeDictationIndex + 1 >= activeDictationWords.size()
-                ? "这是最后一个词，写完就可以核对啦。"
-                : "写下这个词，" + (nextWordGap / 1000) + "秒后进入下一个。");
+                ? "这是最后一个词，我写完就可以核对啦。"
+                : "我写下这个词，" + (nextWordGap / 1000) + "秒后进入下一个。");
         setDictationProgress(activeDictationIndex, activeDictationWords.size(), activeDictationIndex + 1);
         playDictationWordRecording(word);
     }
@@ -4203,10 +4203,10 @@ public class MainActivity extends Activity {
         releaseDictationMediaPlayer();
         renderDictationPage();
         dictationStatusView.setText(completed ? "听写完成，共 " + total + " 个词语！" : "听写已停止");
-        dictationTimingView.setText(completed ? "太棒了，现在可以打开词语表自己核对。" : "可以重新选择课程，准备好后再次开始。");
+        dictationTimingView.setText(completed ? "太棒了，我可以打开词语表自己核对啦！" : "可以重新选择课程，准备好后再次开始。");
         setDictationProgress(completedCount, total, -1);
         activeDictationWords.clear();
-        if (completed && notify) toast("听写完成，认真核对一下吧");
+        if (completed && notify) toast("听写完成，我来认真核对一下");
     }
 
     private void showDictationPage() {
@@ -4244,7 +4244,7 @@ public class MainActivity extends Activity {
         LinearLayout copy = vertical();
         copy.addView(text("🌈 每一步都算数", 10, GREEN, true));
         copy.addView(text("成长足迹", 25, GREEN_DARK, true));
-        TextView cheer = text("回头看看，你已经完成了很多关。", 10, MUTED, false);
+        TextView cheer = text("回头看看，我已经完成了很多关。", 10, MUTED, false);
         cheer.setPadding(0, dp(3), 0, 0);
         copy.addView(cheer);
         header.addView(copy, weightedWrap(1));
@@ -4263,7 +4263,7 @@ public class MainActivity extends Activity {
         content.addView(space(14));
         content.addView(buildHistoryCard());
         content.addView(space(16));
-        TextView footer = text("🌱 每一条记录，都是认真坚持的证明", 11, MUTED, true);
+        TextView footer = text("🌱 每一条记录，都是我认真坚持的证明", 11, MUTED, true);
         footer.setGravity(Gravity.CENTER);
         content.addView(footer, matchWrap());
         return scroll;
@@ -4306,7 +4306,7 @@ public class MainActivity extends Activity {
         card.addView(title);
         historyList = vertical();
         card.addView(historyList, matchWrap());
-        emptyHistoryView = text("🌟\n新的成长旅程要开始啦\n完成第一份作业后，这里会留下你的进步。", 13, MUTED, false);
+        emptyHistoryView = text("🌟\n新的成长旅程要开始啦\n完成第一份作业后，这里会留下我的进步。", 13, MUTED, false);
         emptyHistoryView.setGravity(Gravity.CENTER);
         emptyHistoryView.setLineSpacing(dp(4), 1f);
         emptyHistoryView.setPadding(dp(6), dp(28), dp(6), dp(20));
@@ -4332,7 +4332,7 @@ public class MainActivity extends Activity {
         weeklyEstimatedTimeView = addWeeklyReviewStat(stats, "预计用时");
         weeklyActualTimeView = addWeeklyReviewStat(stats, "实际用时");
         review.addView(stats, matchWrap());
-        weeklyReviewInsightView = text("完成几项作业后，这里会帮助你了解自己的时间。", 11, MUTED, false);
+        weeklyReviewInsightView = text("完成几项作业后，我就能更了解自己的时间。", 11, MUTED, false);
         weeklyReviewInsightView.setPadding(0, dp(13), 0, 0);
         review.addView(weeklyReviewInsightView);
         return review;
@@ -4747,7 +4747,7 @@ public class MainActivity extends Activity {
         boolean tasksConfirmed = taskListConfirmed();
         boolean tasksDone = allTasksDone();
         recordHeadingView.setText(currentDate.equals(todayIso())
-                ? "今天也一起加油吧！" : formatShortDate(currentDate) + "的记录");
+                ? "今天我也会一步一步完成！" : formatShortDate(currentDate) + "的记录");
         finishLabelView.setText(weekendMode ? "结束今日时段" : "全部完成");
         startLabelView.setText(weekendMode ? "开始本段作业" : "开始饭前作业");
         dinnerLabelView.setText(weekendMode ? "暂停休息" : "吃饭暂停");
@@ -4790,9 +4790,9 @@ public class MainActivity extends Activity {
         int dailyDoneCount = (sportDone ? 1 : 0) + (readingDone ? 1 : 0)
                 + (mathThinkingDone ? 1 : 0) + (englishReadingDone ? 1 : 0);
         dailyCheckinsSummaryView.setText(dailyDoneCount == 4
-                ? "4 / 4 已完成 · 今天也坚持下来啦"
+                ? "4 / 4 已完成 · 我今天也坚持下来啦"
                 : dailyDoneCount + " / 4 已完成 · "
-                + (dailyDoneCount > 0 ? "继续加油" : "完成作业后再来打卡"));
+                + (dailyDoneCount > 0 ? "我再完成一项" : "我做完作业再来打卡"));
         dailyCheckinsToggle.setBackground(rounded(dailyDoneCount == 4
                         ? Color.rgb(239, 251, 247) : Color.rgb(248, 251, 255),
                 17, dailyDoneCount == 4 ? Color.rgb(159, 214, 197) : LINE, 1));
@@ -5014,19 +5014,19 @@ public class MainActivity extends Activity {
         weeklyEstimatedTimeView.setText(estimated + " 分钟");
         weeklyActualTimeView.setText(actual + " 分钟");
         if (completed == 0) {
-            weeklyReviewInsightView.setText("完成几项作业后，这里会帮助你了解自己的时间。");
+            weeklyReviewInsightView.setText("完成几项作业后，我就能更了解自己的时间。");
             return;
         }
         int difference = actual - estimated;
         int tolerance = Math.max(5, Math.round(estimated * 0.2f));
         if (Math.abs(difference) <= tolerance) {
-            weeklyReviewInsightView.setText("这周的预计时间和实际时间很接近，估时越来越准了。");
+            weeklyReviewInsightView.setText("这周的预计时间和实际时间很接近，我估得越来越准了。");
         } else if (difference > 0) {
-            weeklyReviewInsightView.setText("完成这些作业比预计多用了 " + difference
-                    + " 分钟，下次可以给长作业多留一点时间。");
+            weeklyReviewInsightView.setText("这些作业比预计多用了 " + difference
+                    + " 分钟，下次我要给长作业多留一点时间。");
         } else {
-            weeklyReviewInsightView.setText("完成这些作业比预计少用了 " + Math.abs(difference)
-                    + " 分钟，你对自己的速度越来越了解了。");
+            weeklyReviewInsightView.setText("这些作业比预计少用了 " + Math.abs(difference)
+                    + " 分钟，我越来越了解自己的速度了。");
         }
     }
 

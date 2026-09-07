@@ -532,16 +532,16 @@
     elements.weeklyEstimatedTime.textContent = `${estimated} 分钟`;
     elements.weeklyActualTime.textContent = `${actual} 分钟`;
     if (!completed.length) {
-      elements.weeklyReviewInsight.textContent = "完成几项作业后，这里会帮助你了解自己的时间。";
+      elements.weeklyReviewInsight.textContent = "完成几项作业后，我就能更了解自己的时间。";
       return;
     }
     const difference = actual - estimated;
     const tolerance = Math.max(5, Math.round(estimated * 0.2));
     elements.weeklyReviewInsight.textContent = Math.abs(difference) <= tolerance
-      ? "这周的预计时间和实际时间很接近，估时越来越准了。"
+      ? "这周的预计时间和实际时间很接近，我估得越来越准了。"
       : difference > 0
-        ? `完成这些作业比预计多用了 ${difference} 分钟，下次可以给长作业多留一点时间。`
-        : `完成这些作业比预计少用了 ${Math.abs(difference)} 分钟，你对自己的速度越来越了解了。`;
+        ? `这些作业比预计多用了 ${difference} 分钟，下次我要给长作业多留一点时间。`
+        : `这些作业比预计少用了 ${Math.abs(difference)} 分钟，我越来越了解自己的速度了。`;
   }
 
   function latestStatus(record) {
@@ -751,10 +751,10 @@
     const total = session?.words.length || dictationWordsForLesson().length;
     elements.dictationStatus.dataset.result = "true";
     elements.dictationStatus.textContent = completed ? `听写完成，共 ${total} 个词语！` : "听写已停止";
-    elements.dictationTimingHint.textContent = completed ? "太棒了，现在可以打开词语表自己核对。" : "可以重新选择课程，准备好后再次开始。";
+    elements.dictationTimingHint.textContent = completed ? "太棒了，我可以打开词语表自己核对啦！" : "可以重新选择课程，准备好后再次开始。";
     setDictationProgress(completed ? total : session?.index || 0, total);
     renderDictation();
-    if (notify && completed) showToast("听写完成，认真核对一下吧");
+    if (notify && completed) showToast("听写完成，我来认真核对一下");
   }
 
   function speakCurrentDictationWord() {
@@ -769,10 +769,10 @@
     utterance.pitch = 1;
     elements.dictationStatus.textContent = `第 ${session.index + 1} 个词语 · 正在朗读第 ${repeatNumber} 遍`;
     elements.dictationTimingHint.textContent = repeatNumber === 1
-      ? "听清楚，1秒后会再读一遍。"
+      ? "我要听清楚，1秒后会再读一遍。"
       : session.index + 1 >= session.words.length
-        ? "这是最后一个词，写完就可以核对啦。"
-        : `写下这个词，${nextWordGap / 1000}秒后进入下一个。`;
+        ? "这是最后一个词，我写完就可以核对啦。"
+        : `我写下这个词，${nextWordGap / 1000}秒后进入下一个。`;
     setDictationProgress(session.index, session.words.length, session.index + 1);
     utterance.onend = () => {
       if (dictationSession !== session || !session.running) return;
@@ -1036,15 +1036,15 @@
     const progressDone = questMode ? questDone.length : doneCount;
     elements.taskPanelTitle.textContent = !confirmed
       ? ledgerReady ? tasks.length ? "作业已录入，等待确认" : "今天的作业" : "先核对今天的作业"
-      : sortingMode ? "安排你的闯关顺序"
+      : sortingMode ? "安排我的闯关顺序"
       : orderPendingWeekend ? "还差一步：确定顺序"
-        : "选一项，轻松开始吧";
+        : "我选一项，轻松开始！";
     elements.taskPanelHelp.textContent = !confirmed
       ? ledgerReady ? tasks.length ? "检查有没有遗漏，确认后就可以安排顺序。" : "全部录好后，再一起核对。" : ""
       : sortingMode
-      ? "这是你的计划，想先做哪一项由你决定。"
+      ? "这是我的计划，我可以决定先做哪一项。"
       : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
-        : "一次专心做一项，每完成一项都很棒！";
+        : "我一次专心做一项，每完成一项都在前进！";
     elements.taskPanelTitle.hidden = questMode;
     elements.taskPanelHelp.hidden = questMode;
     elements.taskSummary.textContent = !confirmed && tasks.length
@@ -1172,7 +1172,7 @@
       const completedHtml = questDone.length
         ? `<button class="quest-toggle" type="button" data-list-toggle="completed">${completedTasksExpanded ? "收起已完成作业" : `看看闯过的 ${questDone.length} 关`} <span>${completedTasksExpanded ? "⌃" : "⌄"}</span></button>
           ${completedTasksExpanded ? `<div class="quest-collapsed-list">${questDone.map((task) => taskCard(task, { compact: true })).join("")}</div>` : ""}` : "";
-      elements.taskList.innerHTML = `${progressHtml}<div class="quest-victory"><span>🎉</span><strong>太棒了，全部通关！</strong><small>看起来很多的作业，也被你一项一项完成啦。</small></div>${completedHtml}`;
+      elements.taskList.innerHTML = `${progressHtml}<div class="quest-victory"><span>🎉</span><strong>我全部通关啦！</strong><small>看起来很多的作业，也被我一项一项完成啦。</small></div>${completedHtml}`;
       return;
     }
 
@@ -1192,7 +1192,7 @@
     const record = currentRecord() || {};
     const weekendMode = Boolean(weekendKeyFor(date));
     elements.recordHeading.textContent = date === todayIso()
-      ? "今天也一起加油吧！"
+      ? "今天我也会一步一步完成！"
       : `${formatDate(date)}的记录`;
     const key = weekendKeyFor(date);
     elements.ledgerButton.hidden = Boolean(key && date !== key);
@@ -1223,8 +1223,8 @@
     elements.dailyCheckinsToggle.classList.toggle("complete", dailyDoneCount === 4);
     elements.dailyCheckinsBody.hidden = !dailyCheckinsExpanded;
     elements.dailyCheckinsSummary.textContent = dailyDoneCount === 4
-      ? "4 / 4 已完成 · 今天也坚持下来啦"
-      : `${dailyDoneCount} / 4 已完成 · ${dailyDoneCount ? "继续加油" : "完成作业后再来打卡"}`;
+      ? "4 / 4 已完成 · 我今天也坚持下来啦"
+      : `${dailyDoneCount} / 4 已完成 · ${dailyDoneCount ? "我再完成一项" : "我做完作业再来打卡"}`;
 
     const result = weekendMode && !includeDailyInLedger(date, record) ? null : resultFor(record);
     elements.dayResult.hidden = !result;
@@ -1539,7 +1539,7 @@
     completedTasksExpanded = false;
     persist();
     render();
-    showToast(key ? "周末闯关顺序已确定！" : "顺序已确定，开始第一关吧！");
+    showToast(key ? "周末闯关顺序已确定！" : "顺序已确定，我要开始第一关啦！");
   }
 
   function reorderTask(sourceId, targetId) {
@@ -1640,7 +1640,7 @@
     } else if (action === "pause") {
       stopTaskClock(task, "paused");
       closeFocusModal();
-      showToast("已暂停，可以休息或选择下一项");
+      showToast("我先暂停一下，可以休息或选择下一项");
     } else if (action === "complete") {
       const step = currentTaskStep(task);
       if (step) {
@@ -1690,10 +1690,10 @@
                 && (item.status !== "done" || item.completedDate === date)));
         const todayDone = todayTasks.filter((item) => item.status === "done").length;
         const remaining = Math.max(0, todayTasks.length - todayDone);
-        if (remaining === 0) showToast("今天安排的作业已通关，太棒了！");
-        else if (remaining <= 2) showToast(`太棒了，快到终点了，只剩 ${remaining} 项！`);
-        else if (todayDone >= Math.ceil(todayTasks.length / 2)) showToast("成功闯过一关，已经完成一半多啦！");
-        else showToast(`成功闯过一关！已经完成 ${todayDone} 项`);
+        if (remaining === 0) showToast("我完成今天安排的作业啦！");
+        else if (remaining <= 2) showToast(`我快到终点了，只剩 ${remaining} 项！`);
+        else if (todayDone >= Math.ceil(todayTasks.length / 2)) showToast("我又闯过一关，已经完成一半多啦！");
+        else showToast(`我又闯过一关！已经完成 ${todayDone} 项`);
       }
     } else if (action === "undo") {
       task.status = "paused";
