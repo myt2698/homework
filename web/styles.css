@@ -826,13 +826,26 @@ body.modal-open { overflow: hidden; }
 .dictation-lesson-row select { width: 100%; margin-top: 7px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; outline: none; color: var(--ink); background: #fff; font: inherit; }
 .dictation-lesson-row select:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
 .dictation-lesson-row > strong { padding: 7px 11px; border-radius: 999px; color: #356bcf; background: var(--green-soft); font-size: .75rem; white-space: nowrap; }
+.dictation-lesson-navigation { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.dictation-lesson-navigation button { width: 100%; min-width: 0; }
+.dictation-lesson-navigation button:disabled { opacity: .45; cursor: not-allowed; }
 .dictation-word-bank { padding: 18px; border: 1px solid var(--line); border-radius: 19px; background: #f8fbff; }
 .dictation-section-heading { display: flex; justify-content: space-between; gap: 14px; align-items: flex-end; }
 .dictation-section-heading small { max-width: 290px; color: var(--muted); font-size: .68rem; line-height: 1.45; text-align: right; }
-.dictation-words { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; }
-.dictation-word { display: inline-flex; min-height: 35px; padding: 7px 10px; border: 1px solid #c7d8f5; border-radius: 999px; align-items: center; gap: 6px; color: #34547f; background: #fff; font-size: .79rem; font-weight: 700; }
-.dictation-word.custom { border-color: #a8dcc9; color: #377e68; background: #f0fbf7; }
-.dictation-word button { display: grid; width: 19px; height: 19px; padding: 0; border: 0; border-radius: 50%; place-items: center; color: #557a6f; background: #dcefe8; font: inherit; font-size: .8rem; cursor: pointer; }
+.dictation-words { display: grid; gap: 8px; margin-top: 15px; }
+.dictation-word { display: flex; min-height: 66px; padding: 10px; border: 1px solid #c7d8f5; border-radius: 14px; align-items: center; justify-content: space-between; gap: 12px; color: #34547f; background: #fff; }
+.dictation-word.custom { border-color: #a8dcc9; background: #f0fbf7; }
+.dictation-word-info { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.dictation-word-number { display: grid; width: 28px; height: 30px; flex: 0 0 auto; border-radius: 9px; place-items: center; color: #356bcf; background: var(--green-soft); font-size: .7rem; font-weight: 800; }
+.dictation-word-copy { display: grid; gap: 2px; }
+.dictation-word-copy strong { color: var(--ink); font-size: .84rem; }
+.dictation-word-copy small { color: var(--muted); font-size: .68rem; }
+.dictation-word.custom .dictation-word-number { color: #377e68; background: #dcefe8; }
+.dictation-word-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 5px; }
+.dictation-word-actions button { min-width: 52px; min-height: 32px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--green); background: #fff; font: inherit; font-size: .68rem; font-weight: 800; cursor: pointer; }
+.dictation-word-actions button.primary { border-color: var(--green); color: #fff; background: var(--green); }
+.dictation-word-actions button.danger { border-color: #eb9494; color: var(--red); background: #fff4f4; }
+.dictation-word-actions button:disabled { opacity: .42; cursor: not-allowed; }
 .dictation-add-row { display: flex; gap: 8px; margin-top: 16px; }
 .dictation-add-row input { min-width: 0; flex: 1; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; outline: none; color: var(--ink); background: #fff; }
 .dictation-add-row input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
@@ -1026,6 +1039,9 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .dictation-section-heading small { max-width: none; text-align: left; }
   .dictation-add-row, .dictation-actions { flex-direction: column; }
   .dictation-add-row button, .dictation-actions button { width: 100%; }
+  .dictation-word { align-items: stretch; flex-direction: column; }
+  .dictation-word-actions { flex-wrap: wrap; }
+  .dictation-word-actions button { flex: 1; }
   .quest-section-title { align-items: flex-start; flex-direction: column; gap: 2px; }
   .quest-current-card { padding: 12px 11px; }
 }

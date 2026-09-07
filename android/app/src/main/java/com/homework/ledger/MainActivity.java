@@ -71,6 +71,7 @@ public class MainActivity extends Activity {
     private static final String KEY_RECORDS = "records";
     private static final String KEY_WEEKENDS = "weekends";
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
+    private static final String KEY_DICTATION_LESSON = "dictation_lesson";
     private static final String KEY_BREAK_SESSION = "break_session";
     private static final int EXPORT_BACKUP_REQUEST = 301;
     private static final int IMPORT_BACKUP_REQUEST = 302;
@@ -79,29 +80,33 @@ public class MainActivity extends Activity {
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
     private static final int[] ESTIMATE_OPTIONS = {5, 10, 15, 20, 30};
     private static final String DICTATION_VOICE_GUIDANCE =
-            "使用家长逐词录制的人声；每个词连续播放两遍，两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
+            "使用逐词人工录制的语音；每个词连续播放两遍，两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
     private static final String[][] DICTATION_LESSONS = {
-            {"lesson-1", "第1课", "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波"},
-            {"lesson-2", "第2课", "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡"},
-            {"lesson-4", "第4课", "暖洋洋 舒适 揭晓 身份 暖和 的确 曾经 打滚 水沟 注视"},
-            {"lesson-5", "第5课", "蚊子 即使 问题 绳子 苍蝇 证明 相互 配合 研究 类似 能够"},
-            {"lesson-6", "第6课", "帽子 脑袋 舒服 假如 设法 懂事 一溜烟 各式各样 摆放 玻璃"},
-            {"garden-2", "语文园地二", "提纲 生锈 泡沫 综合 氧气 结账 矿物 俱乐部"},
-            {"lesson-9", "第9课", "爬山虎 操场 嫩绿 新鲜 均匀 空隙 叶柄 触角 弯曲 痕迹 瞧不起 牢固"},
-            {"lesson-10", "第10课", "住宅 选择 住址 大厅 柔弱 平坦 光滑 修理 重要 增长"},
-            {"lesson-11", "第11课", "宇宙 黑乎乎 翻身 下降 精疲力竭 飘动 照耀 四肢 奔流不息 茂盛 整个"},
-            {"lesson-13", "第13课", "喷射 气急败坏 严厉 立即 执行 敬佩 坚定 忍受 遭受 尽管 屈服 肝脏 获得"},
+            {"lesson-1", "第1课", "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波 随时 河堤 拥堵 高墙"},
+            {"lesson-2", "第2课", "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡 安静 熟人 躺倒"},
+            {"lesson-4", "第4课", "暖洋洋 舒适 揭晓 身份 暖和 的确 曾经 打滚 水沟 注视 涨红 滚动 滑落 擦洗 探望 头昏脑涨"},
+            {"lesson-5", "第5课", "蚊子 即使 问题 绳子 苍蝇 证明 相互 配合 研究 类似 能够 嘴巴 驾驶"},
+            {"lesson-6", "第6课", "帽子 脑袋 舒服 假如 设法 懂事 一溜烟 各式各样 摆放 玻璃 纽扣 折扣 圆筒"},
+            {"garden-2", "语文园地二", "提纲 生锈 泡沫 综合 氧气 结账 矿物 俱乐部 揍人 挨揍"},
+            {"lesson-8", "第8课", "残留 铺床 墙壁 横线 侧面 山峰 庐山 缘分 投降 评论 文章 服输"},
+            {"lesson-9", "第9课", "爬山虎 操场 嫩绿 新鲜 均匀 空隙 叶柄 触角 弯曲 痕迹 瞧不起 牢固 脚步 鲜嫩"},
+            {"lesson-10", "第10课", "住宅 选择 住址 大厅 柔弱 平坦 光滑 修理 重要 增长 丝毫 专家 比较 后腿"},
+            {"lesson-11", "第11课", "宇宙 黑乎乎 翻身 下降 精疲力竭 飘动 照耀 四肢 奔流不息 茂盛 整个 苏醒 缓慢 踏步 丈量 撑船 万丈"},
+            {"lesson-12", "第12课", "填空 帝国 或曰 女娃 衔接"},
+            {"lesson-13", "第13课", "喷射 气急败坏 严厉 立即 执行 敬佩 坚定 忍受 遭受 尽管 屈服 肝脏 获得 颗粒 既然"},
             {"garden-4", "语文园地四", "花卉 玫瑰 牡丹 花蕾 茉莉 海棠"},
-            {"lesson-15", "第15课", "麻雀 悄悄 猛烈 无可奈何 身躯 掩护 紧张 浑身 牺牲 庞大 强大 力量 勇气"},
-            {"lesson-16", "第16课", "石级 发颤 年纪 奋力 猴子 纪念 笑呵呵 鼓舞"},
-            {"lesson-17", "第17课", "崇山峻岭 盘旋 扩建 修筑 平整 打仗 自然 当地 耗费 大量 智慧 工程 奇迹"},
-            {"lesson-18", "第18课", "柱子 栏杆 人物 神清气爽 建筑 耸立 半山腰 金碧辉煌 镜子 隐隐约约 游人 狮子 姿态"},
-            {"garden-5", "语文园地六", "陵寝 景观 丝绸"},
-            {"lesson-20", "第20课", "虽然 拳头 故意 神气 忙乱 鞋子 助威 胳膊 纷纷 可笑 无缘无故"},
-            {"lesson-21", "第21课", "文艺 表演 角色 排练 主意 通情达理 充分 提示 演技 撤换 等候 哄堂大笑 垂头丧气"},
-            {"garden-6", "语文园地七", "韭菜 芹菜 辣椒 红薯 莲藕 芋头"},
-            {"lesson-24", "第24课", "主席 举行 心情 补充 激动 状态 奉献 运动员 训练 建设 勤劳 邀请"},
-            {"lesson-25", "第25课", "崛起 严肃 干脆 默默 若有所思 清晰 离开 随便 忘怀 非凡 惩处 训斥 燃烧 响亮"}
+            {"lesson-15", "第15课", "麻雀 悄悄 猛烈 无可奈何 身躯 掩护 紧张 浑身 牺牲 庞大 强大 力量 勇气 嗅觉"},
+            {"lesson-16", "第16课", "石级 发颤 年纪 奋力 猴子 纪念 笑呵呵 鼓舞 陡坡 铁链 好哩 攀登 好啦"},
+            {"lesson-17", "第17课", "崇山峻岭 盘旋 扩建 修筑 平整 打仗 自然 当地 耗费 大量 智慧 工程 奇迹 城砖 间隔 扶手"},
+            {"lesson-18", "第18课", "柱子 栏杆 人物 神清气爽 建筑 耸立 半山腰 金碧辉煌 镜子 隐隐约约 游人 狮子 姿态 围绕 栽种 幅度"},
+            {"garden-5", "语文园地六", "陵寝 景观 丝绸 拉萨 昭告 都江堰 尼龙 走廊"},
+            {"lesson-20", "第20课", "虽然 拳头 故意 神气 忙乱 鞋子 助威 胳膊 纷纷 可笑 无缘无故 白鹅 骑车 竟然 胸口 拖地 拖拉 把握 摔倒"},
+            {"lesson-21", "第21课", "文艺 表演 角色 排练 主意 通情达理 充分 提示 演技 撤换 等候 哄堂大笑 垂头丧气 我们俩 吹捧 推广"},
+            {"lesson-23", "第23课", "戎马 诸多 诸位 竞争 竞赛 唯一"},
+            {"garden-6", "语文园地七", "韭菜 芹菜 辣椒 红薯 莲藕 芋头 大蒜 生姜"},
+            {"lesson-24", "第24课", "主席 举行 心情 补充 激动 状态 奉献 运动员 训练 建设 勤劳 邀请 抛弃 万亿"},
+            {"lesson-25", "第25课", "崛起 严肃 干脆 默默 若有所思 清晰 离开 随便 忘怀 非凡 惩处 训斥 燃烧 响亮"},
+            {"lesson-27", "第27课", "词语 葡萄 水杯 秦朝 将领 杰出 鬼怪 雄伟 项目"}
     };
     private static final int RECORD_AUDIO_PERMISSION_REQUEST = 201;
     private static final int DICTATION_RECORD_AUDIO_PERMISSION_REQUEST = 202;
@@ -166,6 +171,8 @@ public class MainActivity extends Activity {
     private TextToSpeech breakAlarmTts;
 
     private Button dictationLessonButton;
+    private Button dictationPreviousLessonButton;
+    private Button dictationNextLessonButton;
     private TextView dictationLessonCountView;
     private TextView dictationLessonTitleView;
     private LinearLayout dictationWordBank;
@@ -513,6 +520,13 @@ public class MainActivity extends Activity {
         weekends = readJson(KEY_WEEKENDS);
         dictationCustomWords = readJson(KEY_DICTATION_CUSTOM);
         breakSession = readJson(KEY_BREAK_SESSION);
+        String savedDictationLesson = preferences.getString(KEY_DICTATION_LESSON, DICTATION_LESSONS[0][0]);
+        for (int index = 0; index < DICTATION_LESSONS.length; index++) {
+            if (DICTATION_LESSONS[index][0].equals(savedDictationLesson)) {
+                selectedDictationLessonIndex = index;
+                break;
+            }
+        }
         currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
 
         breakAlarmTts = new TextToSpeech(this, status -> {
@@ -3872,15 +3886,27 @@ public class MainActivity extends Activity {
         lessonRow.addView(dictationLessonCountView);
         card.addView(lessonRow, matchWrap());
 
+        LinearLayout lessonNavigation = horizontal();
+        dictationPreviousLessonButton = smallButton("← 上一课");
+        dictationPreviousLessonButton.setOnClickListener(v -> selectDictationLesson(selectedDictationLessonIndex - 1));
+        lessonNavigation.addView(dictationPreviousLessonButton, weightedFixed(1, dp(42)));
+        lessonNavigation.addView(spaceHorizontal(8));
+        dictationNextLessonButton = smallButton("下一课 →");
+        dictationNextLessonButton.setOnClickListener(v -> selectDictationLesson(selectedDictationLessonIndex + 1));
+        lessonNavigation.addView(dictationNextLessonButton, weightedFixed(1, dp(42)));
+        LinearLayout.LayoutParams lessonNavigationParams = matchWrap();
+        lessonNavigationParams.topMargin = dp(10);
+        card.addView(lessonNavigation, lessonNavigationParams);
+
         dictationWordBank = vertical();
         dictationWordBank.setPadding(dp(15), dp(15), dp(15), dp(15));
         dictationWordBank.setBackground(rounded(Color.rgb(248, 251, 255), 17, LINE, 1));
-        TextView bankKicker = text("本课词语与人声录音", 10, GREEN, true);
+        TextView bankKicker = text("本课词语与人工录音", 10, GREEN, true);
         bankKicker.setLetterSpacing(0.1f);
         dictationWordBank.addView(bankKicker);
         dictationLessonTitleView = text("第1课", 18, INK, true);
         dictationWordBank.addView(dictationLessonTitleView);
-        TextView bankHelp = text("请由家长为每个词清楚地读一遍并保存；开始听写前，本课词语需要全部完成录音。", 9, MUTED, false);
+        TextView bankHelp = text("请为每个词清楚地读一遍并保存；开始听写前，本课词语需要全部完成录音。", 9, MUTED, false);
         bankHelp.setPadding(0, dp(4), 0, dp(8));
         dictationWordBank.addView(bankHelp);
         dictationWordsContainer = vertical();
@@ -4023,7 +4049,7 @@ public class MainActivity extends Activity {
         TextView wordView = text(word + (custom ? "  ·  自定义" : ""), 13, INK, true);
         copy.addView(wordView);
         String recordingStatus = recordingThisWord ? "正在录音，读完后点击停止"
-                : hasRecording ? "已录制家长人声" : "未录音";
+                : hasRecording ? "已录音" : "未录音";
         TextView status = text(recordingStatus, 9,
                 recordingThisWord ? RED : hasRecording ? Color.rgb(55, 126, 104) : MUTED, false);
         status.setPadding(0, dp(2), 0, 0);
@@ -4093,7 +4119,11 @@ public class MainActivity extends Activity {
         List<String> allWords = dictationWordsForSelectedLesson();
         JSONArray custom = customWordsForSelectedLesson();
         dictationLessonButton.setText(lesson[1] + "  ▾");
-        dictationLessonButton.setEnabled(!dictationRunning && activeDictationRecordingWord == null);
+        boolean lessonSelectionEnabled = !dictationRunning && activeDictationRecordingWord == null;
+        dictationLessonButton.setEnabled(lessonSelectionEnabled);
+        dictationPreviousLessonButton.setEnabled(lessonSelectionEnabled && selectedDictationLessonIndex > 0);
+        dictationNextLessonButton.setEnabled(
+                lessonSelectionEnabled && selectedDictationLessonIndex < DICTATION_LESSONS.length - 1);
         dictationLessonTitleView.setText(lesson[1]);
         int recordedCount = 0;
         for (String word : allWords) if (hasDictationWordRecording(word)) recordedCount++;
@@ -4136,11 +4166,19 @@ public class MainActivity extends Activity {
                 .setNegativeButton("取消", null)
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getListView().setOnItemClickListener((parent, view, position, id) -> {
-            selectedDictationLessonIndex = position;
-            renderDictationPage();
+            selectDictationLesson(position);
             dialog.dismiss();
         }));
         dialog.show();
+    }
+
+    private void selectDictationLesson(int lessonIndex) {
+        if (dictationRunning || activeDictationRecordingWord != null) return;
+        if (lessonIndex < 0 || lessonIndex >= DICTATION_LESSONS.length) return;
+        releaseDictationPreviewPlayer();
+        selectedDictationLessonIndex = lessonIndex;
+        preferences.edit().putString(KEY_DICTATION_LESSON, selectedDictationLessonId()).apply();
+        renderDictationPage();
     }
 
     private void addCustomDictationWords() {
@@ -4322,7 +4360,8 @@ public class MainActivity extends Activity {
         if (!saved && temporaryFile != null) temporaryFile.delete();
         renderDictationPage();
         if (notify) {
-            toast(saved ? "“" + word + "”的人声录音已保存" : "录音时间太短，请重新录制");
+            toast(saved ? "“" + word + "”的录音已保存，正在自动试听" : "录音时间太短，请重新录制");
+            if (saved) toggleDictationWordPreview(word);
         }
     }
 
@@ -4377,7 +4416,7 @@ public class MainActivity extends Activity {
     private void deleteDictationWordRecording(String word) {
         new AlertDialog.Builder(this)
                 .setTitle("删除词语录音")
-                .setMessage("确定删除“" + word + "”的家长人声录音吗？")
+                .setMessage("确定删除“" + word + "”的录音吗？")
                 .setNegativeButton("取消", null)
                 .setPositiveButton("删除", (dialog, which) -> {
                     if (word.equals(activeDictationPreviewWord)) releaseDictationPreviewPlayer();
@@ -4425,7 +4464,7 @@ public class MainActivity extends Activity {
         String word = activeDictationWords.get(activeDictationIndex);
         int repeatNumber = activeDictationRepeat + 1;
         int nextWordGap = dictationWordGapMs(word);
-        dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在播放家长录音第 "
+        dictationStatusView.setText("第 " + (activeDictationIndex + 1) + " 个词语 · 正在播放录音第 "
                 + repeatNumber + " 遍");
         dictationTimingView.setText(repeatNumber == 1
                 ? "我要认真听，1秒后会再播放一遍。"
@@ -4441,7 +4480,7 @@ public class MainActivity extends Activity {
         File recording = dictationWordRecordingFile(word);
         if (!recording.isFile()) {
             stopDictation(false, false);
-            toast("“" + word + "”的人声录音不存在，请重新录制");
+            toast("“" + word + "”的录音不存在，请重新录制");
             return;
         }
         MediaPlayer player = new MediaPlayer();
@@ -4459,7 +4498,7 @@ public class MainActivity extends Activity {
                     dictationMediaPlayer = null;
                     failedPlayer.release();
                     stopDictation(false, false);
-                    toast("无法播放“" + word + "”的人声录音，请重新录制");
+                    toast("无法播放“" + word + "”的录音，请重新录制");
                 });
                 return true;
             });
@@ -4469,7 +4508,7 @@ public class MainActivity extends Activity {
         } catch (Exception error) {
             player.release();
             stopDictation(false, false);
-            toast("无法播放“" + word + "”的人声录音，请重新录制");
+            toast("无法播放“" + word + "”的录音，请重新录制");
         }
     }
 

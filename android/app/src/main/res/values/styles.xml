@@ -2,11 +2,18 @@
 <resources>
     <style name="Theme.HomeworkLedger" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="android:buttonStyle">@style/Widget.HomeworkLedger.Button</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">@color/green_dark</item>
         <item name="android:navigationBarColor">@color/page</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">@color/green</item>
         <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="Widget.HomeworkLedger.Button" parent="@android:style/Widget.Material.Button">
+        <item name="android:elevation">0dp</item>
+        <item name="android:translationZ">0dp</item>
+        <item name="android:stateListAnimator">@null</item>
     </style>
 </resources>
