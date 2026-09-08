@@ -272,11 +272,16 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryLauncher;
     private TextView taskEntryLauncherStatus;
     private TextView taskEntryDialogStatus;
+    private LinearLayout taskEntryComposerPanel;
+    private Button taskEntryComposerToggleButton;
     private LinearLayout taskEntryPendingPanel;
     private TextView taskEntryPendingSummary;
     private LinearLayout taskEntryPendingList;
     private Button taskEntryConfirmButton;
+    private Button taskEntryAddButton;
+    private Button taskEntryUndoDeleteButton;
     private EditText taskDraftInput;
+    private TextView taskDraftErrorView;
     private Button voiceTaskButton;
     private TextView voiceTaskStatusView;
     private OfflineVoiceRecognizer offlineVoiceRecognizer;
@@ -324,6 +329,9 @@ public class MainActivity extends Activity {
     private String selectedTaskSubject = "语文";
     private boolean taskListExpanded;
     private boolean completedTasksExpanded;
+    private boolean taskEntryComposerExpanded = true;
+    private JSONObject lastDeletedTask;
+    private String lastDeletedTaskDate;
 
     private TextView sessionStatusView;
     private TextView focusView;
@@ -375,6 +383,11 @@ public class MainActivity extends Activity {
     private JSONObject taskFocusTask;
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
+    private final Runnable clearDeletedTaskUndo = () -> {
+        lastDeletedTask = null;
+        lastDeletedTaskDate = null;
+        if (taskEntryUndoDeleteButton != null) taskEntryUndoDeleteButton.setVisibility(View.GONE);
+    };
     private final Runnable dictationNextWord = this::speakCurrentDictationWord;
     private final Runnable breakTimerTick = new Runnable() {
         @Override
@@ -424,7 +437,7 @@ public class MainActivity extends Activity {
                 public void onModelReady() {
                     setVoiceTaskButtonIdle();
                     if (voiceTaskStatusView != null) {
-                        voiceTaskStatusView.setText("离线中文识别已就绪，录音不会上传网络");
+                        voiceTaskStatusView.setText("可以说：语文，背诵第3课；数学，口算20题（录音不上传）");
                     }
                 }
 
@@ -476,7 +489,7 @@ public class MainActivity extends Activity {
                         if (!shouldAddTasks) toast("没有识别到语音，请重试或直接输入文字");
                     } else {
                         if (voiceTaskStatusView != null) {
-                            voiceTaskStatusView.setText("识别完成，请核对文字后生成清单");
+                            voiceTaskStatusView.setText("文字已经放进输入框，我检查一下再加入清单");
                         }
                         if (!shouldAddTasks) toast("离线语音已转成文字，请核对");
                     }
@@ -1237,6 +1250,18 @@ public class MainActivity extends Activity {
         taskEntryPanel = vertical();
         taskEntryPanel.setPadding(dp(12), dp(12), dp(12), dp(12));
         taskEntryPanel.setBackground(rounded(PAGE, 14, PAGE, 0));
+        taskEntryComposerToggleButton = new Button(this);
+        taskEntryComposerToggleButton.setText("＋ 继续录入作业");
+        taskEntryComposerToggleButton.setTextSize(12);
+        taskEntryComposerToggleButton.setTextColor(GREEN);
+        taskEntryComposerToggleButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        taskEntryComposerToggleButton.setAllCaps(false);
+        taskEntryComposerToggleButton.setBackground(rounded(Color.rgb(245, 249, 255), 12,
+                Color.rgb(156, 188, 245), 1));
+        taskEntryComposerToggleButton.setOnClickListener(v -> setTaskEntryComposerExpanded(true, true));
+        taskEntryPanel.addView(taskEntryComposerToggleButton, matchFixed(dp(44)));
+
+        taskEntryComposerPanel = vertical();
         LinearLayout subjectTabs = horizontal();
         subjectTabButtons.clear();
         for (String subject : TASK_SUBJECTS) {
@@ -1254,9 +1279,9 @@ public class MainActivity extends Activity {
             subjectTabs.addView(tab, tabParams);
             subjectTabButtons.add(tab);
         }
-        taskEntryPanel.addView(subjectTabs, matchFixed(dp(39)));
+        taskEntryComposerPanel.addView(subjectTabs, matchFixed(dp(39)));
         selectTaskSubject(selectedTaskSubject);
-        taskEntryPanel.addView(space(9));
+        taskEntryComposerPanel.addView(space(9));
         voiceTaskButton = new Button(this);
         voiceTaskButton.setText("正在准备离线语音…");
         voiceTaskButton.setTextSize(13);
@@ -1266,10 +1291,10 @@ public class MainActivity extends Activity {
         voiceTaskButton.setEnabled(false);
         voiceTaskButton.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
         voiceTaskButton.setOnClickListener(v -> startVoiceTaskInput());
-        taskEntryPanel.addView(voiceTaskButton, matchFixed(dp(46)));
+        taskEntryComposerPanel.addView(voiceTaskButton, matchFixed(dp(46)));
         voiceTaskStatusView = text("正在本机加载中文识别模型", 10, MUTED, false);
         voiceTaskStatusView.setPadding(0, dp(7), 0, 0);
-        taskEntryPanel.addView(voiceTaskStatusView);
+        taskEntryComposerPanel.addView(voiceTaskStatusView);
 
         taskDraftInput = new EditText(this);
         taskDraftInput.setTextSize(14);
@@ -1285,25 +1310,45 @@ public class MainActivity extends Activity {
         taskDraftInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
         LinearLayout.LayoutParams draftParams = matchWrap();
         draftParams.topMargin = dp(10);
-        taskEntryPanel.addView(taskDraftInput, draftParams);
+        taskEntryComposerPanel.addView(taskDraftInput, draftParams);
+        taskDraftErrorView = text("先说出或输入作业内容", 10, RED, true);
+        taskDraftErrorView.setPadding(dp(2), dp(5), 0, 0);
+        taskDraftErrorView.setVisibility(View.GONE);
+        taskEntryComposerPanel.addView(taskDraftErrorView);
+        taskDraftInput.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s != null && s.toString().trim().length() > 0) setTaskDraftError(null);
+            }
+            public void afterTextChanged(Editable editable) { }
+        });
 
         LinearLayout entryActions = horizontal();
-        Button add = new Button(this);
-        add.setText("生成作业清单");
-        add.setTextSize(12);
-        add.setTextColor(Color.WHITE);
-        add.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        add.setAllCaps(false);
-        add.setBackground(rounded(GREEN, 10, GREEN, 0));
-        add.setOnClickListener(v -> generateTasksFromDraft());
-        entryActions.addView(add, weightedFixed(1, dp(43)));
+        taskEntryAddButton = new Button(this);
+        taskEntryAddButton.setText("加入语文作业");
+        taskEntryAddButton.setTextSize(12);
+        taskEntryAddButton.setTextColor(Color.WHITE);
+        taskEntryAddButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        taskEntryAddButton.setAllCaps(false);
+        taskEntryAddButton.setBackground(rounded(GREEN, 10, GREEN, 0));
+        taskEntryAddButton.setOnClickListener(v -> generateTasksFromDraft());
+        entryActions.addView(taskEntryAddButton, weightedFixed(1, dp(43)));
         entryActions.addView(spaceHorizontal(6));
         Button clear = textButton("清空");
         clear.setOnClickListener(v -> clearTaskDraftAndStopVoice());
         entryActions.addView(clear, fixed(dp(62), dp(43)));
         LinearLayout.LayoutParams entryActionParams = matchWrap();
         entryActionParams.topMargin = dp(9);
-        taskEntryPanel.addView(entryActions, entryActionParams);
+        taskEntryComposerPanel.addView(entryActions, entryActionParams);
+        taskEntryPanel.addView(taskEntryComposerPanel, matchWrap());
+
+        taskEntryUndoDeleteButton = textButton("↶ 撤销刚才删除");
+        taskEntryUndoDeleteButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        taskEntryUndoDeleteButton.setOnClickListener(v -> undoLastDeletedTask());
+        taskEntryUndoDeleteButton.setVisibility(View.GONE);
+        LinearLayout.LayoutParams undoParams = matchFixed(dp(36));
+        undoParams.topMargin = dp(7);
+        taskEntryPanel.addView(taskEntryUndoDeleteButton, undoParams);
 
         taskEntryPendingPanel = vertical();
         taskEntryPendingPanel.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -1311,8 +1356,8 @@ public class MainActivity extends Activity {
         LinearLayout pendingHead = horizontal();
         pendingHead.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout pendingCopy = vertical();
-        pendingCopy.addView(text("待确认作业清单", 14, INK, true));
-        TextView pendingHelp = text("按科目核对，确认没有遗漏再开始闯关", 9, MUTED, false);
+        pendingCopy.addView(text("我录好的作业", 14, INK, true));
+        TextView pendingHelp = text("我按科目检查一下，看看有没有听错或漏掉", 10, Color.rgb(101, 115, 140), false);
         pendingHelp.setPadding(0, dp(3), 0, 0);
         pendingCopy.addView(pendingHelp);
         pendingHead.addView(pendingCopy, weightedWrap(1));
@@ -1325,20 +1370,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams pendingListParams = matchWrap();
         pendingListParams.topMargin = dp(5);
         taskEntryPendingPanel.addView(taskEntryPendingList, pendingListParams);
-        TextView pendingHint = text("语文、数学、英语、科学，同科按录入顺序排列。", 9, MUTED, false);
-        pendingHint.setPadding(0, dp(10), 0, dp(7));
-        taskEntryPendingPanel.addView(pendingHint);
-        taskEntryConfirmButton = new Button(this);
-        taskEntryConfirmButton.setText("确认作业清单");
-        taskEntryConfirmButton.setTextSize(12);
-        taskEntryConfirmButton.setTextColor(Color.WHITE);
-        taskEntryConfirmButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        taskEntryConfirmButton.setAllCaps(false);
-        taskEntryConfirmButton.setBackground(rounded(GREEN, 11, GREEN, 0));
-        taskEntryConfirmButton.setOnClickListener(v -> toggleTaskListConfirmation());
-        taskEntryPendingPanel.addView(taskEntryConfirmButton, matchFixed(dp(43)));
         LinearLayout.LayoutParams pendingParams = matchWrap();
-        pendingParams.topMargin = dp(14);
+        pendingParams.topMargin = dp(10);
         taskEntryPanel.addView(taskEntryPendingPanel, pendingParams);
 
         LinearLayout.LayoutParams entryParams = matchWrap();
@@ -1470,14 +1503,16 @@ public class MainActivity extends Activity {
             ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
         }
         taskEntryPanel.setVisibility(View.VISIBLE);
+        taskEntryComposerExpanded = taskArray(false).length() == 0;
+        setTaskDraftError(null);
 
         LinearLayout content = vertical();
         content.setPadding(dp(18), dp(18), dp(18), dp(8));
-        TextView kicker = text("每日录入作业", 10, GREEN, true);
+        TextView kicker = text("我的作业清单", 10, GREEN, true);
         kicker.setLetterSpacing(0.1f);
         content.addView(kicker);
-        content.addView(text("录入并确认今天的作业", 18, INK, true));
-        taskEntryDialogStatus = text("先选择科目，再用语音或文字录入；下方统一核对并确认。", 10, MUTED, false);
+        content.addView(text("把今天的作业收进清单", 18, INK, true));
+        taskEntryDialogStatus = text("我选好科目，把作业说出来或写下来。", 10, Color.rgb(101, 115, 140), false);
         taskEntryDialogStatus.setPadding(0, dp(5), 0, 0);
         content.addView(taskEntryDialogStatus);
         LinearLayout.LayoutParams entryParams = matchWrap();
@@ -1489,6 +1524,7 @@ public class MainActivity extends Activity {
         scroll.addView(content, matchWrap());
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(scroll)
+                .setPositiveButton("都录好了，去排顺序", null)
                 .setNegativeButton("关闭", null)
                 .create();
         taskEntryDialog = dialog;
@@ -1500,9 +1536,14 @@ public class MainActivity extends Activity {
             }
             if (taskEntryDialog == dialog) taskEntryDialog = null;
             taskEntryDialogStatus = null;
+            taskEntryConfirmButton = null;
         });
         dialog.show();
         dialog.setCanceledOnTouchOutside(false);
+        taskEntryConfirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        taskEntryConfirmButton.setOnClickListener(v -> toggleTaskListConfirmation());
+        taskEntryConfirmButton.setTextColor(GREEN);
+        taskEntryConfirmButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         renderTasks();
     }
 
@@ -1646,6 +1687,29 @@ public class MainActivity extends Activity {
         if (taskDraftInput != null) {
             taskDraftInput.setHint("例如：1. " + subject + "背诵第3课  2. 练习册第12页  3. 阅读课文");
         }
+        if (taskEntryAddButton != null) taskEntryAddButton.setText("加入" + subject + "作业");
+    }
+
+    private void setTaskEntryComposerExpanded(boolean expanded, boolean focusInput) {
+        taskEntryComposerExpanded = expanded;
+        renderTasks();
+        if (focusInput && expanded && taskDraftInput != null) {
+            taskDraftInput.requestFocus();
+            taskDraftInput.setSelection(taskDraftInput.length());
+            if (taskEntryDialog != null && taskEntryDialog.getWindow() != null) {
+                taskEntryDialog.getWindow().setSoftInputMode(
+                        android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+            }
+        }
+    }
+
+    private void setTaskDraftError(String message) {
+        if (taskDraftErrorView == null || taskDraftInput == null) return;
+        boolean hasError = message != null && !message.isEmpty();
+        taskDraftErrorView.setText(hasError ? message : "先说出或输入作业内容");
+        taskDraftErrorView.setVisibility(hasError ? View.VISIBLE : View.GONE);
+        taskDraftInput.setBackground(rounded(Color.WHITE, 11,
+                hasError ? Color.rgb(223, 126, 126) : LINE, 1));
     }
 
     private List<String> numberedTaskParts(String value) {
@@ -1709,7 +1773,7 @@ public class MainActivity extends Activity {
             addTasksAfterVoiceStops = true;
             stopOfflineVoiceInput();
             if (voiceTaskStatusView != null) {
-                voiceTaskStatusView.setText("录音已停止，识别完成后将自动生成清单");
+                voiceTaskStatusView.setText("录音已停止，识别完成后会自动加入清单");
             }
             return;
         }
@@ -1725,6 +1789,7 @@ public class MainActivity extends Activity {
         discardVoiceResultAfterStop = voiceActive;
         if (voiceActive) stopOfflineVoiceInput();
         if (taskDraftInput != null) taskDraftInput.setText("");
+        setTaskDraftError(null);
         if (voiceTaskStatusView != null) {
             voiceTaskStatusView.setText(voiceActive
                     ? "录音已停止，正在清空识别结果"
@@ -1746,9 +1811,15 @@ public class MainActivity extends Activity {
         String draft = taskDraftInput.getText().toString().trim();
         List<JSONObject> parsed = parseTaskDraft(draft);
         if (parsed.isEmpty()) {
-            toast("请先说出或输入作业内容");
+            setTaskDraftError("先说出或输入作业内容");
+            taskDraftInput.requestFocus();
+            if (taskEntryDialog != null && taskEntryDialog.getWindow() != null) {
+                taskEntryDialog.getWindow().setSoftInputMode(
+                        android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+            }
             return;
         }
+        setTaskDraftError(null);
         JSONObject owner = taskOwner(true);
         JSONArray tasks = owner.optJSONArray("tasks");
         if (tasks == null) tasks = new JSONArray();
@@ -1780,9 +1851,10 @@ public class MainActivity extends Activity {
         owner.remove("orderSaved");
         owner.remove("orderSavedAt");
         taskDraftInput.setText("");
+        taskEntryComposerExpanded = false;
         saveTaskData();
         renderAll();
-        toast("已加入 " + parsed.size() + " 项作业");
+        toast("我把 " + parsed.size() + " 项作业收进清单了");
     }
 
     private JSONObject taskOwner(boolean create) {
@@ -2603,7 +2675,8 @@ public class MainActivity extends Activity {
         saveTaskData();
         renderAll();
         if (confirmed) showTaskEntryDialog();
-        toast(confirmed ? "可以修改作业清单了" : "清单已确认，共 " + tasks.length() + " 项");
+        toast(confirmed ? "我可以继续修改清单了"
+                : "清单收好了，接下来安排 " + tasks.length() + " 项作业的顺序");
     }
 
     private void toggleTaskOrder() {
@@ -2768,12 +2841,12 @@ public class MainActivity extends Activity {
         int progressTotal = questMode ? questIndexes.size() : tasks.length();
         int progressDone = questMode ? questDoneCount : allDoneCount;
         taskSummaryView.setText(!confirmed && tasks.length() > 0
-                ? tasks.length() + " 项待确认"
+                ? "已录 " + tasks.length() + " 项"
                 : progressTotal == 0 ? "0 项"
                 : questMode ? progressDone + " / " + progressTotal
                 : progressDone + " / " + progressTotal + " 项完成");
         taskPanelTitleView.setText(!confirmed
-                ? ledgerReady ? tasks.length() > 0 ? "作业已录入，等待确认" : "录入今天的作业" : "先核对今天的作业"
+                ? ledgerReady ? tasks.length() > 0 ? "我的作业还在整理中" : "今天的作业" : "先核对今天的作业"
                 : sortingMode ? "安排我的闯关顺序"
                 : orderPendingWeekend ? "还差一步：确定顺序"
                 : "作业清单");
@@ -2793,18 +2866,23 @@ public class MainActivity extends Activity {
         taskEntryLauncherStatus.setText(entryStatus);
         if (taskEntryDialogStatus != null) {
             taskEntryDialogStatus.setText(tasks.length() > 0
-                    ? "已经录入 " + tasks.length() + " 项。可以继续录下一科，下方核对无误后直接确认。"
-                    : "先选择科目，再用语音或文字录入；下方统一核对并确认。");
+                    ? "我已经收好 " + tasks.length() + " 项，可以检查或继续录入。"
+                    : "我选好科目，把作业说出来或写下来。");
         }
         if (!canEnterTasks) dismissTaskEntryDialog();
+        boolean composerVisible = tasks.length() == 0 || taskEntryComposerExpanded;
+        taskEntryComposerPanel.setVisibility(composerVisible ? View.VISIBLE : View.GONE);
+        taskEntryComposerToggleButton.setVisibility(canEnterTasks && !composerVisible ? View.VISIBLE : View.GONE);
+        boolean canUndoDelete = lastDeletedTask != null && currentDate.equals(lastDeletedTaskDate)
+                && !confirmed && canEditList;
+        taskEntryUndoDeleteButton.setVisibility(canUndoDelete ? View.VISIBLE : View.GONE);
         taskEntryPendingPanel.setVisibility(canEnterTasks && tasks.length() > 0 ? View.VISIBLE : View.GONE);
         taskEntryPendingSummary.setText(tasks.length() + " 项");
         taskEntryPendingList.removeAllViews();
-        if (!confirmed) {
-            for (int index = 0; index < tasks.length(); index++) {
-                addTaskCard(taskEntryPendingList, tasks, index, false, canEditList, weekendMode, isFriday,
-                        planSaved, weekendKey, false, false, false, true);
-            }
+        if (!confirmed) renderPendingTaskGroups(tasks);
+        if (taskEntryConfirmButton != null) {
+            taskEntryConfirmButton.setVisibility(canEnterTasks && tasks.length() > 0 ? View.VISIBLE : View.GONE);
+            taskEntryConfirmButton.setText(tasks.length() + " 项 · 都录好了，去排顺序");
         }
         emptyTaskView.setVisibility(tasks.length() == 0 && !canEnterTasks ? View.VISIBLE : View.GONE);
         emptyTaskView.setText(weekendMode && !isFriday
@@ -3353,6 +3431,115 @@ public class MainActivity extends Activity {
         taskListContainer.addView(victory, params);
     }
 
+    private void renderPendingTaskGroups(JSONArray tasks) {
+        String currentSubject = null;
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null) continue;
+            String subject = task.optString("subject", "其他");
+            if (!subject.equals(currentSubject)) {
+                currentSubject = subject;
+                int count = 0;
+                for (int scan = index; scan < tasks.length(); scan++) {
+                    JSONObject candidate = tasks.optJSONObject(scan);
+                    if (candidate != null && subject.equals(candidate.optString("subject", "其他"))) count++;
+                }
+                TextView heading = text(subject + "  " + count + " 项", 11, taskSubjectColor(subject), true);
+                heading.setPadding(dp(2), dp(index == 0 ? 5 : 11), dp(2), dp(2));
+                taskEntryPendingList.addView(heading, matchWrap());
+            }
+            addPendingTaskRow(tasks, index);
+        }
+    }
+
+    private void addPendingTaskRow(JSONArray tasks, int index) {
+        JSONObject task = tasks.optJSONObject(index);
+        if (task == null) return;
+        String subject = task.optString("subject", "其他");
+        LinearLayout row = horizontal();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(11), dp(6), dp(7), dp(6));
+        row.setBackground(rounded(taskSubjectSoftColor(subject), 10, taskSubjectColor(subject), 1));
+        TextView title = text(task.optString("title", "未命名作业"), 12, INK, true);
+        row.addView(title, weightedWrap(1));
+        row.addView(spaceHorizontal(6));
+        LinearLayout actions = horizontal();
+        final int taskIndex = index;
+        addTaskActionButton(actions, "修改", false, false, () -> showPendingTaskEditDialog(taskIndex));
+        addTaskActionButton(actions, "删除", false, true, () -> performTaskAction("delete", taskIndex));
+        row.addView(actions, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(5);
+        taskEntryPendingList.addView(row, params);
+    }
+
+    private void showPendingTaskEditDialog(int index) {
+        JSONArray tasks = taskArray(false);
+        JSONObject task = tasks.optJSONObject(index);
+        if (task == null || taskListConfirmed()) return;
+        String taskId = task.optString("id");
+        EditText input = new EditText(this);
+        input.setSingleLine(false);
+        input.setMaxLines(3);
+        input.setText(task.optString("title"));
+        input.setTextSize(14);
+        input.setTextColor(INK);
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(12), dp(9), dp(12), dp(9));
+        input.setBackground(rounded(Color.WHITE, 11, LINE, 1));
+        LinearLayout content = vertical();
+        content.setPadding(dp(20), dp(4), dp(20), 0);
+        content.addView(input, matchWrap());
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("修改" + task.optString("subject", "") + "作业")
+                .setView(content)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String title = input.getText().toString().trim();
+                if (title.isEmpty()) {
+                    input.setError("作业内容不能留空");
+                    input.requestFocus();
+                    return;
+                }
+                int currentIndex = taskIndexById(taskId);
+                JSONObject currentTask = taskArray(false).optJSONObject(currentIndex);
+                if (currentTask == null) {
+                    dialog.dismiss();
+                    return;
+                }
+                put(currentTask, "title", title);
+                saveTaskData();
+                renderAll();
+                dialog.dismiss();
+                toast("这项作业已经改好了");
+            });
+            input.requestFocus();
+            if (dialog.getWindow() != null) dialog.getWindow().setSoftInputMode(
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        });
+        dialog.show();
+    }
+
+    private void undoLastDeletedTask() {
+        if (lastDeletedTask == null || !currentDate.equals(lastDeletedTaskDate) || taskListConfirmed()) return;
+        JSONObject owner = taskOwner(true);
+        JSONArray tasks = owner.optJSONArray("tasks");
+        if (tasks == null) tasks = new JSONArray();
+        tasks.put(lastDeletedTask);
+        put(owner, "tasks", sortedPendingTasks(tasks));
+        timerHandler.removeCallbacks(clearDeletedTaskUndo);
+        lastDeletedTask = null;
+        lastDeletedTaskDate = null;
+        taskEntryComposerExpanded = false;
+        saveTaskData();
+        renderAll();
+        toast("刚才删除的作业回来了");
+    }
+
     private void addTaskCard(JSONArray tasks, int index, boolean confirmed, boolean canEditList,
                              boolean weekendMode, boolean isFriday, boolean planSaved, String weekendKey,
                              boolean suggested, boolean current, boolean compact, boolean allowActions) {
@@ -3754,6 +3941,10 @@ public class MainActivity extends Activity {
                 toast("周末清单只能在周五修改");
                 return;
             }
+            timerHandler.removeCallbacks(clearDeletedTaskUndo);
+            lastDeletedTask = task;
+            lastDeletedTaskDate = currentDate;
+            timerHandler.postDelayed(clearDeletedTaskUndo, 15000);
             tasks.remove(index);
             if (weekendKey == null) {
                 JSONObject owner = taskOwner(true);
@@ -3774,9 +3965,10 @@ public class MainActivity extends Activity {
             cleanupWeekend();
             taskListExpanded = false;
             completedTasksExpanded = false;
+            if (tasks.length() == 0) taskEntryComposerExpanded = true;
             saveTaskData();
             renderAll();
-            toast("作业已删除");
+            toast("已删除，可以在上方撤销");
             return;
         }
         if (!taskListConfirmed()) {

@@ -350,39 +350,46 @@
   <div class="task-entry-modal" id="taskEntryModal" role="dialog" aria-modal="true" aria-labelledby="taskEntryModalTitle" hidden>
     <div class="task-entry-dialog">
       <button class="focus-close" id="taskEntryCloseButton" type="button" aria-label="关闭作业录入">×</button>
-      <p class="section-kicker">每日录入作业</p>
-      <h2 id="taskEntryModalTitle">录入并确认今天的作业</h2>
-      <p class="task-entry-dialog-status" id="taskEntryModalStatus">先选择科目，再用语音或文字录入；下方统一核对并确认。</p>
+      <p class="section-kicker">我的作业清单</p>
+      <h2 id="taskEntryModalTitle">把今天的作业收进清单</h2>
+      <p class="task-entry-dialog-status" id="taskEntryModalStatus">我选好科目，把作业说出来或写下来。</p>
       <div class="task-entry" id="taskEntry">
-        <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
-          <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
-          <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
-          <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
-          <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+        <button class="task-entry-composer-toggle" id="taskEntryComposerToggle" type="button" hidden>＋ 继续录入作业</button>
+        <div class="task-entry-composer" id="taskEntryComposer">
+          <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
+            <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
+            <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
+            <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
+            <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+          </div>
+          <div class="voice-entry-row">
+            <button class="voice-button" id="voiceTaskButton" type="button">🎙 开始报作业</button>
+            <small id="voiceStatus">可以说：语文，背诵第3课；数学，口算20题</small>
+          </div>
+          <textarea id="taskDraft" rows="3" maxlength="500" aria-describedby="taskDraftError" aria-invalid="false" placeholder="例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文"></textarea>
+          <small class="task-draft-error" id="taskDraftError" role="alert" hidden>先说出或输入作业内容</small>
+          <div class="task-entry-actions">
+            <button class="primary-button compact-button" id="addTasksButton" type="button">加入语文作业</button>
+            <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
+          </div>
         </div>
-        <div class="voice-entry-row">
-          <button class="voice-button" id="voiceTaskButton" type="button">🎙 开始报作业</button>
-          <small id="voiceStatus">可以连续说“语文……，数学……，英语……”</small>
-        </div>
-        <textarea id="taskDraft" rows="3" maxlength="500" placeholder="例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文"></textarea>
-        <div class="task-entry-actions">
-          <button class="primary-button compact-button" id="addTasksButton" type="button">生成作业清单</button>
-          <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
+        <div class="task-entry-feedback-row">
+          <button class="task-entry-undo" id="taskEntryUndoDeleteButton" type="button" hidden>↶ 撤销刚才删除</button>
         </div>
         <section class="task-entry-pending" id="taskEntryPendingSection" aria-labelledby="taskEntryPendingTitle" hidden>
           <div class="task-entry-pending-heading">
             <div>
-              <strong id="taskEntryPendingTitle">待确认作业清单</strong>
-              <small>按科目核对，确认没有遗漏再开始闯关</small>
+              <strong id="taskEntryPendingTitle">我录好的作业</strong>
+              <small>我按科目检查一下，看看有没有听错或漏掉</small>
             </div>
             <b id="taskEntryPendingSummary">0 项</b>
           </div>
-          <div class="task-list task-entry-pending-list" id="taskEntryPendingList"></div>
-          <div class="task-entry-confirm-row">
-            <span>语文、数学、英语、科学，同科按录入顺序排列。</span>
-            <button class="primary-button compact-button" id="taskEntryConfirmButton" type="button">确认作业清单</button>
-          </div>
+          <div class="task-entry-pending-list" id="taskEntryPendingList"></div>
         </section>
+      </div>
+      <div class="task-entry-sticky-footer" id="taskEntryStickyFooter" hidden>
+        <span>清单里有 <strong id="taskEntryFooterCount">0 项</strong></span>
+        <button class="primary-button compact-button" id="taskEntryConfirmButton" type="button">都录好了，去排顺序</button>
       </div>
     </div>
   </div>

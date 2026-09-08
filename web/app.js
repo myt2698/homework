@@ -125,8 +125,11 @@
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryCloseButton: $("#taskEntryCloseButton"),
     taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
+    taskEntryComposer: $("#taskEntryComposer"), taskEntryComposerToggle: $("#taskEntryComposerToggle"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
+    taskEntryStickyFooter: $("#taskEntryStickyFooter"), taskEntryFooterCount: $("#taskEntryFooterCount"),
+    taskEntryUndoDeleteButton: $("#taskEntryUndoDeleteButton"), taskDraftError: $("#taskDraftError"),
     stepEditorModal: $("#stepEditorModal"), stepEditorCloseButton: $("#stepEditorCloseButton"),
     stepEditorTaskTitle: $("#stepEditorTaskTitle"), stepEditorInput: $("#stepEditorInput"),
     stepEditorCancelButton: $("#stepEditorCancelButton"), stepEditorSaveButton: $("#stepEditorSaveButton"),
@@ -174,6 +177,10 @@
   let stepEditorTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
+  let taskEntryComposerExpanded = true;
+  let editingPendingTaskId = null;
+  let lastDeletedTask = null;
+  let undoDeleteTimer = null;
   let dailyCheckinsExpanded = false;
   let historyManageMode = false;
   let pointerTaskDrag = null;
@@ -970,6 +977,9 @@
     div.textContent = value;
     return div.innerHTML;
   }
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
   function renderHistory() {
     const dailyEntries = datedRecords()
       .filter(([date, record]) => includeDailyInLedger(date, record))
@@ -1038,15 +1048,35 @@
 
   function openTaskEntryModal() {
     if (elements.taskEntryLauncher.hidden) return;
+    taskEntryComposerExpanded = tasksForDate().length === 0;
+    editingPendingTaskId = null;
+    setTaskDraftError();
     elements.taskEntryModal.hidden = false;
     document.body.classList.add("modal-open");
-    elements.taskEntryCloseButton.focus();
+    renderTasks();
+    (taskEntryComposerExpanded ? elements.taskDraft : elements.taskEntryComposerToggle).focus();
   }
 
   function closeTaskEntryModal() {
     if (elements.taskEntryModal.hidden) return;
     elements.taskEntryModal.hidden = true;
     document.body.classList.remove("modal-open");
+  }
+
+  function setTaskEntryComposer(expanded, focus = false) {
+    taskEntryComposerExpanded = Boolean(expanded);
+    renderTasks();
+    if (focus && taskEntryComposerExpanded) {
+      elements.taskDraft.focus();
+      elements.taskDraft.setSelectionRange(elements.taskDraft.value.length, elements.taskDraft.value.length);
+    }
+  }
+
+  function setTaskDraftError(message = "") {
+    const hasError = Boolean(message);
+    elements.taskDraftError.textContent = message || "先说出或输入作业内容";
+    elements.taskDraftError.hidden = !hasError;
+    elements.taskDraft.setAttribute("aria-invalid", String(hasError));
   }
 
   function openTaskStepsEditor(id) {
@@ -1700,6 +1730,43 @@
       .map(({ task }) => task);
   }
 
+  function pendingTaskGroups(tasks) {
+    const groups = new Map();
+    pendingTaskOrder(tasks).forEach((task) => {
+      const subject = task.subject || "其他";
+      if (!groups.has(subject)) groups.set(subject, []);
+      groups.get(subject).push(task);
+    });
+    return [...groups.entries()];
+  }
+
+  function pendingTaskRow(task) {
+    const id = escapeHtml(String(task.id));
+    if (String(editingPendingTaskId || "") === String(task.id)) {
+      return `<div class="pending-task-row" data-subject="${escapeHtml(task.subject || "其他")}">
+        <input class="pending-task-edit-input" data-pending-edit-id="${id}" maxlength="120" value="${escapeAttribute(task.title || "")}" aria-label="修改${escapeAttribute(task.subject || "作业")}内容">
+        <div class="pending-task-actions">
+          ${taskButton("保存", "save-edit", task.id)}
+          ${taskButton("取消", "cancel-edit", task.id)}
+        </div>
+      </div>`;
+    }
+    return `<div class="pending-task-row" data-subject="${escapeHtml(task.subject || "其他")}">
+      <strong class="pending-task-title">${escapeHtml(task.title || "未命名作业")}</strong>
+      <div class="pending-task-actions">
+        ${taskButton("修改", "edit", task.id)}
+        ${taskButton("删除", "delete", task.id, "danger-task-action")}
+      </div>
+    </div>`;
+  }
+
+  function pendingTaskListHtml(tasks) {
+    return pendingTaskGroups(tasks).map(([subject, groupTasks]) => `<section class="pending-subject-group" data-subject="${escapeHtml(subject)}">
+      <div class="pending-subject-heading"><strong>${escapeHtml(subject)}</strong><span>${groupTasks.length} 项</span></div>
+      <div class="pending-subject-tasks">${groupTasks.map(pendingTaskRow).join("")}</div>
+    </section>`).join("");
+  }
+
   function renderTasks() {
     const date = elements.recordDate.value;
     const key = weekendKeyFor(date);
@@ -1726,8 +1793,8 @@
       : "选择科目，语音或文字录入";
     elements.taskEntryLauncherStatus.textContent = entryStatus;
     elements.taskEntryModalStatus.textContent = tasks.length
-      ? `已经录入 ${tasks.length} 项。可以继续录下一科，下方核对无误后直接确认。`
-      : "先选择科目，再用语音或文字录入；下方统一核对并确认。";
+      ? `我已经收好 ${tasks.length} 项，可以检查或继续录入。`
+      : "我选好科目，把作业说出来或写下来。";
     if (!canEnterTasks) closeTaskEntryModal();
     elements.emptyTaskList.hidden = tasks.length > 0 || canEnterTasks;
     elements.emptyTaskList.textContent = key && !isFriday
@@ -1774,7 +1841,7 @@
     const progressTotal = questMode ? questTasks.length : tasks.length;
     const progressDone = questMode ? questDone.length : doneCount;
     elements.taskPanelTitle.textContent = !confirmed
-      ? ledgerReady ? tasks.length ? "作业已录入，等待确认" : "今天的作业" : "先核对今天的作业"
+      ? ledgerReady ? tasks.length ? "我的作业还在整理中" : "今天的作业" : "先核对今天的作业"
       : sortingMode ? "安排我的闯关顺序"
       : orderPendingWeekend ? "还差一步：确定顺序"
         : "我选一项，轻松开始！";
@@ -1787,7 +1854,7 @@
     elements.taskPanelTitle.hidden = questMode;
     elements.taskPanelHelp.hidden = questMode;
     elements.taskSummary.textContent = !confirmed && tasks.length
-      ? `${tasks.length} 项待确认` : progressTotal ? questMode ? `${progressDone} / ${progressTotal}` : `${progressDone} / ${progressTotal} 项完成` : "0 项";
+      ? `已录 ${tasks.length} 项` : progressTotal ? questMode ? `${progressDone} / ${progressTotal}` : `${progressDone} / ${progressTotal} 项完成` : "0 项";
     elements.activeTaskBanner.hidden = !active || questMode;
     if (active) {
       elements.activeTaskTitle.textContent = `${active.subject} · ${active.title}`;
@@ -1866,10 +1933,18 @@
     };
 
     const pendingTasks = pendingTaskOrder(tasks);
-    elements.taskEntryPendingSection.hidden = confirmed || !canEditList || pendingTasks.length === 0;
+    const composerVisible = pendingTasks.length === 0 || taskEntryComposerExpanded;
+    elements.taskEntryComposer.hidden = !composerVisible;
+    elements.taskEntryComposerToggle.hidden = composerVisible || !canEnterTasks;
+    elements.taskEntry.classList.toggle("composer-collapsed", !composerVisible);
+    elements.taskEntryPendingSection.hidden = !canEnterTasks || confirmed || !canEditList || pendingTasks.length === 0;
     elements.taskEntryPendingSummary.textContent = `${pendingTasks.length} 项`;
     elements.taskEntryPendingList.innerHTML = confirmed ? ""
-      : pendingTasks.map((task) => taskCard(task)).join("");
+      : pendingTaskListHtml(pendingTasks);
+    const canUndoDelete = Boolean(lastDeletedTask && lastDeletedTask.date === date && !confirmed && canEditList);
+    elements.taskEntryUndoDeleteButton.hidden = !canUndoDelete;
+    elements.taskEntryStickyFooter.hidden = !canEnterTasks || confirmed || !canEditList || pendingTasks.length === 0;
+    elements.taskEntryFooterCount.textContent = `${pendingTasks.length} 项`;
 
     if (!confirmed) {
       elements.taskList.innerHTML = "";
@@ -2128,7 +2203,12 @@
     if (key && date !== key) return showToast("周六、周日直接使用周五清单，不需要重新录入");
     if (!currentRecord()?.ledgerConfirmed) return showToast("请先核对钉钉，并补全成长记录册");
     const parsed = parseTaskDraft(elements.taskDraft.value.trim(), selectedTaskSubject);
-    if (!parsed.length) return showToast("请先说出或输入作业内容");
+    if (!parsed.length) {
+      setTaskDraftError("先说出或输入作业内容");
+      elements.taskDraft.focus();
+      return;
+    }
+    setTaskDraftError();
     const owner = taskOwnerForDate(elements.recordDate.value, true);
     const existing = Array.isArray(owner.tasks) ? owner.tasks : [];
     const stamp = Date.now();
@@ -2158,9 +2238,11 @@
     delete owner.orderSaved;
     delete owner.orderSavedAt;
     elements.taskDraft.value = "";
+    taskEntryComposerExpanded = false;
+    editingPendingTaskId = null;
     persist();
     render();
-    showToast(`已加入 ${parsed.length} 项作业`);
+    showToast(`我把 ${parsed.length} 项作业收进清单了`);
   }
 
   function toggleTaskListConfirmation() {
@@ -2207,7 +2289,7 @@
     persist();
     render();
     if (confirmed) openTaskEntryModal();
-    showToast(confirmed ? "可以修改作业清单了" : `清单已确认，共 ${tasks.length} 项`);
+    showToast(confirmed ? "我可以继续修改清单了" : `清单收好了，接下来安排 ${tasks.length} 项作业的顺序`);
   }
 
   function setTaskEstimate(id, value) {
@@ -2359,6 +2441,59 @@
     render();
   }
 
+  function beginPendingTaskEdit(id) {
+    const task = taskById(id);
+    if (!task || taskListConfirmed()) return;
+    editingPendingTaskId = String(id);
+    renderTasks();
+    const input = [...elements.taskEntryPendingList.querySelectorAll("[data-pending-edit-id]")]
+      .find((item) => item.dataset.pendingEditId === String(id));
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
+  function savePendingTaskEdit(id) {
+    const task = taskById(id);
+    const input = [...elements.taskEntryPendingList.querySelectorAll("[data-pending-edit-id]")]
+      .find((item) => item.dataset.pendingEditId === String(id));
+    if (!task || !input) return;
+    const title = input.value.trim();
+    if (!title) {
+      input.setAttribute("aria-invalid", "true");
+      input.focus();
+      return showToast("作业内容不能留空");
+    }
+    task.title = title;
+    editingPendingTaskId = null;
+    persist();
+    render();
+    showToast("这项作业已经改好了");
+  }
+
+  function rememberDeletedTask(task, date) {
+    clearTimeout(undoDeleteTimer);
+    lastDeletedTask = { date, task: JSON.parse(JSON.stringify(task)) };
+    undoDeleteTimer = window.setTimeout(() => {
+      lastDeletedTask = null;
+      elements.taskEntryUndoDeleteButton.hidden = true;
+    }, 15000);
+  }
+
+  function undoPendingTaskDelete() {
+    if (!lastDeletedTask || lastDeletedTask.date !== elements.recordDate.value || taskListConfirmed()) return;
+    const restored = lastDeletedTask.task;
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    owner.tasks = pendingTaskOrder([...(Array.isArray(owner.tasks) ? owner.tasks : []), restored]);
+    clearTimeout(undoDeleteTimer);
+    lastDeletedTask = null;
+    taskEntryComposerExpanded = false;
+    persist();
+    render();
+    showToast("刚才删除的作业回来了");
+  }
+
   function performTaskAction(action, id) {
     const task = taskById(id);
     if (!task) return;
@@ -2373,6 +2508,7 @@
     if (action === "delete") {
       if (key && date !== key) return showToast("周末清单只能在周五修改");
       const owner = taskOwnerForDate(elements.recordDate.value, true);
+      rememberDeletedTask(task, date);
       owner.tasks = tasks.filter((item) => String(item.id) !== String(id));
       if (String(owner.mealAfterTaskId || "") === String(id)) delete owner.mealAfterTaskId;
       if (key) {
@@ -2387,9 +2523,11 @@
       cleanupWeekend();
       taskListExpanded = false;
       completedTasksExpanded = false;
+      editingPendingTaskId = null;
+      if (!owner.tasks.length) taskEntryComposerExpanded = true;
       persist();
       render();
-      return showToast("作业已删除");
+      return showToast("已删除，可以在上方撤销");
     }
     if (!taskListConfirmed()) return showToast("请先确认作业清单");
     if (!taskOrderSaved()) return showToast(key && date !== key ? "请回到周五确定周末闯关顺序" : "请先确定闯关顺序");
@@ -2515,7 +2653,7 @@
     elements.subjectTabs.querySelectorAll("button[data-subject]").forEach((button) => {
       button.setAttribute("aria-checked", String(button.dataset.subject === subject));
     });
-    elements.addTasksButton.textContent = `生成${subject}清单`;
+    elements.addTasksButton.textContent = `加入${subject}作业`;
     elements.taskDraft.placeholder = `例如：1. ${subject}背诵第3课  2. 练习册第12页  3. 阅读课文`;
   }
 
@@ -2577,6 +2715,7 @@
       if (transcript.trim()) {
         const prefix = elements.taskDraft.value.trim() ? "；" : "";
         elements.taskDraft.value += `${prefix}${transcript.trim()}`;
+        setTaskDraftError();
       }
     };
     speechRecognition.onerror = (event) => {
@@ -2584,7 +2723,7 @@
       updateSpeechState(false, message);
       showToast(message);
     };
-    speechRecognition.onend = () => updateSpeechState(false, "语音已转成文字，请核对后生成清单");
+    speechRecognition.onend = () => updateSpeechState(false, "文字已经放进输入框，我检查一下再加入清单");
     try {
       speechRecognition.start();
       updateSpeechState(true, "正在听，请连续报完每项作业……");
@@ -2762,11 +2901,39 @@
     if (button) selectTaskSubject(button.dataset.subject);
   });
   elements.addTasksButton.addEventListener("click", addTasksFromDraft);
-  elements.clearTaskDraftButton.addEventListener("click", () => { elements.taskDraft.value = ""; });
+  elements.taskEntryComposerToggle.addEventListener("click", () => setTaskEntryComposer(true, true));
+  elements.taskDraft.addEventListener("input", () => {
+    if (elements.taskDraft.value.trim()) setTaskDraftError();
+  });
+  elements.clearTaskDraftButton.addEventListener("click", () => {
+    elements.taskDraft.value = "";
+    setTaskDraftError();
+    elements.taskDraft.focus();
+  });
+  elements.taskEntryUndoDeleteButton.addEventListener("click", undoPendingTaskDelete);
   elements.taskEntryConfirmButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskEntryPendingList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-task-action]");
-    if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
+    if (!button) return;
+    const action = button.dataset.taskAction;
+    if (action === "edit") beginPendingTaskEdit(button.dataset.taskId);
+    else if (action === "save-edit") savePendingTaskEdit(button.dataset.taskId);
+    else if (action === "cancel-edit") {
+      editingPendingTaskId = null;
+      renderTasks();
+    } else performTaskAction(action, button.dataset.taskId);
+  });
+  elements.taskEntryPendingList.addEventListener("keydown", (event) => {
+    const input = event.target.closest("input[data-pending-edit-id]");
+    if (!input) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      savePendingTaskEdit(input.dataset.pendingEditId);
+    } else if (event.key === "Escape") {
+      event.stopPropagation();
+      editingPendingTaskId = null;
+      renderTasks();
+    }
   });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
