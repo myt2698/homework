@@ -447,7 +447,7 @@
       <div class="focus-start-row"><span>开始时间</span><strong id="focusModalStartedAt">--:--</strong></div>
       <p class="focus-reminder">我先做好这一项，完成后再去下一关！</p>
       <div class="focus-dialog-actions">
-        <button class="secondary-button" id="focusPauseButton" type="button">暂停</button>
+        <button class="secondary-button" id="focusPauseButton" type="button">休息一下</button>
         <button class="primary-button" id="focusCompleteButton" type="button">完成这项</button>
       </div>
     </div>
@@ -456,12 +456,14 @@
   <div class="focus-modal" id="breakChoiceModal" role="dialog" aria-modal="true" aria-labelledby="breakChoiceTitle" hidden>
     <div class="focus-dialog break-choice-dialog">
       <button class="focus-close" id="breakChoiceCloseButton" type="button" aria-label="关闭休息安排">×</button>
-      <p class="section-kicker">这一关完成啦</p>
+      <p class="section-kicker" id="breakChoiceKicker">到达我的休息点</p>
       <h2 id="breakChoiceTitle">我准备什么时候回来？</h2>
       <div class="break-next-task"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
+      <button class="text-button bordered break-change-task" id="changeBreakNextTaskButton" type="button">换一个下一项（仅一次）</button>
       <div class="break-quick-actions">
-        <button class="secondary-button" type="button" data-break-minutes="5">休息 5 分钟</button>
-        <button class="secondary-button" type="button" data-break-minutes="10">休息 10 分钟</button>
+        <button class="secondary-button" type="button" data-break-kind="toilet" data-break-minutes="5">🚻 上厕所 · 5分钟</button>
+        <button class="secondary-button" type="button" data-break-kind="short" data-break-minutes="5">🥤 短休息 · 5分钟</button>
+        <button class="secondary-button" type="button" data-break-kind="long" data-break-minutes="10">🌿 多休息一会 · 10分钟</button>
       </div>
       <div class="break-return-row">
         <label for="breakReturnTime">吃饭后回来</label>
@@ -478,6 +480,7 @@
       <h2 id="breakTimerTitle">休息一下，等我按时回来</h2>
       <span class="focus-clock-label">距离回来还有</span>
       <div class="focus-clock break-clock" id="breakCountdown">05:00</div>
+      <p class="break-planned-return" id="breakPlannedReturn">我计划 19:10 回来</p>
       <div class="break-next-task"><span>回来后做</span><strong id="breakTimerNextTask"></strong></div>
       <div class="focus-dialog-actions break-timer-actions">
         <button class="secondary-button" id="extendBreakButton" type="button">再休息 3 分钟</button>

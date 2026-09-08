@@ -21,6 +21,8 @@ import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.speech.tts.TextToSpeech;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -360,8 +362,13 @@ public class MainActivity extends Activity {
     private AlertDialog breakTimerDialog;
     private TextView breakCountdownView;
     private TextView breakNextTaskView;
+    private TextView breakPlannedReturnView;
     private Button extendBreakButton;
     private int breakChoiceTaskIndex = -1;
+    private int breakChoiceSourceTaskIndex = -1;
+    private boolean breakChoiceFromPause;
+    private boolean breakChoiceChanged;
+    private Button changeBreakTaskButton;
     private TextView taskFocusElapsedView;
     private TextView taskFocusStepView;
     private TextView taskFocusComparisonView;
@@ -2065,7 +2072,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(content)
                 .setNegativeButton("暂时收起", null)
-                .setNeutralButton("暂停", null)
+                .setNeutralButton("休息一下", null)
                 .setPositiveButton(currentStep == null ? "完成这项"
                         : remainingTaskStepCount(task) == 1 ? "完成最后一步" : "完成本步", null)
                 .create();
@@ -2136,6 +2143,89 @@ public class MainActivity extends Activity {
         return -1;
     }
 
+    private List<Integer> availableBreakTaskIndexes() {
+        List<Integer> indexes = new ArrayList<>();
+        JSONArray tasks = taskArray(false);
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && !"done".equals(task.optString("status")) && taskCanRunToday(task)) {
+                indexes.add(index);
+            }
+        }
+        return indexes;
+    }
+
+    private String breakKindLabel(String kind) {
+        if ("toilet".equals(kind)) return "上厕所";
+        if ("short".equals(kind)) return "短休息";
+        if ("long".equals(kind)) return "多休息一会";
+        return "meal".equals(kind) ? "吃饭" : "休息";
+    }
+
+    private String timeFromEpoch(long value) {
+        return new SimpleDateFormat("HH:mm", Locale.CHINA).format(value);
+    }
+
+    private JSONArray breakLogArray(boolean create) {
+        JSONObject owner = taskOwner(create);
+        if (owner == null) return new JSONArray();
+        JSONArray breaks = owner.optJSONArray("breaks");
+        if (breaks == null && create) {
+            breaks = new JSONArray();
+            put(owner, "breaks", breaks);
+        }
+        return breaks == null ? new JSONArray() : breaks;
+    }
+
+    private JSONObject createBreakLog(String kind, long endAt) {
+        long startedAt = System.currentTimeMillis();
+        JSONObject task = taskArray(false).optJSONObject(breakChoiceTaskIndex);
+        JSONObject sourceTask = taskArray(false).optJSONObject(breakChoiceSourceTaskIndex);
+        JSONObject entry = new JSONObject();
+        put(entry, "id", "break-" + startedAt);
+        put(entry, "kind", kind);
+        put(entry, "kindLabel", breakKindLabel(kind));
+        put(entry, "trigger", breakChoiceFromPause ? "pause" : "checkpoint");
+        if (sourceTask != null) put(entry, "sourceTaskId", sourceTask.optString("id"));
+        if (task != null) put(entry, "nextTaskId", task.optString("id"));
+        put(entry, "nextTaskChanged", breakChoiceChanged);
+        put(entry, "startedAt", startedAt);
+        put(entry, "plannedEndAt", endAt);
+        put(entry, "plannedMinutes", Math.max(1L, (endAt - startedAt + 59999L) / 60000L));
+        put(entry, "plannedReturnAt", timeFromEpoch(endAt));
+        put(entry, "status", "resting");
+        breakLogArray(true).put(entry);
+        saveTaskData();
+        return entry;
+    }
+
+    private JSONObject breakLogById(String id) {
+        if (id == null || id.isEmpty()) return null;
+        JSONArray breaks = breakLogArray(false);
+        for (int index = 0; index < breaks.length(); index++) {
+            JSONObject entry = breaks.optJSONObject(index);
+            if (entry != null && id.equals(entry.optString("id"))) return entry;
+        }
+        return null;
+    }
+
+    private JSONObject finishBreakLog(String status) {
+        if (!hasActiveBreakSession() || !hasText(breakSession, "breakId")) return null;
+        JSONObject entry = breakLogById(breakSession.optString("breakId"));
+        if (entry == null) return null;
+        long returnedAt = System.currentTimeMillis();
+        long startedAt = entry.optLong("startedAt", returnedAt);
+        long actualMinutes = Math.max(1L, (returnedAt - startedAt + 59999L) / 60000L);
+        put(entry, "status", status);
+        put(entry, "actualEndAt", returnedAt);
+        put(entry, "actualReturnAt", timeFromEpoch(returnedAt));
+        put(entry, "actualMinutes", actualMinutes);
+        put(entry, "overtimeMinutes", Math.max(0L, actualMinutes - entry.optLong("plannedMinutes", 0L)));
+        put(entry, "extended", breakSession.optBoolean("extended"));
+        saveTaskData();
+        return entry;
+    }
+
     private boolean hasActiveBreakSession() {
         return breakSession != null
                 && hasText(breakSession, "taskId")
@@ -2156,46 +2246,88 @@ public class MainActivity extends Activity {
         breakTimerDialog = null;
         breakCountdownView = null;
         breakNextTaskView = null;
+        breakPlannedReturnView = null;
         extendBreakButton = null;
     }
 
-    private void showBreakChoiceDialog(int taskIndex) {
+    private void updateBreakChoiceTask(TextView nextTaskView) {
+        JSONObject task = taskArray(false).optJSONObject(breakChoiceTaskIndex);
+        if (task == null) return;
+        nextTaskView.setText((breakChoiceFromPause ? "休息回来，我要做  ·  " : "回来后做  ·  ")
+                + task.optString("subject", "其他") + " · " + task.optString("title", "下一项作业"));
+        if (changeBreakTaskButton != null) {
+            changeBreakTaskButton.setVisibility(availableBreakTaskIndexes().size() < 2 ? View.GONE : View.VISIBLE);
+            changeBreakTaskButton.setEnabled(!breakChoiceChanged);
+            changeBreakTaskButton.setText(breakChoiceChanged ? "已更换下一项" : "换一个下一项（仅一次）");
+        }
+    }
+
+    private void changeBreakChoiceTask(TextView nextTaskView) {
+        if (breakChoiceChanged) return;
+        List<Integer> candidates = availableBreakTaskIndexes();
+        if (candidates.size() < 2) return;
+        int position = candidates.indexOf(breakChoiceTaskIndex);
+        int nextPosition = position < 0 ? 0 : (position + 1) % candidates.size();
+        int nextIndex = candidates.get(nextPosition);
+        if (nextIndex == breakChoiceTaskIndex) return;
+        breakChoiceTaskIndex = nextIndex;
+        breakChoiceChanged = true;
+        updateBreakChoiceTask(nextTaskView);
+    }
+
+    private void showBreakChoiceDialog(int taskIndex, boolean fromPause, int sourceTaskIndex) {
         JSONArray tasks = taskArray(false);
         JSONObject task = tasks.optJSONObject(taskIndex);
         if (task == null) return;
         if (breakChoiceDialog != null && breakChoiceDialog.isShowing()) breakChoiceDialog.dismiss();
         breakChoiceTaskIndex = taskIndex;
+        breakChoiceSourceTaskIndex = sourceTaskIndex;
+        breakChoiceFromPause = fromPause;
+        breakChoiceChanged = false;
         LinearLayout content = vertical();
         content.setPadding(dp(22), dp(6), dp(22), 0);
-        TextView next = text("回来后做  ·  " + task.optString("subject", "其他")
-                + " · " + task.optString("title", "下一项作业"), 12, Color.rgb(69, 107, 168), true);
+        TextView next = text("", 12, Color.rgb(69, 107, 168), true);
         next.setPadding(dp(13), dp(11), dp(13), dp(11));
         next.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
         content.addView(next, matchWrap());
         TextView help = text("我先决定休息多久，时间到就回来开始这一项。", 11, MUTED, false);
         help.setPadding(0, dp(11), 0, dp(8));
         content.addView(help);
-        LinearLayout quick = horizontal();
-        Button five = smallButton("休息 5 分钟");
-        Button ten = smallButton("休息 10 分钟");
-        quick.addView(five, weightedFixed(1, dp(46)));
-        quick.addView(spaceHorizontal(8));
-        quick.addView(ten, weightedFixed(1, dp(46)));
-        content.addView(quick, matchFixed(dp(46)));
-        Button meal = smallButton("选择吃饭后回来的时间");
+        Button toilet = smallButton("🚻 上厕所 · 5分钟");
+        content.addView(toilet, matchFixed(dp(44)));
+        Button shortBreak = smallButton("🥤 短休息 · 5分钟");
+        LinearLayout.LayoutParams shortParams = matchFixed(dp(44));
+        shortParams.topMargin = dp(6);
+        content.addView(shortBreak, shortParams);
+        Button longBreak = smallButton("🌿 多休息一会 · 10分钟");
+        LinearLayout.LayoutParams longParams = matchFixed(dp(44));
+        longParams.topMargin = dp(6);
+        content.addView(longBreak, longParams);
+        Button meal = smallButton("🍚 去吃饭 · 选择回来时间");
         LinearLayout.LayoutParams mealParams = matchFixed(dp(46));
-        mealParams.topMargin = dp(8);
+        mealParams.topMargin = dp(6);
         content.addView(meal, mealParams);
+        changeBreakTaskButton = smallButton("换一个下一项（仅一次）");
+        changeBreakTaskButton.setTextColor(Color.rgb(69, 107, 168));
+        changeBreakTaskButton.setOnClickListener(v -> changeBreakChoiceTask(next));
+        LinearLayout.LayoutParams changeParams = matchFixed(dp(42));
+        changeParams.topMargin = dp(9);
+        content.addView(changeBreakTaskButton, changeParams);
+        updateBreakChoiceTask(next);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("这一关完成啦，我什么时候回来？")
+                .setTitle(fromPause ? "我准备休息多久？" : "到达我的休息点")
                 .setView(content)
                 .setNegativeButton("先关闭", null)
-                .setPositiveButton("不休息，开始下一项", null)
+                .setPositiveButton(fromPause ? "不休息，继续这项" : "不休息，开始下一项", null)
                 .create();
         breakChoiceDialog = dialog;
-        five.setOnClickListener(v -> startBreakSession(taskIndex, System.currentTimeMillis() + 5 * 60000L));
-        ten.setOnClickListener(v -> startBreakSession(taskIndex, System.currentTimeMillis() + 10 * 60000L));
+        toilet.setOnClickListener(v -> startBreakSession(
+                breakChoiceTaskIndex, System.currentTimeMillis() + 5 * 60000L, "toilet"));
+        shortBreak.setOnClickListener(v -> startBreakSession(
+                breakChoiceTaskIndex, System.currentTimeMillis() + 5 * 60000L, "short"));
+        longBreak.setOnClickListener(v -> startBreakSession(
+                breakChoiceTaskIndex, System.currentTimeMillis() + 10 * 60000L, "long"));
         meal.setOnClickListener(v -> {
             Calendar suggested = Calendar.getInstance();
             suggested.add(Calendar.MINUTE, 30);
@@ -2209,27 +2341,40 @@ public class MainActivity extends Activity {
                     toast("请选择晚于现在的时间");
                     return;
                 }
-                startBreakSession(taskIndex, end.getTimeInMillis());
+                startBreakSession(breakChoiceTaskIndex, end.getTimeInMillis(), "meal");
             }, suggested.get(Calendar.HOUR_OF_DAY), suggested.get(Calendar.MINUTE), true).show();
         });
         dialog.setOnShowListener(ignored -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> startTaskAfterBreak(task.optString("id"), currentDate));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                JSONObject selectedTask = taskArray(false).optJSONObject(breakChoiceTaskIndex);
+                if (selectedTask != null) startTaskAfterBreak(selectedTask.optString("id"), currentDate);
+            });
         });
         dialog.setOnDismissListener(ignored -> {
-            if (breakChoiceDialog == dialog) breakChoiceDialog = null;
+            if (breakChoiceDialog == dialog) {
+                breakChoiceDialog = null;
+                breakChoiceTaskIndex = -1;
+                breakChoiceSourceTaskIndex = -1;
+                breakChoiceFromPause = false;
+                breakChoiceChanged = false;
+                changeBreakTaskButton = null;
+            }
         });
         dialog.show();
     }
 
-    private void startBreakSession(int taskIndex, long endAt) {
+    private void startBreakSession(int taskIndex, long endAt, String kind) {
         JSONObject task = taskArray(false).optJSONObject(taskIndex);
         if (task == null) return;
+        JSONObject log = createBreakLog(kind, endAt);
         breakSession = new JSONObject();
         put(breakSession, "taskId", task.optString("id"));
         put(breakSession, "date", currentDate);
         put(breakSession, "startedAt", System.currentTimeMillis());
         put(breakSession, "endAt", endAt);
+        put(breakSession, "kind", kind);
+        put(breakSession, "breakId", log.optString("id"));
         put(breakSession, "extended", false);
         put(breakSession, "alerted", false);
         saveBreakSession();
@@ -2247,6 +2392,7 @@ public class MainActivity extends Activity {
         int taskIndex = taskIndexById(breakSession.optString("taskId"));
         JSONObject task = taskArray(false).optJSONObject(taskIndex);
         if (task == null || "done".equals(task.optString("status"))) {
+            finishBreakLog("cancelled");
             clearBreakSession();
             return;
         }
@@ -2260,6 +2406,10 @@ public class MainActivity extends Activity {
         breakCountdownView.setGravity(Gravity.CENTER);
         breakCountdownView.setPadding(0, dp(3), 0, dp(10));
         content.addView(breakCountdownView);
+        breakPlannedReturnView = text("", 10, MUTED, true);
+        breakPlannedReturnView.setGravity(Gravity.CENTER);
+        breakPlannedReturnView.setPadding(0, 0, 0, dp(10));
+        content.addView(breakPlannedReturnView);
         breakNextTaskView = text("", 12, Color.rgb(69, 107, 168), true);
         breakNextTaskView.setGravity(Gravity.CENTER);
         breakNextTaskView.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -2281,6 +2431,7 @@ public class MainActivity extends Activity {
             extendBreakButton.setTextColor(GREEN);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                finishBreakLog("cancelled");
                 clearBreakSession();
                 toast("这次休息提醒已取消");
             });
@@ -2302,6 +2453,7 @@ public class MainActivity extends Activity {
         int taskIndex = taskIndexById(breakSession.optString("taskId"));
         JSONObject task = taskArray(false).optJSONObject(taskIndex);
         if (task == null || "done".equals(task.optString("status"))) {
+            finishBreakLog("cancelled");
             clearBreakSession();
             return;
         }
@@ -2314,25 +2466,50 @@ public class MainActivity extends Activity {
         }
         if (breakNextTaskView != null) breakNextTaskView.setText("回来后做  ·  "
                 + task.optString("subject", "其他") + " · " + task.optString("title", "下一项作业"));
+        if (breakPlannedReturnView != null) breakPlannedReturnView.setText(
+                "我计划 " + timeFromEpoch(breakSession.optLong("endAt")) + " 回来");
         if (extendBreakButton != null) {
             extendBreakButton.setEnabled(!breakSession.optBoolean("extended"));
             extendBreakButton.setVisibility(!breakSession.optBoolean("extended") ? View.VISIBLE : View.GONE);
         }
+        breakTimerDialog.setTitle(remaining > 0 ? "我正在休息" : "我计划的休息时间到了");
         Button start = breakTimerDialog.getButton(AlertDialog.BUTTON_POSITIVE);
         if (start != null) start.setText(remaining > 0 ? "我提前回来了，开始下一项" : "开始下一项");
         if (remaining == 0L && !breakSession.optBoolean("alerted")) {
             put(breakSession, "alerted", true);
             saveBreakSession();
+            vibrateBreakAlarm();
             playBreakAlarm(2);
+        }
+    }
+
+    private void vibrateBreakAlarm() {
+        Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+        long[] pattern = {0L, 350L, 180L, 350L};
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1));
+        } else {
+            vibrator.vibrate(pattern, -1);
         }
     }
 
     private void extendBreakSession() {
         if (!hasActiveBreakSession() || breakSession.optBoolean("extended")) return;
         releaseBreakAlarmPlayer();
-        put(breakSession, "endAt", Math.max(System.currentTimeMillis(), breakSession.optLong("endAt")) + 3 * 60000L);
+        long endAt = Math.max(System.currentTimeMillis(), breakSession.optLong("endAt")) + 3 * 60000L;
+        put(breakSession, "endAt", endAt);
         put(breakSession, "extended", true);
         put(breakSession, "alerted", false);
+        JSONObject entry = breakLogById(breakSession.optString("breakId"));
+        if (entry != null) {
+            put(entry, "plannedEndAt", endAt);
+            put(entry, "plannedMinutes", Math.max(1L,
+                    (endAt - entry.optLong("startedAt", System.currentTimeMillis()) + 59999L) / 60000L));
+            put(entry, "plannedReturnAt", timeFromEpoch(endAt));
+            put(entry, "extended", true);
+            saveTaskData();
+        }
         saveBreakSession();
         renderBreakTimerDialog();
         toast("我把休息延长 3 分钟，只延长这一次");
@@ -2341,10 +2518,14 @@ public class MainActivity extends Activity {
     private void startTaskAfterBreak(String taskId, String date) {
         if (date != null && !date.isEmpty() && !date.equals(currentDate)) currentDate = date;
         int taskIndex = taskIndexById(taskId);
+        JSONObject log = finishBreakLog("returned");
         clearBreakSession();
         if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
         renderAll();
         if (taskIndex >= 0) performTaskAction("start", taskIndex);
+        if (log != null) timerHandler.postDelayed(() -> toast("计划休息 "
+                + log.optLong("plannedMinutes") + " 分钟，实际 "
+                + log.optLong("actualMinutes") + " 分钟"), 80L);
     }
 
     private void stopTaskClock(JSONObject task, String nextStatus) {
@@ -2447,6 +2628,10 @@ public class MainActivity extends Activity {
                 toast("已经开始闯关，顺序不能再调整");
                 return;
             }
+        }
+        if (taskBreakPointCount(tasks) > 2) {
+            toast("休息点最多两个，请先取消多余的休息点");
+            return;
         }
         if (taskOrderSaved()) {
             put(owner, "orderSaved", false);
@@ -2788,8 +2973,10 @@ public class MainActivity extends Activity {
         for (int index = 0; index < tasks.length(); index++) {
             totalEstimate += estimatedMinutes(tasks.optJSONObject(index));
         }
-        String detail = "预计净学习 " + totalEstimate + " 分钟。排好顺序，设置每项预计用时"
-                + (weekendMode ? "。" : "，并选择饭前完成到哪一项。");
+        int breakPoints = taskBreakPointCount(tasks);
+        String detail = "预计净学习 " + totalEstimate + " 分钟。排好顺序，设置预计用时和最多两个休息点"
+                + (weekendMode ? "。" : "，也可以选择饭前完成到哪一项。")
+                + "  已设 " + breakPoints + " / 2 个休息点";
         TextView intro = text(detail, 10,
                 Color.rgb(83, 115, 166), true);
         intro.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -2920,9 +3107,30 @@ public class MainActivity extends Activity {
         toolsParams.topMargin = dp(7);
         wrapper.addView(tools, toolsParams);
 
+        boolean breakSelected = task.optBoolean("breakAfter");
+        Button breakPoint = smallButton(breakSelected ? "✓ 完成这项后休息" : "☕ 设为休息点（最多2个）");
+        breakPoint.setTextSize(10);
+        breakPoint.setTextColor(breakSelected ? Color.rgb(69, 107, 168) : GREEN);
+        breakPoint.setBackground(rounded(breakSelected ? Color.rgb(238, 245, 255) : SURFACE,
+                11, breakSelected ? Color.rgb(116, 159, 235) : LINE, 1));
+        breakPoint.setOnClickListener(v -> toggleTaskBreakPoint(task));
+        LinearLayout.LayoutParams breakPointParams = matchFixed(dp(38));
+        breakPointParams.topMargin = dp(6);
+        wrapper.addView(breakPoint, breakPointParams);
+
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(8);
         taskListContainer.addView(wrapper, params);
+        if (breakSelected) {
+            TextView breakDivider = text("☕  我的休息点    完成上面这项后安排休息", 10,
+                    Color.rgb(69, 107, 168), true);
+            breakDivider.setPadding(dp(11), dp(8), dp(11), dp(8));
+            breakDivider.setBackground(rounded(Color.rgb(244, 248, 255), 10,
+                    Color.rgb(156, 188, 245), 1));
+            LinearLayout.LayoutParams breakDividerParams = matchWrap();
+            breakDividerParams.topMargin = dp(5);
+            taskListContainer.addView(breakDivider, breakDividerParams);
+        }
         JSONObject owner = taskOwner(false);
         if (weekendKeyFor(currentDate) == null && owner != null
                 && task.optString("id").equals(owner.optString("mealAfterTaskId"))) {
@@ -2977,6 +3185,32 @@ public class MainActivity extends Activity {
         owner.remove("orderSavedAt");
         saveTaskData();
         renderTasks();
+    }
+
+    private int taskBreakPointCount(JSONArray tasks) {
+        int count = 0;
+        if (tasks == null) return count;
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && task.optBoolean("breakAfter")) count++;
+        }
+        return count;
+    }
+
+    private void toggleTaskBreakPoint(JSONObject task) {
+        JSONArray tasks = taskArray(false);
+        boolean selected = task.optBoolean("breakAfter");
+        if (!selected && taskBreakPointCount(tasks) >= 2) {
+            toast("最多设置两个休息点");
+            return;
+        }
+        put(task, "breakAfter", !selected);
+        JSONObject owner = taskOwner(true);
+        owner.remove("orderSaved");
+        owner.remove("orderSavedAt");
+        saveTaskData();
+        renderTasks();
+        toast(selected ? "已取消这个休息点" : "这里已设为休息点");
     }
 
     private List<String> parseStepTitles(String value) {
@@ -3171,6 +3405,7 @@ public class MainActivity extends Activity {
                 + task.optString("completedAt", "已") + " 完成 · " + estimateLabel
                 + " · 实际 " + taskActualMinutes(task) + " 分钟" + stepSuffix;
         else if (weekendMode && planSaved && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成 · " + estimateLabel;
+        if (task.optBoolean("breakAfter") && !"done".equals(status)) meta += " · ☕ 完成后休息";
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
         metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
         taskCopy.addView(metaView);
@@ -3181,7 +3416,7 @@ public class MainActivity extends Activity {
             addTaskActionButton(actions, deleteLabel, false, true,
                     () -> performTaskAction("delete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "active".equals(status)) {
-            addTaskActionButton(actions, "暂停", false, false, () -> performTaskAction("pause", taskIndex));
+            addTaskActionButton(actions, "休息一下", false, false, () -> performTaskAction("pause", taskIndex));
             addTaskActionButton(actions, currentTaskStep(task) == null ? "完成" : "完成本步", true, false,
                     () -> performTaskAction("complete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "paused".equals(status)) {
@@ -3512,6 +3747,8 @@ public class MainActivity extends Activity {
         if (task == null) return;
         boolean showFocusAfterRender = false;
         int offerBreakTaskIndex = -1;
+        int offerBreakSourceTaskIndex = -1;
+        boolean offerBreakFromPause = false;
         if ("delete".equals(action)) {
             if (weekendKey != null && !currentDate.equals(weekendKey)) {
                 toast("周末清单只能在周五修改");
@@ -3588,7 +3825,9 @@ public class MainActivity extends Activity {
         } else if ("pause".equals(action)) {
             stopTaskClock(task, "paused");
             dismissTaskFocusDialog();
-            toast("我先暂停一下，可以休息或选择下一项");
+            offerBreakTaskIndex = index;
+            offerBreakSourceTaskIndex = index;
+            offerBreakFromPause = true;
         } else if ("complete".equals(action)) {
             JSONObject step = currentTaskStep(task);
             if (step != null) {
@@ -3659,7 +3898,11 @@ public class MainActivity extends Activity {
                 else if (todayDone >= Math.ceil(todayTotal / 2.0)) toast("我又闯过一关，已经完成一半多啦！");
                 else toast("我又闯过一关！已经完成 " + todayDone + " 项");
             }
-            offerBreakTaskIndex = nextTaskIndexForToday();
+            int nextTaskIndex = nextTaskIndexForToday();
+            if (task.optBoolean("breakAfter") && nextTaskIndex >= 0) {
+                offerBreakTaskIndex = nextTaskIndex;
+                offerBreakSourceTaskIndex = index;
+            }
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
             JSONArray steps = taskSteps(task);
@@ -3698,7 +3941,8 @@ public class MainActivity extends Activity {
         saveTaskData();
         renderAll();
         if (showFocusAfterRender) showTaskFocusDialog(task, index);
-        else if (offerBreakTaskIndex >= 0) showBreakChoiceDialog(offerBreakTaskIndex);
+        else if (offerBreakTaskIndex >= 0) showBreakChoiceDialog(
+                offerBreakTaskIndex, offerBreakFromPause, offerBreakSourceTaskIndex);
     }
 
     private void saveTaskData() {

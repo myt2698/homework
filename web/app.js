@@ -148,10 +148,13 @@
     alarmSoundStatus: $("#alarmSoundStatus"), recordAlarmButton: $("#recordAlarmButton"),
     previewAlarmButton: $("#previewAlarmButton"), resetAlarmButton: $("#resetAlarmButton"),
     alarmRecordHint: $("#alarmRecordHint"), breakChoiceModal: $("#breakChoiceModal"),
-    breakChoiceCloseButton: $("#breakChoiceCloseButton"), breakChoiceNextTask: $("#breakChoiceNextTask"),
+    breakChoiceCloseButton: $("#breakChoiceCloseButton"), breakChoiceKicker: $("#breakChoiceKicker"),
+    breakChoiceTitle: $("#breakChoiceTitle"), breakChoiceNextTask: $("#breakChoiceNextTask"),
+    changeBreakNextTaskButton: $("#changeBreakNextTaskButton"),
     breakReturnTime: $("#breakReturnTime"), startTimedBreakButton: $("#startTimedBreakButton"),
     startNextTaskNowButton: $("#startNextTaskNowButton"), breakTimerModal: $("#breakTimerModal"),
-    breakCountdown: $("#breakCountdown"), breakTimerNextTask: $("#breakTimerNextTask"),
+    breakTimerTitle: $("#breakTimerTitle"), breakCountdown: $("#breakCountdown"),
+    breakPlannedReturn: $("#breakPlannedReturn"), breakTimerNextTask: $("#breakTimerNextTask"),
     extendBreakButton: $("#extendBreakButton"), startNextTaskButton: $("#startNextTaskButton"),
     cancelBreakButton: $("#cancelBreakButton"),
     resultLabel: $("#resultLabel"), resultAmount: $("#resultAmount"),
@@ -189,6 +192,9 @@
   let dictationRecordingNotifyOnStop = false;
   let dictationPreview = null;
   let breakChoiceTaskId = null;
+  let breakChoiceSourceTaskId = null;
+  let breakChoiceMode = "checkpoint";
+  let breakChoiceChanged = false;
   let breakTimer = null;
   let breakSession = loadBreakSession();
   let alarmRecorder = null;
@@ -566,17 +572,103 @@
     return tasksForDate(date).find((task) => task.status !== "done" && taskCanRunToday(task, date)) || null;
   }
 
+  function availableBreakTasks(date = elements.recordDate.value) {
+    return tasksForDate(date).filter((task) => task.status !== "done" && taskCanRunToday(task, date));
+  }
+
+  function breakKindLabel(kind) {
+    if (kind === "toilet") return "上厕所";
+    if (kind === "short") return "短休息";
+    if (kind === "long") return "多休息一会";
+    return kind === "meal" ? "吃饭" : "休息";
+  }
+
+  function timeFromEpoch(value) {
+    const date = new Date(Number(value));
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function createBreakLog(kind, endAt) {
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    if (!Array.isArray(owner.breaks)) owner.breaks = [];
+    const startedAt = Date.now();
+    const entry = {
+      id: `break-${startedAt}`,
+      kind,
+      kindLabel: breakKindLabel(kind),
+      trigger: breakChoiceMode,
+      sourceTaskId: breakChoiceSourceTaskId,
+      nextTaskId: breakChoiceTaskId,
+      nextTaskChanged: breakChoiceChanged,
+      startedAt,
+      plannedEndAt: endAt,
+      plannedMinutes: Math.max(1, Math.ceil((endAt - startedAt) / 60000)),
+      plannedReturnAt: timeFromEpoch(endAt),
+      status: "resting"
+    };
+    owner.breaks.push(entry);
+    persist();
+    return entry;
+  }
+
+  function finishBreakLog(status) {
+    if (!breakSession?.breakId) return null;
+    const owner = taskOwnerForDate(breakSession.date, true);
+    const log = Array.isArray(owner.breaks)
+      ? owner.breaks.find((entry) => String(entry.id) === String(breakSession.breakId)) : null;
+    if (!log) return null;
+    const returnedAt = Date.now();
+    log.status = status;
+    log.actualEndAt = returnedAt;
+    log.actualReturnAt = timeFromEpoch(returnedAt);
+    log.actualMinutes = Math.max(1, Math.ceil((returnedAt - Number(log.startedAt || returnedAt)) / 60000));
+    log.overtimeMinutes = Math.max(0, log.actualMinutes - Number(log.plannedMinutes || 0));
+    log.extended = Boolean(breakSession.extended);
+    persist();
+    return log;
+  }
+
   function closeBreakChoice() {
     breakChoiceTaskId = null;
+    breakChoiceSourceTaskId = null;
+    breakChoiceMode = "checkpoint";
+    breakChoiceChanged = false;
     elements.breakChoiceModal.hidden = true;
     if (elements.breakTimerModal.hidden) document.body.classList.remove("modal-open");
   }
 
-  function openBreakChoice(taskId) {
+  function updateBreakChoiceTask() {
+    const task = taskById(breakChoiceTaskId);
+    if (!task) return;
+    elements.breakChoiceNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    const candidates = availableBreakTasks();
+    elements.changeBreakNextTaskButton.hidden = candidates.length < 2;
+    elements.changeBreakNextTaskButton.disabled = breakChoiceChanged;
+    elements.changeBreakNextTaskButton.textContent = breakChoiceChanged ? "已更换下一项" : "换一个下一项（仅一次）";
+  }
+
+  function changeBreakNextTask() {
+    if (breakChoiceChanged) return;
+    const candidates = availableBreakTasks();
+    const currentIndex = candidates.findIndex((task) => String(task.id) === String(breakChoiceTaskId));
+    const next = candidates[(currentIndex + 1 + candidates.length) % candidates.length];
+    if (!next || String(next.id) === String(breakChoiceTaskId)) return;
+    breakChoiceTaskId = String(next.id);
+    breakChoiceChanged = true;
+    updateBreakChoiceTask();
+  }
+
+  function openBreakChoice(taskId, mode = "checkpoint", sourceTaskId = null) {
     const task = taskById(taskId);
     if (!task) return;
     breakChoiceTaskId = String(taskId);
-    elements.breakChoiceNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    breakChoiceSourceTaskId = sourceTaskId ? String(sourceTaskId) : null;
+    breakChoiceMode = mode;
+    breakChoiceChanged = false;
+    elements.breakChoiceKicker.textContent = mode === "pause" ? "我决定休息一下" : "到达我的休息点";
+    elements.breakChoiceTitle.textContent = mode === "pause" ? "我准备休息多久？" : "我准备什么时候回来？";
+    elements.startNextTaskNowButton.textContent = mode === "pause" ? "不休息，继续这项" : "不休息，开始下一项";
+    updateBreakChoiceTask();
     const suggested = new Date(Date.now() + 30 * 60000);
     elements.breakReturnTime.value = `${String(suggested.getHours()).padStart(2, "0")}:${String(suggested.getMinutes()).padStart(2, "0")}`;
     elements.breakChoiceModal.hidden = false;
@@ -600,6 +692,8 @@
     elements.breakCountdown.textContent = remaining > 0
       ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
       : "时间到";
+    elements.breakTimerTitle.textContent = remaining > 0 ? "我正在休息" : "我计划的休息时间到了";
+    elements.breakPlannedReturn.textContent = `我计划 ${timeFromEpoch(breakSession.endAt)} 回来`;
     elements.breakTimerModal.querySelector(".break-timer-dialog").classList.toggle("time-up", remaining <= 0);
     elements.extendBreakButton.hidden = Boolean(breakSession.extended);
     elements.startNextTaskButton.textContent = remaining <= 0 ? "开始下一项" : "我提前回来了，开始下一项";
@@ -620,13 +714,16 @@
     breakTimer = window.setInterval(renderBreakTimer, 1000);
   }
 
-  function startBreak(endAt) {
+  function startBreak(endAt, kind = "short") {
     if (!breakChoiceTaskId) return;
+    const log = createBreakLog(kind, endAt);
     breakSession = {
       taskId: breakChoiceTaskId,
       date: elements.recordDate.value,
       startedAt: Date.now(),
       endAt,
+      kind,
+      breakId: log.id,
       extended: false,
       alerted: false
     };
@@ -635,6 +732,7 @@
   }
 
   function cancelBreak(notify = true) {
+    if (breakSession) finishBreakLog("cancelled");
     breakSession = null;
     saveBreakSession();
     stopAlarmPlayback();
@@ -645,10 +743,15 @@
   function startNextTaskAfterBreak(taskId = breakSession?.taskId, date = breakSession?.date) {
     if (!taskId) taskId = breakChoiceTaskId;
     if (!taskId) return;
+    const log = breakSession ? finishBreakLog("returned") : null;
     closeBreakChoice();
-    cancelBreak(false);
+    breakSession = null;
+    saveBreakSession();
+    stopAlarmPlayback();
+    closeBreakTimer();
     if (date && elements.recordDate.value !== date) setRecordDate(date);
     performTaskAction("start", taskId);
+    if (log) window.setTimeout(() => showToast(`计划休息 ${log.plannedMinutes} 分钟，实际 ${log.actualMinutes} 分钟`), 80);
   }
 
   const SUBJECT_PATTERN = "语文|数学|英语|科学|道法|体育|音乐|美术|其他";
@@ -1712,7 +1815,7 @@
           <button class="order-arrow" type="button" data-order-action="down" data-task-id="${escapeHtml(String(task.id))}" aria-label="向后移动"${options.moveDown ? "" : " disabled"}>↓</button>`;
       } else if (confirmed && canDoToday && allowActions) {
         if (status === "active") {
-          buttons = taskButton("暂停", "pause", task.id) + taskButton(step ? "完成本步" : "完成", "complete", task.id, "primary-task-action");
+          buttons = taskButton("休息一下", "pause", task.id) + taskButton(step ? "完成本步" : "完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
           buttons = taskButton("继续", "start", task.id, "primary-task-action") + taskButton(step ? "完成本步" : "完成", "complete", task.id);
         } else if (status === "done") {
@@ -1727,12 +1830,13 @@
       }
       const estimateText = `预计 ${estimatedMinutes(task)} 分钟`;
       const stepText = taskStepSummary(task);
-      const meta = options.sortable ? `拖动或用箭头排序${stepText ? ` · ${stepText}` : ""}`
+      let meta = options.sortable ? `拖动或用箭头排序${stepText ? ` · ${stepText}` : ""}`
         : status === "done"
         ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · ${estimateText} · 实际 ${taskActualMinutes(task)} 分钟${stepText ? ` · ${stepText}` : ""}`
         : status === "active" ? `${estimateText} · 已用 ${taskDurationLabel(task)}${stepText ? ` · ${stepText}` : ""}`
           : status === "paused" ? `${estimateText} · 已用 ${taskDurationLabel(task)}${stepText ? ` · ${stepText}` : ""}`
             : key && weekend.planSaved && !canDoToday ? `计划${plannedDayLabel(task)}完成 · ${estimateText}` : `${estimateText}${stepText ? ` · ${stepText}` : ""}`;
+      if (task.breakAfter && status !== "done") meta += " · ☕ 完成后休息";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && plannedDateForTask(key, task) === date;
       const sortAttributes = options.sortable
@@ -1740,11 +1844,14 @@
       const planningTools = options.sortable ? `<div class="task-planning-tools">
         <label>预计用时<select data-estimate-task-id="${escapeHtml(String(task.id))}" aria-label="${escapeHtml(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map((minutes) => `<option value="${minutes}"${estimatedMinutes(task) === minutes ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label>
         <button type="button" data-plan-action="steps" data-task-id="${escapeHtml(String(task.id))}">${steps.length ? "修改步骤" : "拆成步骤"}</button>
+        <button type="button" data-break-after="${escapeHtml(String(task.id))}" class="${task.breakAfter ? "break-selected" : ""}">${task.breakAfter ? "✓ 休息点" : "设为休息点"}</button>
         ${!key ? `<button type="button" data-meal-after="${escapeHtml(String(task.id))}" class="${String(owner?.mealAfterTaskId || "") === String(task.id) ? "selected" : ""}">${String(owner?.mealAfterTaskId || "") === String(task.id) ? "✓ 饭前到这里" : "饭前到这里"}</button>` : ""}
       </div>` : "";
       const stepsHtml = options.current && steps.length ? `<ol class="task-step-list">${steps.map((item) => `<li class="${item.done ? "done" : item === step ? "current" : ""}"><span>${item.done ? "✓" : item === step ? "→" : ""}</span>${escapeHtml(item.title)}</li>`).join("")}</ol>` : "";
       const mealDivider = options.sortable && !key && String(owner?.mealAfterTaskId || "") === String(task.id)
         ? `<div class="meal-divider"><span>🍚</span><strong>吃饭</strong><small>饭后从下一项继续</small></div>` : "";
+      const breakDivider = options.sortable && task.breakAfter
+        ? `<div class="break-divider"><span>☕</span><strong>我的休息点</strong><small>完成上面这项后，我安排一次休息</small></div>` : "";
       return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${sortAttributes}" data-subject="${escapeHtml(task.subject || "其他")}">
         <div class="task-main-row">
           ${options.sortable ? `<button class="drag-handle" type="button" data-drag-handle aria-label="按住拖动作业排序" title="按住拖动">⠿</button><span class="order-number">${options.orderNumber}</span>` : ""}
@@ -1755,7 +1862,7 @@
           <div class="task-buttons">${buttons}</div>
         </div>
         ${stepsHtml}${planningTools}
-      </article>${mealDivider}`;
+      </article>${breakDivider}${mealDivider}`;
     };
 
     const pendingTasks = pendingTaskOrder(tasks);
@@ -1783,7 +1890,8 @@
       elements.taskSummary.textContent = `${tasks.length} 关待安排`;
       elements.activeTaskBanner.hidden = true;
       const totalEstimate = tasks.reduce((sum, task) => sum + estimatedMinutes(task), 0);
-      elements.taskList.innerHTML = `<div class="order-intro">预计净学习 ${totalEstimate} 分钟。排好顺序，设置每项预计用时${key ? "。" : "，并选择饭前完成到哪一项。"}</div>${orderBody}`;
+      const breakPointCount = tasks.filter((task) => task.breakAfter).length;
+      elements.taskList.innerHTML = `<div class="order-intro">预计净学习 ${totalEstimate} 分钟。排好顺序，并设置最多两个休息点（已选 ${breakPointCount} 个）${key ? "。" : "；还可以选择饭前完成到哪一项。"}</div>${orderBody}`;
       return;
     }
 
@@ -2126,6 +2234,22 @@
     renderTasks();
   }
 
+  function toggleTaskBreakPoint(id) {
+    const task = taskById(id);
+    if (!task || task.status !== "pending") return;
+    const tasks = tasksForDate();
+    if (!task.breakAfter && tasks.filter((item) => item.breakAfter).length >= 2) {
+      return showToast("最多设置两个休息点，可以先取消一个再调整");
+    }
+    task.breakAfter = !task.breakAfter;
+    const owner = taskOwnerForDate(elements.recordDate.value, true);
+    owner.orderSaved = false;
+    delete owner.orderSavedAt;
+    persist();
+    renderTasks();
+    showToast(task.breakAfter ? "这里已设为休息点" : "已取消这个休息点");
+  }
+
   function parseStepTitles(value) {
     const numbered = numberedTaskParts(value);
     return (numbered || value.split(/[\n；;]+/))
@@ -2166,6 +2290,8 @@
     if (key && !owner.planSaved) return showToast("请先安排每项作业在周五、周六还是周日完成");
     if (tasks.some((task) => (task.status || "pending") !== "pending"))
       return showToast("已经开始闯关，顺序不能再调整");
+    if (tasks.filter((task) => task.breakAfter).length > 2)
+      return showToast("休息点最多两个，请先取消多余的休息点");
     if (taskOrderSaved(date)) {
       owner.orderSaved = false;
       delete owner.orderSavedAt;
@@ -2242,6 +2368,8 @@
     const tasks = tasksForDate();
     let openFocusAfterRender = false;
     let offerBreakTaskId = null;
+    let offerBreakMode = "checkpoint";
+    let offerBreakSourceTaskId = null;
     if (action === "delete") {
       if (key && date !== key) return showToast("周末清单只能在周五修改");
       const owner = taskOwnerForDate(elements.recordDate.value, true);
@@ -2285,7 +2413,9 @@
     } else if (action === "pause") {
       stopTaskClock(task, "paused");
       closeFocusModal();
-      showToast("我先暂停一下，可以休息或选择下一项");
+      offerBreakTaskId = String(task.id);
+      offerBreakMode = "pause";
+      offerBreakSourceTaskId = String(task.id);
     } else if (action === "complete") {
       const step = currentTaskStep(task);
       if (step) {
@@ -2341,7 +2471,10 @@
         else showToast(`我又闯过一关！已经完成 ${todayDone} 项`);
       }
       const nextTask = nextTaskForToday(date);
-      if (nextTask) offerBreakTaskId = String(nextTask.id);
+      if (task.breakAfter && nextTask) {
+        offerBreakTaskId = String(nextTask.id);
+        offerBreakSourceTaskId = String(task.id);
+      }
     } else if (action === "undo") {
       task.status = "paused";
       const steps = taskSteps(task);
@@ -2367,7 +2500,7 @@
     persist();
     render();
     if (openFocusAfterRender) openFocusModal(id);
-    else if (offerBreakTaskId) openBreakChoice(offerBreakTaskId);
+    else if (offerBreakTaskId) openBreakChoice(offerBreakTaskId, offerBreakMode, offerBreakSourceTaskId);
   }
 
   function updateSpeechState(listening, message) {
@@ -2648,6 +2781,11 @@
       toggleMealAfter(mealButton.dataset.mealAfter);
       return;
     }
+    const breakPointButton = event.target.closest("button[data-break-after]");
+    if (breakPointButton) {
+      toggleTaskBreakPoint(breakPointButton.dataset.breakAfter);
+      return;
+    }
     const orderButton = event.target.closest("button[data-order-action]");
     if (orderButton) {
       moveTaskOneStep(orderButton.dataset.taskId, orderButton.dataset.orderAction === "up" ? -1 : 1);
@@ -2715,12 +2853,13 @@
     if (focusModalTaskId) performTaskAction("complete", focusModalTaskId);
   });
   elements.breakChoiceCloseButton.addEventListener("click", closeBreakChoice);
+  elements.changeBreakNextTaskButton.addEventListener("click", changeBreakNextTask);
   elements.breakChoiceModal.addEventListener("click", (event) => {
     if (event.target === elements.breakChoiceModal) closeBreakChoice();
   });
   elements.breakChoiceModal.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-break-minutes]");
-    if (button) startBreak(Date.now() + Number(button.dataset.breakMinutes) * 60000);
+    if (button) startBreak(Date.now() + Number(button.dataset.breakMinutes) * 60000, button.dataset.breakKind);
   });
   elements.startTimedBreakButton.addEventListener("click", () => {
     if (!elements.breakReturnTime.value) return showToast("先选择准备回来的时间");
@@ -2728,7 +2867,7 @@
     const end = new Date();
     end.setHours(hours, minutes, 0, 0);
     if (end.getTime() <= Date.now()) return showToast("请选择晚于现在的时间");
-    startBreak(end.getTime());
+    startBreak(end.getTime(), "meal");
   });
   elements.startNextTaskNowButton.addEventListener("click", () => startNextTaskAfterBreak(breakChoiceTaskId, elements.recordDate.value));
   elements.startNextTaskButton.addEventListener("click", () => startNextTaskAfterBreak());
@@ -2738,6 +2877,16 @@
     breakSession.endAt = Math.max(Date.now(), Number(breakSession.endAt)) + 3 * 60000;
     breakSession.extended = true;
     breakSession.alerted = false;
+    const owner = taskOwnerForDate(breakSession.date, true);
+    const log = Array.isArray(owner.breaks)
+      ? owner.breaks.find((entry) => String(entry.id) === String(breakSession.breakId)) : null;
+    if (log) {
+      log.plannedEndAt = breakSession.endAt;
+      log.plannedMinutes = Math.max(1, Math.ceil((breakSession.endAt - Number(log.startedAt || Date.now())) / 60000));
+      log.plannedReturnAt = timeFromEpoch(breakSession.endAt);
+      log.extended = true;
+      persist();
+    }
     saveBreakSession();
     renderBreakTimer();
     showToast("我把休息延长 3 分钟，只延长这一次");
