@@ -82,11 +82,11 @@ public class MainActivity extends Activity {
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
     private static final String[] SPORTS = {"跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
-    private static final int TASK_KEYWORDS_DEFAULTS_VERSION = 1;
+    private static final int TASK_KEYWORDS_DEFAULTS_VERSION = 2;
     private static final String[][] DEFAULT_TASK_KEYWORDS = {
             {"背诵", "默写", "生抄本", "作文", "小练习", "预习", "小古文", "订正", "朗读"},
             {"口算", "课作本", "书本", "小练习", "订正"},
-            {"校本", "预习课本"},
+            {"校本", "预习课本", "复习"},
             {}
     };
     private static final int[] ESTIMATE_OPTIONS = {5, 10, 15, 20, 30};
@@ -1755,6 +1755,24 @@ public class MainActivity extends Activity {
                 put(correction, "label", "订正");
                 put(correction, "visible", true);
                 mathKeywords.put(correction);
+            }
+        }
+        if (source != null && source.optInt("_defaultsVersion", 0) < 2) {
+            JSONArray englishKeywords = normalized.optJSONArray("英语");
+            boolean hasReview = false;
+            for (int index = 0; englishKeywords != null && index < englishKeywords.length(); index++) {
+                JSONObject item = englishKeywords.optJSONObject(index);
+                if (item != null && "复习".equals(item.optString("label"))) {
+                    hasReview = true;
+                    break;
+                }
+            }
+            if (!hasReview && englishKeywords != null) {
+                JSONObject review = new JSONObject();
+                put(review, "id", "builtin-2-2");
+                put(review, "label", "复习");
+                put(review, "visible", true);
+                englishKeywords.put(review);
             }
         }
         put(normalized, "_defaultsVersion", TASK_KEYWORDS_DEFAULTS_VERSION);

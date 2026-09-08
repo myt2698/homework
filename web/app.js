@@ -14,11 +14,11 @@
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
   const SPORTS = ["跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"];
   const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
-  const TASK_KEYWORDS_DEFAULTS_VERSION = 1;
+  const TASK_KEYWORDS_DEFAULTS_VERSION = 2;
   const DEFAULT_TASK_KEYWORDS = {
     语文: ["背诵", "默写", "生抄本", "作文", "小练习", "预习", "小古文", "订正", "朗读"],
     数学: ["口算", "课作本", "书本", "小练习", "订正"],
-    英语: ["校本", "预习课本"],
+    英语: ["校本", "预习课本", "复习"],
     科学: []
   };
   const ESTIMATE_OPTIONS = [5, 10, 15, 20, 30];
@@ -104,6 +104,10 @@
     if (source && Number(source._defaultsVersion || 0) < 1
         && !normalized["数学"].some((item) => item.label === "订正")) {
       normalized["数学"].push({ id: "builtin-1-4", label: "订正", visible: true });
+    }
+    if (source && Number(source._defaultsVersion || 0) < 2
+        && !normalized["英语"].some((item) => item.label === "复习")) {
+      normalized["英语"].push({ id: "builtin-2-2", label: "复习", visible: true });
     }
     normalized._defaultsVersion = TASK_KEYWORDS_DEFAULTS_VERSION;
     return normalized;
