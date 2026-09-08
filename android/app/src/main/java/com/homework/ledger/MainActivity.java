@@ -82,9 +82,10 @@ public class MainActivity extends Activity {
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
     private static final String[] SPORTS = {"跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
+    private static final int TASK_KEYWORDS_DEFAULTS_VERSION = 1;
     private static final String[][] DEFAULT_TASK_KEYWORDS = {
             {"背诵", "默写", "生抄本", "作文", "小练习", "预习", "小古文", "订正", "朗读"},
-            {"口算", "课作本", "书本", "小练习"},
+            {"口算", "课作本", "书本", "小练习", "订正"},
             {"校本", "预习课本"},
             {}
     };
@@ -1709,6 +1710,7 @@ public class MainActivity extends Activity {
             }
             put(defaults, TASK_SUBJECTS[subjectIndex], entries);
         }
+        put(defaults, "_defaultsVersion", TASK_KEYWORDS_DEFAULTS_VERSION);
         return defaults;
     }
 
@@ -1737,6 +1739,25 @@ public class MainActivity extends Activity {
             }
             put(normalized, subject, entries);
         }
+        if (source != null && source.optInt("_defaultsVersion", 0) < 1) {
+            JSONArray mathKeywords = normalized.optJSONArray("数学");
+            boolean hasCorrection = false;
+            for (int index = 0; mathKeywords != null && index < mathKeywords.length(); index++) {
+                JSONObject item = mathKeywords.optJSONObject(index);
+                if (item != null && "订正".equals(item.optString("label"))) {
+                    hasCorrection = true;
+                    break;
+                }
+            }
+            if (!hasCorrection && mathKeywords != null) {
+                JSONObject correction = new JSONObject();
+                put(correction, "id", "builtin-1-4");
+                put(correction, "label", "订正");
+                put(correction, "visible", true);
+                mathKeywords.put(correction);
+            }
+        }
+        put(normalized, "_defaultsVersion", TASK_KEYWORDS_DEFAULTS_VERSION);
         return normalized;
     }
 
@@ -3029,8 +3050,7 @@ public class MainActivity extends Activity {
         taskOrderButton.setTextColor(sortingMode ? Color.WHITE : GREEN);
         taskOrderButton.setBackground(rounded(sortingMode ? GREEN : GREEN_SOFT, 13,
                 sortingMode ? GREEN : Color.rgb(156, 188, 245), sortingMode ? 0 : 1));
-        taskConfirmHintView.setVisibility(confirmed ? View.VISIBLE : View.GONE);
-        taskConfirmHintView.setText(sortingMode
+        String taskConfirmHint = sortingMode
                 ? weekendMode ? "分别排好周五、周六、周日的顺序，确定后就按计划闯关。"
                     : "长按拖动作业，或使用箭头排好顺序，再确定开始。"
                 : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
@@ -3043,8 +3063,10 @@ public class MainActivity extends Activity {
                     ? weekendMode ? "周末清单已全部完成并自动结算。"
                     : dailyRecord != null && hasText(dailyRecord, "finishTime")
                         ? "最后一项完成时已自动结算。" : "清单已完成，补全成长记录册后自动结算。"
-                    : weekendMode ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
-                : tasks.length() > 0 ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。");
+                    : weekendMode ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : ""
+                : tasks.length() > 0 ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。";
+        taskConfirmHintView.setText(taskConfirmHint);
+        taskConfirmHintView.setVisibility(confirmed && !taskConfirmHint.isEmpty() ? View.VISIBLE : View.GONE);
 
         Result settlement = weekendMode ? null : resultFor(dailyRecord);
         taskSettlementPanel.setVisibility(settlement == null ? View.GONE : View.VISIBLE);

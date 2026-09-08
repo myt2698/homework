@@ -14,9 +14,10 @@
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
   const SPORTS = ["跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"];
   const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
+  const TASK_KEYWORDS_DEFAULTS_VERSION = 1;
   const DEFAULT_TASK_KEYWORDS = {
     语文: ["背诵", "默写", "生抄本", "作文", "小练习", "预习", "小古文", "订正", "朗读"],
-    数学: ["口算", "课作本", "书本", "小练习"],
+    数学: ["口算", "课作本", "书本", "小练习", "订正"],
     英语: ["校本", "预习课本"],
     科学: []
   };
@@ -71,19 +72,21 @@
   });
 
   function defaultTaskKeywords() {
-    return Object.fromEntries(TASK_SUBJECTS.map((subject) => [subject,
+    const defaults = Object.fromEntries(TASK_SUBJECTS.map((subject) => [subject,
       DEFAULT_TASK_KEYWORDS[subject].map((label, index) => ({
         id: `builtin-${TASK_SUBJECTS.indexOf(subject)}-${index}`,
         label,
         visible: true
       }))
     ]));
+    defaults._defaultsVersion = TASK_KEYWORDS_DEFAULTS_VERSION;
+    return defaults;
   }
 
   function normalizeTaskKeywords(value) {
     const defaults = defaultTaskKeywords();
     const source = value && typeof value === "object" ? value : null;
-    return Object.fromEntries(TASK_SUBJECTS.map((subject) => {
+    const normalized = Object.fromEntries(TASK_SUBJECTS.map((subject) => {
       const raw = source && Array.isArray(source[subject]) ? source[subject] : defaults[subject];
       const seen = new Set();
       const items = raw.map((item, index) => {
@@ -98,6 +101,12 @@
       }).filter(Boolean);
       return [subject, items];
     }));
+    if (source && Number(source._defaultsVersion || 0) < 1
+        && !normalized["数学"].some((item) => item.label === "订正")) {
+      normalized["数学"].push({ id: "builtin-1-4", label: "订正", visible: true });
+    }
+    normalized._defaultsVersion = TASK_KEYWORDS_DEFAULTS_VERSION;
+    return normalized;
   }
 
   function loadState() {
@@ -1878,7 +1887,7 @@
     elements.taskOrderButton.className = sortingMode
       ? "primary-button compact-button" : "text-button bordered compact-order-button";
     const currentRecordData = recordFor(date) || {};
-    elements.taskConfirmHint.textContent = sortingMode
+    const taskConfirmHint = sortingMode
       ? key ? "分别排好周五、周六、周日的顺序，确定后就按计划闯关。" : "拖动作业，或使用箭头排好顺序，再确定开始。"
       : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
       : key && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
@@ -1889,8 +1898,10 @@
       ? doneCount === tasks.length && tasks.length
         ? key ? "周末清单已全部完成并自动结算。"
           : currentRecordData.finishTime ? "最后一项完成时已自动结算。" : "清单已完成，补全成长记录册后自动结算。"
-        : key ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : "清单已确认；一次只开始一项。"
+        : key ? "清单已确认；点击下方“周五安排与闯关”，给每项作业选择完成日。" : ""
       : tasks.length ? "核对无误后再确认清单。" : "点击“录入作业”添加完整清单。";
+    elements.taskConfirmHint.textContent = taskConfirmHint;
+    elements.taskConfirmHint.hidden = !taskConfirmHint;
     const questMode = confirmed && orderSaved && (!key || weekend.planSaved);
     const questTasks = !questMode ? tasks : !key ? tasks
       : date === key
