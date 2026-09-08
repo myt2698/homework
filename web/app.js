@@ -2636,7 +2636,10 @@
   function updateSpeechState(listening, message) {
     speechListening = listening;
     elements.voiceTaskButton.classList.toggle("listening", listening);
-    elements.voiceTaskButton.textContent = listening ? "■ 结束录入" : "🎙 开始报作业";
+    elements.voiceTaskButton.textContent = "🎙";
+    const actionLabel = listening ? "结束语音录入" : "开始报作业";
+    elements.voiceTaskButton.setAttribute("aria-label", actionLabel);
+    elements.voiceTaskButton.title = actionLabel;
     if (message) elements.voiceStatus.textContent = message;
   }
 

@@ -444,7 +444,7 @@ public class MainActivity extends Activity {
                 public void onModelError(Throwable error) {
                     if (voiceTaskButton != null) {
                         voiceTaskButton.setEnabled(true);
-                        voiceTaskButton.setText("↻ 重试加载离线语音");
+                        setVoiceTaskButtonIcon("重试加载离线语音", false);
                     }
                     if (voiceTaskStatusView != null) {
                         voiceTaskStatusView.setText("离线语音模型加载失败，点击按钮重试");
@@ -657,7 +657,7 @@ public class MainActivity extends Activity {
         if (offlineVoiceRecognizer == null || offlineVoiceRecognizer.isReady()) return;
         if (voiceTaskButton != null) {
             voiceTaskButton.setEnabled(false);
-            voiceTaskButton.setText("正在准备离线语音…");
+            setVoiceTaskButtonIcon("正在准备离线语音", false);
         }
         if (voiceTaskStatusView != null) {
             voiceTaskStatusView.setText("正在本机加载中文识别模型，首次需要几秒钟");
@@ -702,7 +702,7 @@ public class MainActivity extends Activity {
         if (!offlineVoiceRecognizer.start(offlineVoiceListener)) return;
         if (voiceTaskButton != null) {
             voiceTaskButton.setEnabled(true);
-            voiceTaskButton.setText("■ 停止并使用文字");
+            setVoiceTaskButtonIcon("结束语音录入", true);
         }
         if (voiceTaskStatusView != null) {
             voiceTaskStatusView.setText("正在本机识别，可以连续报多项作业");
@@ -717,7 +717,7 @@ public class MainActivity extends Activity {
         offlineVoiceRecognizer.stop();
         if (voiceTaskButton != null) {
             voiceTaskButton.setEnabled(false);
-            voiceTaskButton.setText("正在整理识别结果…");
+            setVoiceTaskButtonIcon("正在整理语音识别结果", true);
         }
         if (voiceTaskStatusView != null) {
             voiceTaskStatusView.setText("录音已停止，正在完成离线识别");
@@ -738,7 +738,16 @@ public class MainActivity extends Activity {
         if (voiceTaskButton == null) return;
         voiceTaskButton.setEnabled(offlineVoiceRecognizer != null
                 && offlineVoiceRecognizer.isReady());
-        voiceTaskButton.setText("🎙 开始语音报作业");
+        setVoiceTaskButtonIcon("开始报作业", false);
+    }
+
+    private void setVoiceTaskButtonIcon(String description, boolean listening) {
+        if (voiceTaskButton == null) return;
+        voiceTaskButton.setText("🎙");
+        voiceTaskButton.setContentDescription(description);
+        voiceTaskButton.setTextColor(listening ? RED : GREEN);
+        voiceTaskButton.setBackground(rounded(listening ? RED_SOFT : GREEN_SOFT, 10,
+                listening ? RED : Color.rgb(156, 188, 245), 1));
     }
 
     private String trailingText(String value, int maximumCharacters) {
@@ -1272,8 +1281,9 @@ public class MainActivity extends Activity {
         selectTaskSubject(selectedTaskSubject);
         taskEntryComposerPanel.addView(space(9));
         voiceTaskButton = new Button(this);
-        voiceTaskButton.setText("正在准备离线语音…");
-        voiceTaskButton.setTextSize(13);
+        voiceTaskButton.setText("🎙");
+        voiceTaskButton.setContentDescription("正在准备离线语音");
+        voiceTaskButton.setTextSize(18);
         voiceTaskButton.setTextColor(GREEN);
         voiceTaskButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         voiceTaskButton.setAllCaps(false);
@@ -1322,9 +1332,9 @@ public class MainActivity extends Activity {
         taskEntryAddButton.setOnClickListener(v -> generateTasksFromDraft());
         entryActions.addView(taskEntryAddButton, weightedFixed(1, dp(43)));
         entryActions.addView(spaceHorizontal(6));
-        voiceTaskButton.setTextSize(11);
+        voiceTaskButton.setPadding(0, 0, 0, 0);
         voiceTaskButton.setBackground(rounded(GREEN_SOFT, 10, Color.rgb(156, 188, 245), 1));
-        entryActions.addView(voiceTaskButton, weightedFixed(1, dp(43)));
+        entryActions.addView(voiceTaskButton, fixed(dp(46), dp(43)));
         entryActions.addView(spaceHorizontal(6));
         Button clear = textButton("清空");
         clear.setOnClickListener(v -> clearTaskDraftAndStopVoice());
