@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "homework-ledger-v1";
   const BREAK_SESSION_KEY = "homework-break-session-v1";
+  const START_PLAN_SESSION_KEY = "homework-start-plan-session-v1";
   const BREAK_ALARM_KEY = "homework-break-alarm-v1";
   const BREAK_REMINDER_INTERVAL_MS = 5 * 60000;
   const RULES = {
@@ -186,11 +187,8 @@
     taskEntryUndoDeleteButton: $("#taskEntryUndoDeleteButton"), taskDraftError: $("#taskDraftError"),
     taskEditModal: $("#taskEditModal"), taskEditCloseButton: $("#taskEditCloseButton"),
     taskEditTitle: $("#taskEditTitle"), taskEditInput: $("#taskEditInput"),
-    taskEditEstimate: $("#taskEditEstimate"), taskEditSteps: $("#taskEditSteps"),
+    taskEditEstimate: $("#taskEditEstimate"),
     taskEditCancelButton: $("#taskEditCancelButton"), taskEditSaveButton: $("#taskEditSaveButton"),
-    stepEditorModal: $("#stepEditorModal"), stepEditorCloseButton: $("#stepEditorCloseButton"),
-    stepEditorTaskTitle: $("#stepEditorTaskTitle"), stepEditorInput: $("#stepEditorInput"),
-    stepEditorCancelButton: $("#stepEditorCancelButton"), stepEditorSaveButton: $("#stepEditorSaveButton"),
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     taskSummary: $("#taskSummary"),
@@ -202,18 +200,26 @@
     confirmTaskListButton: $("#confirmTaskListButton"), dayResult: $("#dayResult"),
     focusModal: $("#focusModal"), focusCloseButton: $("#focusCloseButton"),
     focusModalSubject: $("#focusModalSubject"), focusModalTitle: $("#focusModalTitle"),
-    focusModalStep: $("#focusModalStep"), focusModalStepTitle: $("#focusModalStepTitle"),
     focusModalElapsed: $("#focusModalElapsed"), focusModalEstimate: $("#focusModalEstimate"),
     focusModalComparison: $("#focusModalComparison"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
+    startPlanModal: $("#startPlanModal"), startPlanCloseButton: $("#startPlanCloseButton"),
+    startPlanTitle: $("#startPlanTitle"), startPlanTaskCard: $("#startPlanTaskCard"),
+    startPlanTask: $("#startPlanTask"), startPlanOptions: $("#startPlanOptions"),
+    startPlanTime: $("#startPlanTime"), saveStartPlanButton: $("#saveStartPlanButton"),
+    startPlanCountdownPanel: $("#startPlanCountdownPanel"), startPlanCountdown: $("#startPlanCountdown"),
+    startPlanScheduledTime: $("#startPlanScheduledTime"), adjustStartPlanButton: $("#adjustStartPlanButton"),
+    startPlannedTaskButton: $("#startPlannedTaskButton"),
     recordAlarmButton: $("#recordAlarmButton"),
     previewAlarmButton: $("#previewAlarmButton"), resetAlarmButton: $("#resetAlarmButton"),
     alarmRecordHint: $("#alarmRecordHint"), breakChoiceModal: $("#breakChoiceModal"),
     breakChoiceCloseButton: $("#breakChoiceCloseButton"),
-    breakChoiceTitle: $("#breakChoiceTitle"), breakChoiceNextTask: $("#breakChoiceNextTask"),
+    breakChoiceTitle: $("#breakChoiceTitle"), breakChoiceTaskCard: $("#breakChoiceTaskCard"),
+    breakChoiceNextTask: $("#breakChoiceNextTask"),
     breakReturnTime: $("#breakReturnTime"), startTimedBreakButton: $("#startTimedBreakButton"),
     startNextTaskNowButton: $("#startNextTaskNowButton"), breakTimerModal: $("#breakTimerModal"),
     breakTimerTitle: $("#breakTimerTitle"), breakCountdown: $("#breakCountdown"),
+    breakTimerTaskCard: $("#breakTimerTaskCard"),
     breakPlannedReturn: $("#breakPlannedReturn"), breakTimerNextTask: $("#breakTimerNextTask"),
     extendBreakButton: $("#extendBreakButton"), startNextTaskButton: $("#startNextTaskButton"),
     cancelBreakButton: $("#cancelBreakButton"),
@@ -233,7 +239,6 @@
   let selectedKeywordSettingsSubject = "语文";
   let focusModalTaskId = null;
   let taskEditTaskId = null;
-  let stepEditorTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
   let editingPendingTaskId = null;
@@ -261,6 +266,8 @@
   let breakChoiceMode = "checkpoint";
   let breakTimer = null;
   let breakSession = loadBreakSession();
+  let startPlanTimer = null;
+  let startPlanSession = loadStartPlanSession();
   let alarmRecorder = null;
   let alarmStream = null;
   let alarmChunks = [];
@@ -407,16 +414,6 @@
       return sum + Math.max(0, estimatedMinutes(task) - spent);
     }, 0);
   }
-  function taskSteps(task) {
-    return Array.isArray(task?.steps)
-      ? task.steps.filter((step) => step && typeof step.title === "string" && step.title.trim()) : [];
-  }
-  function currentTaskStep(task) { return taskSteps(task).find((step) => !step.done) || null; }
-  function taskStepSummary(task) {
-    const steps = taskSteps(task);
-    if (!steps.length) return "";
-    return `${steps.filter((step) => step.done).length} / ${steps.length} 步`;
-  }
   function taskClockLabel(task) {
     const seconds = Math.floor(taskElapsedMs(task) / 1000);
     const hours = Math.floor(seconds / 3600);
@@ -449,16 +446,11 @@
     if (!task || task.status !== "active") return closeFocusModal();
     elements.focusModalSubject.textContent = task.subject || "其他";
     elements.focusModalTitle.textContent = task.title || "当前作业";
-    const step = currentTaskStep(task);
-    elements.focusModalStep.hidden = !step;
-    elements.focusModalStepTitle.textContent = step?.title || "";
     elements.focusModalElapsed.textContent = taskClockLabel(task);
     elements.focusModalEstimate.textContent = `${estimatedMinutes(task)} 分钟`;
     elements.focusModalComparison.textContent = taskEstimateComparisonLabel(task);
     elements.focusModalStartedAt.textContent = task.startedAt || "--:--";
-    elements.focusCompleteButton.textContent = step
-      ? taskSteps(task).filter((item) => !item.done).length === 1 ? "完成最后一步" : "完成本步"
-      : "完成这项";
+    elements.focusCompleteButton.textContent = "完成这项";
   }
   function openFocusModal(id) {
     focusModalTaskId = String(id);
@@ -470,6 +462,137 @@
     focusModalTaskId = null;
     elements.focusModal.hidden = true;
     document.body.style.overflow = "";
+  }
+
+  function loadStartPlanSession() {
+    try {
+      const value = JSON.parse(localStorage.getItem(START_PLAN_SESSION_KEY));
+      return value && typeof value === "object" && value.taskId && value.date && Number(value.startAt)
+        ? value : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveStartPlanSession() {
+    if (startPlanSession) localStorage.setItem(START_PLAN_SESSION_KEY, JSON.stringify(startPlanSession));
+    else localStorage.removeItem(START_PLAN_SESSION_KEY);
+  }
+
+  function setScheduledTaskCard(card, task) {
+    if (card) card.dataset.subject = task?.subject || "其他";
+  }
+
+  function closeStartPlanModal() {
+    window.clearInterval(startPlanTimer);
+    startPlanTimer = null;
+    elements.startPlanModal.hidden = true;
+    if (elements.breakChoiceModal.hidden && elements.breakTimerModal.hidden) document.body.classList.remove("modal-open");
+  }
+
+  function clearStartPlanSession() {
+    startPlanSession = null;
+    saveStartPlanSession();
+    stopAlarmPlayback();
+    closeStartPlanModal();
+  }
+
+  function openStartPlanChoice(taskId, date = elements.recordDate.value) {
+    const task = tasksForDate(date).find((item) => String(item.id) === String(taskId));
+    if (!task || (task.status || "pending") !== "pending" || !taskCanRunToday(task, date)) return;
+    if (startPlanSession) clearStartPlanSession();
+    if (elements.recordDate.value !== date) setRecordDate(date);
+    elements.startPlanTitle.textContent = "我准备什么时候开始？";
+    elements.startPlanTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    setScheduledTaskCard(elements.startPlanTaskCard, task);
+    elements.startPlanOptions.hidden = false;
+    elements.startPlanCountdownPanel.hidden = true;
+    elements.startPlanCloseButton.hidden = false;
+    elements.startPlanModal.querySelector(".start-plan-dialog")?.classList.remove("time-up");
+    elements.startPlanModal.dataset.taskId = String(task.id);
+    elements.startPlanModal.dataset.date = date;
+    const suggested = new Date(Date.now() + 30 * 60000);
+    elements.startPlanTime.value = `${String(suggested.getHours()).padStart(2, "0")}:${String(suggested.getMinutes()).padStart(2, "0")}`;
+    elements.startPlanModal.hidden = false;
+    document.body.classList.add("modal-open");
+  }
+
+  function scheduleFirstTask(taskId, date, startAt) {
+    const task = tasksForDate(date).find((item) => String(item.id) === String(taskId));
+    if (!task || !Number(startAt)) return;
+    startPlanSession = {
+      taskId: String(taskId),
+      date,
+      startAt: Number(startAt),
+      alerted: false
+    };
+    saveStartPlanSession();
+    openStartPlanTimer();
+  }
+
+  function renderStartPlanTimer() {
+    if (!startPlanSession) return closeStartPlanModal();
+    const task = tasksForDate(startPlanSession.date)
+      .find((item) => String(item.id) === String(startPlanSession.taskId));
+    if (!task || (task.status || "pending") !== "pending" || !taskCanRunToday(task, startPlanSession.date)) {
+      clearStartPlanSession();
+      return;
+    }
+    elements.startPlanTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    setScheduledTaskCard(elements.startPlanTaskCard, task);
+    const now = Date.now();
+    const remaining = Math.max(0, Number(startPlanSession.startAt) - now);
+    const seconds = Math.ceil(remaining / 1000);
+    elements.startPlanCountdown.textContent = remaining > 0
+      ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}\u2009:\u2009${String(seconds % 60).padStart(2, "0")}`
+      : "时间到";
+    elements.startPlanTitle.textContent = remaining > 0 ? "我按计划准备开始" : "我计划的开始时间到了";
+    elements.startPlanScheduledTime.textContent = `我计划 ${timeFromEpoch(startPlanSession.startAt)} 开始`;
+    elements.startPlannedTaskButton.textContent = remaining > 0 ? "我准备好了，提前开始" : "开始我的第一项";
+    elements.startPlanModal.querySelector(".start-plan-dialog")?.classList.toggle("time-up", remaining <= 0);
+    if (remaining <= 0 && !startPlanSession.alerted) {
+      startPlanSession.alerted = true;
+      startPlanSession.nextAlertAt = now + BREAK_REMINDER_INTERVAL_MS;
+      saveStartPlanSession();
+      playAlarm(2);
+    } else if (remaining <= 0
+        && now >= Number(startPlanSession.nextAlertAt || Number(startPlanSession.startAt) + BREAK_REMINDER_INTERVAL_MS)) {
+      startPlanSession.nextAlertAt = now + BREAK_REMINDER_INTERVAL_MS;
+      saveStartPlanSession();
+      playAlarm(1);
+    }
+  }
+
+  function openStartPlanTimer() {
+    if (!startPlanSession) return;
+    if (elements.recordDate.value !== startPlanSession.date) setRecordDate(startPlanSession.date);
+    elements.startPlanModal.dataset.taskId = String(startPlanSession.taskId);
+    elements.startPlanModal.dataset.date = startPlanSession.date;
+    elements.startPlanOptions.hidden = true;
+    elements.startPlanCountdownPanel.hidden = false;
+    elements.startPlanCloseButton.hidden = true;
+    elements.startPlanModal.hidden = false;
+    document.body.classList.add("modal-open");
+    renderStartPlanTimer();
+    window.clearInterval(startPlanTimer);
+    startPlanTimer = window.setInterval(renderStartPlanTimer, 1000);
+  }
+
+  function startFirstTaskFromPlan() {
+    const taskId = startPlanSession?.taskId || elements.startPlanModal.dataset.taskId;
+    const date = startPlanSession?.date || elements.startPlanModal.dataset.date;
+    if (!taskId) return;
+    clearStartPlanSession();
+    if (date && elements.recordDate.value !== date) setRecordDate(date);
+    performTaskAction("start", taskId);
+  }
+
+  function adjustStartPlan() {
+    const taskId = startPlanSession?.taskId;
+    const date = startPlanSession?.date;
+    if (!taskId || !date) return;
+    clearStartPlanSession();
+    openStartPlanChoice(taskId, date);
   }
 
   function loadBreakSession() {
@@ -607,7 +730,6 @@
     stopDictation(false, false);
     closeTaskEntryModal();
     closeWeekendPlanModal();
-    closeTaskStepsEditor();
     closeTaskEditor();
     closeFocusModal();
     elements.mainPage.hidden = true;
@@ -703,6 +825,7 @@
   function updateBreakChoiceTask() {
     const task = taskById(breakChoiceTaskId);
     if (!task) return;
+    setScheduledTaskCard(elements.breakChoiceTaskCard, task);
     elements.breakChoiceNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
   }
 
@@ -732,6 +855,7 @@
     if (!breakSession) return closeBreakTimer();
     const task = tasksForDate(breakSession.date).find((item) => String(item.id) === String(breakSession.taskId));
     if (!task || task.status === "done") return cancelBreak(false);
+    setScheduledTaskCard(elements.breakTimerTaskCard, task);
     elements.breakTimerNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
     const now = Date.now();
     const remaining = Math.max(0, Number(breakSession.endAt) - now);
@@ -1140,27 +1264,6 @@
     elements.taskDraft.setAttribute("aria-invalid", String(hasError));
   }
 
-  function openTaskStepsEditor(id) {
-    const task = taskById(id);
-    if (!task || task.status !== "pending") return showToast("作业开始后不能再修改步骤");
-    stepEditorTaskId = String(id);
-    elements.stepEditorTaskTitle.textContent = `${task.subject || "其他"} · ${task.title || "当前作业"}`;
-    elements.stepEditorInput.value = taskSteps(task)
-      .map((step, index) => `${index + 1}. ${step.title}`)
-      .join("\n");
-    elements.stepEditorModal.hidden = false;
-    document.body.classList.add("modal-open");
-    elements.stepEditorInput.focus();
-    elements.stepEditorInput.setSelectionRange(elements.stepEditorInput.value.length, elements.stepEditorInput.value.length);
-  }
-
-  function closeTaskStepsEditor() {
-    if (elements.stepEditorModal.hidden) return;
-    elements.stepEditorModal.hidden = true;
-    stepEditorTaskId = null;
-    document.body.classList.remove("modal-open");
-  }
-
   function openTaskEditor(id) {
     const task = taskById(id);
     if (!task || (task.status || "pending") !== "pending" || !taskOrderSaved()) {
@@ -1170,9 +1273,6 @@
     elements.taskEditTitle.textContent = `修改${task.subject || ""}作业`;
     elements.taskEditInput.value = task.title || "";
     elements.taskEditEstimate.value = String(estimatedMinutes(task));
-    elements.taskEditSteps.value = taskSteps(task)
-      .map((step, index) => `${index + 1}. ${step.title}`)
-      .join("\n");
     elements.taskEditModal.hidden = false;
     document.body.classList.add("modal-open");
     elements.taskEditInput.focus();
@@ -1190,7 +1290,6 @@
     stopDictation(false, false);
     closeTaskEntryModal();
     closeWeekendPlanModal();
-    closeTaskStepsEditor();
     closeTaskEditor();
     closeFocusModal();
     historyManageMode = false;
@@ -1961,16 +2060,14 @@
       let buttons = "";
       const canDoToday = canDoTaskToday(task);
       const allowActions = options.allowActions !== false;
-      const steps = taskSteps(task);
-      const step = currentTaskStep(task);
       if (options.sortable) {
         buttons = `<button class="order-arrow" type="button" data-order-action="up" data-task-id="${escapeHtml(String(task.id))}" aria-label="向前移动"${options.moveUp ? "" : " disabled"}>↑</button>
           <button class="order-arrow" type="button" data-order-action="down" data-task-id="${escapeHtml(String(task.id))}" aria-label="向后移动"${options.moveDown ? "" : " disabled"}>↓</button>`;
       } else if (confirmed && canDoToday && allowActions) {
         if (status === "active") {
-          buttons = taskButton("休息一下", "pause", task.id) + taskButton(step ? "完成本步" : "完成", "complete", task.id, "primary-task-action");
+          buttons = taskButton("休息一下", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
-          buttons = taskButton("继续", "start", task.id, "primary-task-action") + taskButton(step ? "完成本步" : "完成", "complete", task.id);
+          buttons = taskButton("继续", "start", task.id, "primary-task-action") + taskButton("完成", "complete", task.id);
         } else if (status === "done") {
           buttons = taskButton("撤销完成", "undo", task.id);
         } else {
@@ -1982,23 +2079,20 @@
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");
       }
       const estimateText = `预计 ${estimatedMinutes(task)} 分钟`;
-      const stepText = taskStepSummary(task);
-      let meta = options.sortable ? `拖动或用箭头排序${stepText ? ` · ${stepText}` : ""}`
+      let meta = options.sortable ? "拖动或用箭头排序"
         : status === "done"
-        ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · ${estimateText} · 实际 ${taskActualMinutes(task)} 分钟${stepText ? ` · ${stepText}` : ""}`
-        : status === "active" ? `${estimateText} · 已用 ${taskDurationLabel(task)}${stepText ? ` · ${stepText}` : ""}`
-          : status === "paused" ? `${estimateText} · 已用 ${taskDurationLabel(task)}${stepText ? ` · ${stepText}` : ""}`
-            : key && weekend.planSaved && !canDoToday ? `计划${plannedDayLabel(task)}完成 · ${estimateText}` : `${estimateText}${stepText ? ` · ${stepText}` : ""}`;
+        ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · ${estimateText} · 实际 ${taskActualMinutes(task)} 分钟`
+        : status === "active" ? `${estimateText} · 已用 ${taskDurationLabel(task)}`
+          : status === "paused" ? `${estimateText} · 已用 ${taskDurationLabel(task)}`
+            : key && weekend.planSaved && !canDoToday ? `计划${plannedDayLabel(task)}完成 · ${estimateText}` : estimateText;
       if (task.breakAfter && status !== "done") meta += " · ☕ 完成后休息";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && plannedDateForTask(key, task) === date;
       const planningTools = options.sortable ? `<div class="task-planning-tools">
         <label>预计用时<select data-estimate-task-id="${escapeHtml(String(task.id))}" aria-label="${escapeHtml(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map((minutes) => `<option value="${minutes}"${estimatedMinutes(task) === minutes ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label>
-        <button type="button" data-plan-action="steps" data-task-id="${escapeHtml(String(task.id))}">${steps.length ? "修改步骤" : "拆成步骤"}</button>
         <button type="button" data-break-after="${escapeHtml(String(task.id))}" class="${task.breakAfter ? "break-selected" : ""}">${task.breakAfter ? "✓ 休息点" : "设为休息点"}</button>
         ${!key ? `<button type="button" data-meal-after="${escapeHtml(String(task.id))}" class="${String(owner?.mealAfterTaskId || "") === String(task.id) ? "selected" : ""}">${String(owner?.mealAfterTaskId || "") === String(task.id) ? "✓ 饭前到这里" : "饭前到这里"}</button>` : ""}
       </div>` : "";
-      const stepsHtml = options.current && steps.length ? `<ol class="task-step-list">${steps.map((item) => `<li class="${item.done ? "done" : item === step ? "current" : ""}"><span>${item.done ? "✓" : item === step ? "→" : ""}</span>${escapeHtml(item.title)}</li>`).join("")}</ol>` : "";
       const mealDivider = options.sortable && !key && String(owner?.mealAfterTaskId || "") === String(task.id)
         ? `<div class="meal-divider"><span>🍚</span><strong>吃饭</strong><small>饭后从下一项继续</small></div>` : "";
       const breakDivider = options.sortable && task.breakAfter
@@ -2015,7 +2109,7 @@
           </div>
           <div class="task-buttons">${buttons}</div>
         </div>
-        ${stepsHtml}${planningTools}
+        ${planningTools}
       </article>${breakDivider}${mealDivider}`;
     };
 
@@ -2418,13 +2512,6 @@
     showToast(task.breakAfter ? "这里已设为休息点" : "已取消这个休息点");
   }
 
-  function parseStepTitles(value) {
-    const numbered = numberedTaskParts(value);
-    return (numbered || value.split(/[\n；;]+/))
-      .map((item) => item.trim().replace(/^[-•]\s*/, ""))
-      .filter(Boolean);
-  }
-
   function saveTaskEdit() {
     const task = taskById(taskEditTaskId);
     if (!task || (task.status || "pending") !== "pending") {
@@ -2438,43 +2525,11 @@
     }
     task.title = title;
     task.estimatedMinutes = estimatedMinutes({ estimatedMinutes: Number(elements.taskEditEstimate.value) });
-    const titles = parseStepTitles(elements.taskEditSteps.value);
-    if (titles.length) {
-      task.steps = titles.map((stepTitle, index) => ({
-        id: `${task.id}-step-${index}`,
-        title: stepTitle,
-        done: false
-      }));
-    } else {
-      delete task.steps;
-    }
+    delete task.steps;
     persist();
     closeTaskEditor();
     renderTasks();
     showToast("这项作业修改好了");
-  }
-
-  function saveTaskSteps() {
-    const task = taskById(stepEditorTaskId);
-    if (!task || task.status !== "pending") {
-      closeTaskStepsEditor();
-      return showToast("这项作业已经不能修改步骤");
-    }
-    const titles = parseStepTitles(elements.stepEditorInput.value);
-    let message = "已取消步骤拆分";
-    if (titles.length) {
-      task.steps = titles.map((title, index) => ({ id: `${task.id}-step-${index}`, title, done: false }));
-      message = `已拆成 ${titles.length} 个步骤`;
-    } else {
-      delete task.steps;
-    }
-    const owner = taskOwnerForDate(elements.recordDate.value, true);
-    owner.orderSaved = false;
-    delete owner.orderSavedAt;
-    persist();
-    closeTaskStepsEditor();
-    renderTasks();
-    showToast(message);
   }
 
   function toggleTaskOrder() {
@@ -2490,6 +2545,7 @@
     if (tasks.filter((task) => task.breakAfter).length > 2)
       return showToast("休息点最多两个，请先取消多余的休息点");
     if (taskOrderSaved(date)) {
+      if (startPlanSession?.date === date) clearStartPlanSession();
       owner.orderSaved = false;
       delete owner.orderSavedAt;
       taskListExpanded = false;
@@ -2506,6 +2562,8 @@
     persist();
     render();
     showToast(key ? "周末闯关顺序已确定！" : "顺序已确定，我要开始第一关啦！");
+    const firstTask = nextTaskForToday(date);
+    if (firstTask) window.setTimeout(() => openStartPlanChoice(firstTask.id, date), 80);
   }
 
   function reorderTask(sourceId, targetId) {
@@ -2653,6 +2711,7 @@
     if (!key && record.finishTime && action !== "undo") return showToast("当天已经结算，如需修改可先撤销一项完成");
     if (action === "start") {
       if (breakSession) cancelBreak(false);
+      if (startPlanSession) clearStartPlanSession();
       const active = activeTaskForDate();
       if (active && active !== task) return showToast(`请先暂停或完成“${active.title}”`);
       task.status = "active";
@@ -2668,19 +2727,6 @@
       offerBreakMode = "pause";
       offerBreakSourceTaskId = String(task.id);
     } else if (action === "complete") {
-      const step = currentTaskStep(task);
-      if (step) {
-        step.done = true;
-        step.completedAt = currentTime();
-        const nextStep = currentTaskStep(task);
-        if (nextStep) {
-          persist();
-          render();
-          updateFocusModal();
-          showToast(`完成一步，接下来：${nextStep.title}`);
-          return;
-        }
-      }
       stopTaskClock(task, "done");
       closeFocusModal();
       task.completedAt = currentTime();
@@ -2728,11 +2774,6 @@
       }
     } else if (action === "undo") {
       task.status = "paused";
-      const steps = taskSteps(task);
-      if (steps.length && steps.every((step) => step.done)) {
-        steps[steps.length - 1].done = false;
-        delete steps[steps.length - 1].completedAt;
-      }
       delete task.completedAt;
       delete task.completedDate;
       if (key) {
@@ -3069,12 +3110,6 @@
   elements.taskEditModal.addEventListener("click", (event) => {
     if (event.target === elements.taskEditModal) closeTaskEditor();
   });
-  elements.stepEditorCloseButton.addEventListener("click", closeTaskStepsEditor);
-  elements.stepEditorCancelButton.addEventListener("click", closeTaskStepsEditor);
-  elements.stepEditorSaveButton.addEventListener("click", saveTaskSteps);
-  elements.stepEditorModal.addEventListener("click", (event) => {
-    if (event.target === elements.stepEditorModal) closeTaskStepsEditor();
-  });
   elements.weekendPlanEntry.addEventListener("click", openWeekendPlanModal);
   elements.weekendPlanCloseButton.addEventListener("click", closeWeekendPlanModal);
   elements.weekendPlanModal.addEventListener("click", (event) => {
@@ -3082,10 +3117,10 @@
   });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (!elements.breakTimerModal.hidden) return;
-    if (!elements.breakChoiceModal.hidden) closeBreakChoice();
+    if (!elements.breakTimerModal.hidden || (!elements.startPlanModal.hidden && startPlanSession)) return;
+    if (!elements.startPlanModal.hidden) closeStartPlanModal();
+    else if (!elements.breakChoiceModal.hidden) closeBreakChoice();
     else if (!elements.taskEditModal.hidden) closeTaskEditor();
-    else if (!elements.stepEditorModal.hidden) closeTaskStepsEditor();
     else if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
     else if (!elements.dictationPage.hidden) closeDictationPage();
@@ -3167,11 +3202,6 @@
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
   elements.taskList.addEventListener("click", (event) => {
-    const planningButton = event.target.closest("button[data-plan-action]");
-    if (planningButton) {
-      if (planningButton.dataset.planAction === "steps") openTaskStepsEditor(planningButton.dataset.taskId);
-      return;
-    }
     const mealButton = event.target.closest("button[data-meal-after]");
     if (mealButton) {
       toggleMealAfter(mealButton.dataset.mealAfter);
@@ -3261,6 +3291,28 @@
   elements.focusCompleteButton.addEventListener("click", () => {
     if (focusModalTaskId) performTaskAction("complete", focusModalTaskId);
   });
+  elements.startPlanCloseButton.addEventListener("click", closeStartPlanModal);
+  elements.startPlanModal.addEventListener("click", (event) => {
+    if (event.target === elements.startPlanModal && !startPlanSession) closeStartPlanModal();
+    const button = event.target.closest("button[data-start-delay]");
+    if (!button) return;
+    const taskId = elements.startPlanModal.dataset.taskId;
+    const date = elements.startPlanModal.dataset.date;
+    const delay = Number(button.dataset.startDelay);
+    if (!taskId || !date) return;
+    if (delay === 0) startFirstTaskFromPlan();
+    else scheduleFirstTask(taskId, date, Date.now() + delay * 60000);
+  });
+  elements.saveStartPlanButton.addEventListener("click", () => {
+    if (!elements.startPlanTime.value) return showToast("先选好准备开始的时间");
+    const [hours, minutes] = elements.startPlanTime.value.split(":").map(Number);
+    const startAt = new Date();
+    startAt.setHours(hours, minutes, 0, 0);
+    if (startAt.getTime() <= Date.now()) return showToast("请选择晚于现在的时间");
+    scheduleFirstTask(elements.startPlanModal.dataset.taskId, elements.startPlanModal.dataset.date, startAt.getTime());
+  });
+  elements.adjustStartPlanButton.addEventListener("click", adjustStartPlan);
+  elements.startPlannedTaskButton.addEventListener("click", startFirstTaskFromPlan);
   elements.breakChoiceCloseButton.addEventListener("click", closeBreakChoice);
   elements.breakChoiceModal.addEventListener("click", (event) => {
     if (event.target === elements.breakChoiceModal) closeBreakChoice();
@@ -3343,6 +3395,7 @@
   loadDictationRecordingWords();
   render();
   if (breakSession) openBreakTimer();
+  else if (startPlanSession) openStartPlanTimer();
   setInterval(() => {
     updateFocusModal();
     const active = activeTaskForDate();

@@ -76,6 +76,7 @@ public class MainActivity extends Activity {
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
     private static final String KEY_DICTATION_LESSON = "dictation_lesson";
     private static final String KEY_BREAK_SESSION = "break_session";
+    private static final String KEY_START_PLAN_SESSION = "start_plan_session";
     private static final String KEY_TASK_KEYWORDS = "task_keywords";
     private static final int EXPORT_BACKUP_REQUEST = 301;
     private static final int IMPORT_BACKUP_REQUEST = 302;
@@ -161,6 +162,7 @@ public class MainActivity extends Activity {
     private JSONObject dictationCustomWords;
     private JSONObject taskKeywords;
     private JSONObject breakSession;
+    private JSONObject startPlanSession;
     private String currentDate;
     private boolean loadingNote;
     private View mainPageView;
@@ -382,15 +384,18 @@ public class MainActivity extends Activity {
     private AlertDialog weekendTaskPlanDialog;
     private AlertDialog breakChoiceDialog;
     private AlertDialog breakTimerDialog;
+    private AlertDialog startPlanDialog;
     private TextView breakCountdownView;
     private TextView breakNextTaskView;
     private TextView breakPlannedReturnView;
     private Button extendBreakButton;
+    private TextView startPlanCountdownView;
+    private TextView startPlanTaskView;
+    private TextView startPlanScheduledTimeView;
     private int breakChoiceTaskIndex = -1;
     private int breakChoiceSourceTaskIndex = -1;
     private boolean breakChoiceFromPause;
     private TextView taskFocusElapsedView;
-    private TextView taskFocusStepView;
     private TextView taskFocusComparisonView;
     private JSONObject taskFocusTask;
 
@@ -406,6 +411,15 @@ public class MainActivity extends Activity {
         public void run() {
             renderBreakTimerDialog();
             if (breakTimerDialog != null && breakTimerDialog.isShowing()) {
+                timerHandler.postDelayed(this, 1000);
+            }
+        }
+    };
+    private final Runnable startPlanTimerTick = new Runnable() {
+        @Override
+        public void run() {
+            renderStartPlanTimerDialog();
+            if (startPlanDialog != null && startPlanDialog.isShowing() && hasActiveStartPlanSession()) {
                 timerHandler.postDelayed(this, 1000);
             }
         }
@@ -535,6 +549,7 @@ public class MainActivity extends Activity {
         dictationCustomWords = readJson(KEY_DICTATION_CUSTOM);
         taskKeywords = readTaskKeywords();
         breakSession = readJson(KEY_BREAK_SESSION);
+        startPlanSession = readJson(KEY_START_PLAN_SESSION);
         String savedDictationLesson = preferences.getString(KEY_DICTATION_LESSON, DICTATION_LESSONS[0][0]);
         for (int index = 0; index < DICTATION_LESSONS.length; index++) {
             if (DICTATION_LESSONS[index][0].equals(savedDictationLesson)) {
@@ -558,6 +573,7 @@ public class MainActivity extends Activity {
         renderAll();
         timerHandler.postDelayed(timerTick, 30000);
         if (hasActiveBreakSession()) showBreakTimerDialog();
+        else if (hasActiveStartPlanSession()) showStartPlanTimerDialog();
     }
 
     @Override
@@ -566,11 +582,13 @@ public class MainActivity extends Activity {
         timerHandler.removeCallbacks(taskFocusTick);
         timerHandler.removeCallbacks(offlineVoiceTimeout);
         timerHandler.removeCallbacks(breakTimerTick);
+        timerHandler.removeCallbacks(startPlanTimerTick);
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
         if (taskEntryDialog != null) taskEntryDialog.dismiss();
         if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
         if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
         if (breakTimerDialog != null) breakTimerDialog.dismiss();
+        if (startPlanDialog != null) startPlanDialog.dismiss();
         stopDictation(false, false);
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
@@ -594,6 +612,7 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (breakTimerDialog != null && breakTimerDialog.isShowing()) return;
+        if (hasActiveStartPlanSession() && startPlanDialog != null && startPlanDialog.isShowing()) return;
         if (settingsPageView != null && settingsPageView.getVisibility() == View.VISIBLE) {
             showMainPage();
             return;
@@ -2233,43 +2252,6 @@ public class MainActivity extends Activity {
         return total;
     }
 
-    private JSONArray taskSteps(JSONObject task) {
-        JSONArray steps = task == null ? null : task.optJSONArray("steps");
-        return steps == null ? new JSONArray() : steps;
-    }
-
-    private JSONObject currentTaskStep(JSONObject task) {
-        JSONArray steps = taskSteps(task);
-        for (int index = 0; index < steps.length(); index++) {
-            JSONObject step = steps.optJSONObject(index);
-            if (step != null && !step.optBoolean("done") && !step.optString("title", "").trim().isEmpty()) {
-                return step;
-            }
-        }
-        return null;
-    }
-
-    private int remainingTaskStepCount(JSONObject task) {
-        JSONArray steps = taskSteps(task);
-        int remaining = 0;
-        for (int index = 0; index < steps.length(); index++) {
-            JSONObject step = steps.optJSONObject(index);
-            if (step != null && !step.optBoolean("done")) remaining++;
-        }
-        return remaining;
-    }
-
-    private String taskStepSummary(JSONObject task) {
-        JSONArray steps = taskSteps(task);
-        if (steps.length() == 0) return "";
-        int done = 0;
-        for (int index = 0; index < steps.length(); index++) {
-            JSONObject step = steps.optJSONObject(index);
-            if (step != null && step.optBoolean("done")) done++;
-        }
-        return done + " / " + steps.length() + " 步";
-    }
-
     private String taskClockLabel(JSONObject task) {
         long seconds = taskElapsedMillis(task) / 1000L;
         long hours = seconds / 3600L;
@@ -2307,16 +2289,6 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, dp(8), 0, 0);
         content.addView(title);
-        JSONObject currentStep = currentTaskStep(task);
-        taskFocusStepView = text(currentStep == null ? "" : "当前步骤  ·  " + currentStep.optString("title"),
-                12, Color.rgb(69, 107, 168), true);
-        taskFocusStepView.setGravity(Gravity.CENTER);
-        taskFocusStepView.setPadding(dp(12), dp(9), dp(12), dp(9));
-        taskFocusStepView.setBackground(rounded(GREEN_SOFT, 12, GREEN_SOFT, 0));
-        taskFocusStepView.setVisibility(currentStep == null ? View.GONE : View.VISIBLE);
-        LinearLayout.LayoutParams stepParams = matchWrap();
-        stepParams.topMargin = dp(12);
-        content.addView(taskFocusStepView, stepParams);
         TextView elapsedLabel = text("已用时间", 10, MUTED, true);
         elapsedLabel.setGravity(Gravity.CENTER);
         elapsedLabel.setPadding(0, dp(15), 0, 0);
@@ -2348,8 +2320,7 @@ public class MainActivity extends Activity {
                 .setView(content)
                 .setNegativeButton("暂时收起", null)
                 .setNeutralButton("休息一下", null)
-                .setPositiveButton(currentStep == null ? "完成这项"
-                        : remainingTaskStepCount(task) == 1 ? "完成最后一步" : "完成本步", null)
+                .setPositiveButton("完成这项", null)
                 .create();
         taskFocusDialog = dialog;
         dialog.setCanceledOnTouchOutside(false);
@@ -2359,7 +2330,6 @@ public class MainActivity extends Activity {
                 taskFocusDialog = null;
                 taskFocusTask = null;
                 taskFocusElapsedView = null;
-                taskFocusStepView = null;
                 taskFocusComparisonView = null;
             }
         });
@@ -2386,7 +2356,6 @@ public class MainActivity extends Activity {
         taskFocusDialog = null;
         taskFocusTask = null;
         taskFocusElapsedView = null;
-        taskFocusStepView = null;
         taskFocusComparisonView = null;
     }
 
@@ -2416,6 +2385,259 @@ public class MainActivity extends Activity {
             if (task != null && id.equals(task.optString("id"))) return index;
         }
         return -1;
+    }
+
+    private boolean hasActiveStartPlanSession() {
+        return startPlanSession != null
+                && hasText(startPlanSession, "taskId")
+                && hasText(startPlanSession, "date")
+                && startPlanSession.optLong("startAt", 0L) > 0L;
+    }
+
+    private void saveStartPlanSession() {
+        preferences.edit().putString(KEY_START_PLAN_SESSION,
+                startPlanSession == null ? "{}" : startPlanSession.toString()).apply();
+    }
+
+    private void clearStartPlanSession() {
+        startPlanSession = new JSONObject();
+        saveStartPlanSession();
+        timerHandler.removeCallbacks(startPlanTimerTick);
+        releaseBreakAlarmPlayer();
+        if (startPlanDialog != null && startPlanDialog.isShowing()) startPlanDialog.dismiss();
+        startPlanDialog = null;
+        startPlanCountdownView = null;
+        startPlanTaskView = null;
+        startPlanScheduledTimeView = null;
+    }
+
+    private void stylePlanTimeButton(Button button) {
+        button.setTextColor(Color.rgb(138, 99, 27));
+        button.setBackground(rounded(Color.rgb(255, 248, 230), 12,
+                Color.rgb(230, 189, 103), 1));
+    }
+
+    private void showFirstTaskStartChoice(int taskIndex) {
+        JSONObject task = taskArray(false).optJSONObject(taskIndex);
+        if (task == null || !"pending".equals(task.optString("status", "pending"))
+                || !taskCanRunToday(task)) return;
+        clearStartPlanSession();
+        final String taskId = task.optString("id");
+        final String planDate = currentDate;
+
+        LinearLayout content = vertical();
+        content.setPadding(dp(22), dp(6), dp(22), 0);
+        TextView taskCard = text("第一项作业\n" + task.optString("subject", "其他")
+                + " · " + task.optString("title", "作业"), 12, INK, true);
+        int subjectColor = taskSubjectColor(task.optString("subject", "其他"));
+        taskCard.setPadding(dp(13), dp(11), dp(13), dp(11));
+        taskCard.setLineSpacing(dp(3), 1f);
+        taskCard.setBackground(rounded(taskSubjectSoftColor(task.optString("subject", "其他")),
+                13, subjectColor, 1));
+        content.addView(taskCard, matchWrap());
+
+        Button nowButton = smallButton("现在开始");
+        nowButton.setTextColor(Color.WHITE);
+        nowButton.setBackground(rounded(GREEN, 12, GREEN, 1));
+        Button fiveButton = smallButton("5分钟后");
+        Button tenButton = smallButton("10分钟后");
+        Button fifteenButton = smallButton("15分钟后");
+        stylePlanTimeButton(fiveButton);
+        stylePlanTimeButton(tenButton);
+        stylePlanTimeButton(fifteenButton);
+
+        LinearLayout firstRow = horizontal();
+        firstRow.addView(nowButton, weightedFixed(1, dp(44)));
+        firstRow.addView(spaceHorizontal(7));
+        firstRow.addView(fiveButton, weightedFixed(1, dp(44)));
+        LinearLayout.LayoutParams firstRowParams = matchFixed(dp(44));
+        firstRowParams.topMargin = dp(12);
+        content.addView(firstRow, firstRowParams);
+
+        LinearLayout secondRow = horizontal();
+        secondRow.addView(tenButton, weightedFixed(1, dp(44)));
+        secondRow.addView(spaceHorizontal(7));
+        secondRow.addView(fifteenButton, weightedFixed(1, dp(44)));
+        LinearLayout.LayoutParams secondRowParams = matchFixed(dp(44));
+        secondRowParams.topMargin = dp(7);
+        content.addView(secondRow, secondRowParams);
+
+        Button exactTimeButton = smallButton("选择具体时间");
+        stylePlanTimeButton(exactTimeButton);
+        LinearLayout.LayoutParams exactParams = matchFixed(dp(44));
+        exactParams.topMargin = dp(7);
+        content.addView(exactTimeButton, exactParams);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("我准备什么时候开始？")
+                .setView(content)
+                .setNegativeButton("暂时不安排", null)
+                .create();
+        startPlanDialog = dialog;
+        nowButton.setOnClickListener(v -> startTaskFromStartPlan(taskId, planDate));
+        fiveButton.setOnClickListener(v -> scheduleFirstTask(
+                taskId, planDate, System.currentTimeMillis() + 5 * 60000L));
+        tenButton.setOnClickListener(v -> scheduleFirstTask(
+                taskId, planDate, System.currentTimeMillis() + 10 * 60000L));
+        fifteenButton.setOnClickListener(v -> scheduleFirstTask(
+                taskId, planDate, System.currentTimeMillis() + 15 * 60000L));
+        exactTimeButton.setOnClickListener(v -> {
+            Calendar suggested = Calendar.getInstance();
+            suggested.add(Calendar.MINUTE, 30);
+            new TimePickerDialog(this, (view, hour, minute) -> {
+                Calendar start = Calendar.getInstance();
+                start.set(Calendar.HOUR_OF_DAY, hour);
+                start.set(Calendar.MINUTE, minute);
+                start.set(Calendar.SECOND, 0);
+                start.set(Calendar.MILLISECOND, 0);
+                if (start.getTimeInMillis() <= System.currentTimeMillis()) {
+                    toast("请选择晚于现在的时间");
+                    return;
+                }
+                scheduleFirstTask(taskId, planDate, start.getTimeInMillis());
+            }, suggested.get(Calendar.HOUR_OF_DAY), suggested.get(Calendar.MINUTE), true).show();
+        });
+        dialog.setOnDismissListener(ignored -> {
+            if (startPlanDialog == dialog) startPlanDialog = null;
+        });
+        dialog.show();
+    }
+
+    private void scheduleFirstTask(String taskId, String date, long startAt) {
+        if (taskId == null || taskId.isEmpty() || startAt <= 0L) return;
+        startPlanSession = new JSONObject();
+        put(startPlanSession, "taskId", taskId);
+        put(startPlanSession, "date", date);
+        put(startPlanSession, "startAt", startAt);
+        put(startPlanSession, "alerted", false);
+        saveStartPlanSession();
+        if (startPlanDialog != null && startPlanDialog.isShowing()) startPlanDialog.dismiss();
+        showStartPlanTimerDialog();
+    }
+
+    private void showStartPlanTimerDialog() {
+        if (!hasActiveStartPlanSession()) return;
+        String sessionDate = startPlanSession.optString("date", currentDate);
+        if (!sessionDate.equals(currentDate)) {
+            currentDate = sessionDate;
+            renderAll();
+        }
+        int taskIndex = taskIndexById(startPlanSession.optString("taskId"));
+        JSONObject task = taskArray(false).optJSONObject(taskIndex);
+        if (task == null || !"pending".equals(task.optString("status", "pending"))
+                || !taskCanRunToday(task)) {
+            clearStartPlanSession();
+            return;
+        }
+        if (startPlanDialog != null && startPlanDialog.isShowing()) return;
+        LinearLayout content = vertical();
+        content.setPadding(dp(24), dp(8), dp(24), dp(4));
+        TextView label = text("距离开始还有", 10, Color.rgb(138, 99, 27), true);
+        label.setGravity(Gravity.CENTER);
+        content.addView(label);
+        startPlanCountdownView = text("05 : 00", 48, Color.rgb(183, 119, 18), true);
+        startPlanCountdownView.setGravity(Gravity.CENTER);
+        startPlanCountdownView.setPadding(0, dp(3), 0, dp(6));
+        content.addView(startPlanCountdownView);
+        startPlanScheduledTimeView = text("", 10, MUTED, true);
+        startPlanScheduledTimeView.setGravity(Gravity.CENTER);
+        startPlanScheduledTimeView.setPadding(0, 0, 0, dp(10));
+        content.addView(startPlanScheduledTimeView);
+        startPlanTaskView = text("", 12, INK, true);
+        startPlanTaskView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        content.addView(startPlanTaskView, matchWrap());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("我的开始计划")
+                .setView(content)
+                .setNegativeButton("重新选时间", null)
+                .setPositiveButton("我准备好了，开始第一项", null)
+                .create();
+        startPlanDialog = dialog;
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCancelable(false);
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.rgb(138, 99, 27));
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> adjustStartPlan());
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> startTaskFromStartPlan(
+                    startPlanSession.optString("taskId"), startPlanSession.optString("date", currentDate)));
+            timerHandler.removeCallbacks(startPlanTimerTick);
+            timerHandler.post(startPlanTimerTick);
+        });
+        dialog.setOnDismissListener(ignored -> {
+            timerHandler.removeCallbacks(startPlanTimerTick);
+            if (startPlanDialog == dialog) startPlanDialog = null;
+        });
+        dialog.show();
+    }
+
+    private void renderStartPlanTimerDialog() {
+        if (!hasActiveStartPlanSession() || startPlanDialog == null || !startPlanDialog.isShowing()) return;
+        int taskIndex = taskIndexById(startPlanSession.optString("taskId"));
+        JSONObject task = taskArray(false).optJSONObject(taskIndex);
+        if (task == null || !"pending".equals(task.optString("status", "pending"))
+                || !taskCanRunToday(task)) {
+            clearStartPlanSession();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long remaining = Math.max(0L, startPlanSession.optLong("startAt") - now);
+        long seconds = (remaining + 999L) / 1000L;
+        if (startPlanCountdownView != null) {
+            startPlanCountdownView.setText(remaining > 0
+                    ? String.format(Locale.CHINA, "%02d : %02d", seconds / 60L, seconds % 60L) : "时间到");
+            startPlanCountdownView.setTextColor(remaining > 0 ? Color.rgb(183, 119, 18) : AMBER);
+        }
+        if (startPlanScheduledTimeView != null) startPlanScheduledTimeView.setText(
+                "我计划 " + timeFromEpoch(startPlanSession.optLong("startAt")) + " 开始");
+        if (startPlanTaskView != null) {
+            String subject = task.optString("subject", "其他");
+            startPlanTaskView.setText("第一项作业\n" + subject + " · "
+                    + task.optString("title", "作业"));
+            startPlanTaskView.setTextColor(INK);
+            startPlanTaskView.setBackground(rounded(taskSubjectSoftColor(subject), 13,
+                    taskSubjectColor(subject), 1));
+        }
+        startPlanDialog.setTitle(remaining > 0 ? "我按计划准备开始" : "我计划的开始时间到了");
+        Button start = startPlanDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (start != null) start.setText(remaining > 0 ? "我准备好了，提前开始" : "开始我的第一项");
+        if (remaining == 0L && !startPlanSession.optBoolean("alerted")) {
+            put(startPlanSession, "alerted", true);
+            put(startPlanSession, "nextAlertAt", now + BREAK_REMINDER_INTERVAL_MS);
+            saveStartPlanSession();
+            vibrateBreakAlarm();
+            playBreakAlarm(2);
+        } else if (remaining == 0L && now >= startPlanSession.optLong(
+                "nextAlertAt", startPlanSession.optLong("startAt") + BREAK_REMINDER_INTERVAL_MS)) {
+            put(startPlanSession, "nextAlertAt", now + BREAK_REMINDER_INTERVAL_MS);
+            saveStartPlanSession();
+            vibrateBreakAlarm();
+            playBreakAlarm(1);
+        }
+    }
+
+    private void startTaskFromStartPlan(String taskId, String date) {
+        clearStartPlanSession();
+        if (date != null && !date.isEmpty() && !date.equals(currentDate)) {
+            currentDate = date;
+            renderAll();
+        }
+        int taskIndex = taskIndexById(taskId);
+        if (taskIndex >= 0) performTaskAction("start", taskIndex);
+    }
+
+    private void adjustStartPlan() {
+        if (!hasActiveStartPlanSession()) return;
+        String taskId = startPlanSession.optString("taskId");
+        String date = startPlanSession.optString("date", currentDate);
+        clearStartPlanSession();
+        if (!date.equals(currentDate)) {
+            currentDate = date;
+            renderAll();
+        }
+        int taskIndex = taskIndexById(taskId);
+        if (taskIndex >= 0) showFirstTaskStartChoice(taskIndex);
     }
 
     private String breakKindLabel(String kind) {
@@ -2515,8 +2737,12 @@ public class MainActivity extends Activity {
     private void updateBreakChoiceTask(TextView nextTaskView) {
         JSONObject task = taskArray(false).optJSONObject(breakChoiceTaskIndex);
         if (task == null) return;
-        nextTaskView.setText((breakChoiceFromPause ? "休息回来，我要做  ·  " : "回来后做  ·  ")
-                + task.optString("subject", "其他") + " · " + task.optString("title", "下一项作业"));
+        String subject = task.optString("subject", "其他");
+        nextTaskView.setText((breakChoiceFromPause ? "休息回来，我要做" : "回来后做")
+                + "\n" + subject + " · " + task.optString("title", "下一项作业"));
+        nextTaskView.setTextColor(INK);
+        nextTaskView.setBackground(rounded(taskSubjectSoftColor(subject), 13,
+                taskSubjectColor(subject), 1));
     }
 
     private void showBreakChoiceDialog(int taskIndex, boolean fromPause, int sourceTaskIndex) {
@@ -2541,11 +2767,15 @@ public class MainActivity extends Activity {
         breakTimes.addView(tenMinutes, weightedFixed(1, dp(44)));
         breakTimes.addView(spaceHorizontal(6));
         Button fifteenMinutes = smallButton("15分钟");
+        stylePlanTimeButton(fiveMinutes);
+        stylePlanTimeButton(tenMinutes);
+        stylePlanTimeButton(fifteenMinutes);
         breakTimes.addView(fifteenMinutes, weightedFixed(1, dp(44)));
         LinearLayout.LayoutParams breakTimesParams = matchFixed(dp(44));
         breakTimesParams.topMargin = dp(10);
         content.addView(breakTimes, breakTimesParams);
         Button meal = smallButton("🍚 去吃饭 · 选择回来时间");
+        stylePlanTimeButton(meal);
         LinearLayout.LayoutParams mealParams = matchFixed(dp(46));
         mealParams.topMargin = dp(6);
         content.addView(meal, mealParams);
@@ -2633,10 +2863,10 @@ public class MainActivity extends Activity {
         if (breakTimerDialog != null && breakTimerDialog.isShowing()) return;
         LinearLayout content = vertical();
         content.setPadding(dp(24), dp(8), dp(24), dp(4));
-        TextView label = text("距离回来还有", 10, MUTED, true);
+        TextView label = text("距离回来还有", 10, Color.rgb(138, 99, 27), true);
         label.setGravity(Gravity.CENTER);
         content.addView(label);
-        breakCountdownView = text("05 : 00", 48, GREEN, true);
+        breakCountdownView = text("05 : 00", 48, Color.rgb(183, 119, 18), true);
         breakCountdownView.setGravity(Gravity.CENTER);
         breakCountdownView.setPadding(0, dp(3), 0, dp(10));
         content.addView(breakCountdownView);
@@ -2644,10 +2874,8 @@ public class MainActivity extends Activity {
         breakPlannedReturnView.setGravity(Gravity.CENTER);
         breakPlannedReturnView.setPadding(0, 0, 0, dp(10));
         content.addView(breakPlannedReturnView);
-        breakNextTaskView = text("", 12, Color.rgb(69, 107, 168), true);
-        breakNextTaskView.setGravity(Gravity.CENTER);
+        breakNextTaskView = text("", 12, INK, true);
         breakNextTaskView.setPadding(dp(12), dp(10), dp(12), dp(10));
-        breakNextTaskView.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
         content.addView(breakNextTaskView, matchWrap());
 
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -2697,10 +2925,16 @@ public class MainActivity extends Activity {
         if (breakCountdownView != null) {
             breakCountdownView.setText(remaining > 0
                     ? String.format(Locale.CHINA, "%02d : %02d", seconds / 60L, seconds % 60L) : "时间到");
-            breakCountdownView.setTextColor(remaining > 0 ? GREEN : AMBER);
+            breakCountdownView.setTextColor(remaining > 0 ? Color.rgb(183, 119, 18) : AMBER);
         }
-        if (breakNextTaskView != null) breakNextTaskView.setText("回来后做  ·  "
-                + task.optString("subject", "其他") + " · " + task.optString("title", "下一项作业"));
+        if (breakNextTaskView != null) {
+            String subject = task.optString("subject", "其他");
+            breakNextTaskView.setText("回来后做\n" + subject + " · "
+                    + task.optString("title", "下一项作业"));
+            breakNextTaskView.setTextColor(INK);
+            breakNextTaskView.setBackground(rounded(taskSubjectSoftColor(subject), 13,
+                    taskSubjectColor(subject), 1));
+        }
         if (breakPlannedReturnView != null) breakPlannedReturnView.setText(
                 "我计划 " + timeFromEpoch(breakSession.optLong("endAt")) + " 回来");
         if (extendBreakButton != null) {
@@ -2878,6 +3112,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (taskOrderSaved()) {
+            clearStartPlanSession();
             put(owner, "orderSaved", false);
             owner.remove("orderSavedAt");
             taskListExpanded = false;
@@ -2894,6 +3129,9 @@ public class MainActivity extends Activity {
         saveTaskData();
         renderAll();
         toast(weekendKey == null ? "顺序已确定，我要开始第一关啦！" : "周末闯关顺序已确定！");
+        int firstTaskIndex = nextTaskIndexForToday();
+        if (firstTaskIndex >= 0) timerHandler.postDelayed(
+                () -> showFirstTaskStartChoice(firstTaskIndex), 80L);
     }
 
     private void reorderTask(int fromIndex, int targetIndex) {
@@ -3283,9 +3521,7 @@ public class MainActivity extends Activity {
         String planLabel = weekendKeyFor(currentDate) == null ? "" : "  [" + plannedDayLabel(task) + "]";
         copy.addView(text(subjectName + " · " + task.optString("title", "未命名作业") + planLabel,
                 12, INK, true));
-        String stepSummary = taskStepSummary(task);
-        TextView meta = text("预计 " + estimatedMinutes(task) + " 分钟"
-                + (stepSummary.isEmpty() ? "" : " · " + stepSummary), 9, MUTED, false);
+        TextView meta = text("预计 " + estimatedMinutes(task) + " 分钟", 9, MUTED, false);
         meta.setPadding(0, dp(3), 0, 0);
         copy.addView(meta);
         item.addView(copy, weightedWrap(1));
@@ -3336,11 +3572,6 @@ public class MainActivity extends Activity {
         estimate.setTextSize(10);
         estimate.setOnClickListener(v -> showEstimatePicker(task));
         tools.addView(estimate, weightedFixed(1, dp(38)));
-        tools.addView(spaceHorizontal(6));
-        Button steps = smallButton(taskSteps(task).length() > 0 ? "修改步骤" : "拆成步骤");
-        steps.setTextSize(10);
-        steps.setOnClickListener(v -> showTaskStepsEditor(task));
-        tools.addView(steps, weightedFixed(1, dp(38)));
         if (weekendKeyFor(currentDate) == null) {
             tools.addView(spaceHorizontal(6));
             JSONObject owner = taskOwner(false);
@@ -3464,74 +3695,6 @@ public class MainActivity extends Activity {
         toast(selected ? "已取消这个休息点" : "这里已设为休息点");
     }
 
-    private List<String> parseStepTitles(String value) {
-        List<String> numbered = numberedTaskParts(value == null ? "" : value);
-        String[] pieces = numbered == null
-                ? (value == null ? "" : value).split("[\\n；;]+")
-                : numbered.toArray(new String[0]);
-        List<String> result = new ArrayList<>();
-        for (String piece : pieces) {
-            String clean = piece.trim().replaceFirst("^[-•]\\s*", "");
-            if (!clean.isEmpty()) result.add(clean);
-        }
-        return result;
-    }
-
-    private void showTaskStepsEditor(JSONObject task) {
-        EditText input = new EditText(this);
-        input.setTextSize(14);
-        input.setTextColor(INK);
-        input.setGravity(Gravity.TOP | Gravity.START);
-        input.setMinLines(4);
-        input.setMaxLines(8);
-        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
-        input.setHint("例如：\n1. 读题并圈关键词\n2. 完成练习\n3. 检查订正");
-        StringBuilder existing = new StringBuilder();
-        JSONArray oldSteps = taskSteps(task);
-        for (int index = 0; index < oldSteps.length(); index++) {
-            JSONObject step = oldSteps.optJSONObject(index);
-            if (step == null) continue;
-            if (existing.length() > 0) existing.append('\n');
-            existing.append(index + 1).append(". ").append(step.optString("title"));
-        }
-        input.setText(existing.toString());
-        input.setSelection(input.length());
-        LinearLayout content = vertical();
-        content.setPadding(dp(20), dp(4), dp(20), 0);
-        content.addView(text("用 1. 2. 3. 或换行分开；清空后保存可取消拆分。", 10, MUTED, false));
-        LinearLayout.LayoutParams inputParams = matchWrap();
-        inputParams.topMargin = dp(10);
-        content.addView(input, inputParams);
-        new AlertDialog.Builder(this)
-                .setTitle("把作业拆成小步骤")
-                .setView(content)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", (dialog, which) -> {
-                    List<String> titles = parseStepTitles(input.getText().toString());
-                    if (titles.isEmpty()) {
-                        task.remove("steps");
-                        toast("已取消步骤拆分");
-                    } else {
-                        JSONArray steps = new JSONArray();
-                        for (int index = 0; index < titles.size(); index++) {
-                            JSONObject step = new JSONObject();
-                            put(step, "id", task.optString("id") + "-step-" + index);
-                            put(step, "title", titles.get(index));
-                            put(step, "done", false);
-                            steps.put(step);
-                        }
-                        put(task, "steps", steps);
-                        toast("已拆成 " + titles.size() + " 个步骤");
-                    }
-                    JSONObject owner = taskOwner(true);
-                    owner.remove("orderSaved");
-                    owner.remove("orderSavedAt");
-                    saveTaskData();
-                    renderTasks();
-                })
-                .show();
-    }
-
     private void showTaskEditDialog(JSONObject task) {
         if (task == null || !"pending".equals(task.optString("status", "pending")) || !taskOrderSaved()) {
             toast("排好顺序后，才能从卡片修改作业");
@@ -3579,24 +3742,6 @@ public class MainActivity extends Activity {
         estimateScroll.setHorizontalScrollBarEnabled(false);
         estimateScroll.addView(estimateOptions, matchWrap());
 
-        EditText stepsInput = new EditText(this);
-        stepsInput.setTextSize(14);
-        stepsInput.setTextColor(INK);
-        stepsInput.setGravity(Gravity.TOP | Gravity.START);
-        stepsInput.setMinLines(4);
-        stepsInput.setMaxLines(7);
-        stepsInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
-        stepsInput.setHint("用 1. 2. 3. 或换行分开");
-        StringBuilder existingSteps = new StringBuilder();
-        JSONArray oldSteps = taskSteps(task);
-        for (int index = 0; index < oldSteps.length(); index++) {
-            JSONObject step = oldSteps.optJSONObject(index);
-            if (step == null) continue;
-            if (existingSteps.length() > 0) existingSteps.append('\n');
-            existingSteps.append(index + 1).append(". ").append(step.optString("title"));
-        }
-        stepsInput.setText(existingSteps.toString());
-
         LinearLayout content = vertical();
         content.setPadding(dp(20), dp(4), dp(20), dp(4));
         content.addView(text("作业内容", 10, INK, true));
@@ -3607,13 +3752,6 @@ public class MainActivity extends Activity {
         estimateLabel.setPadding(0, dp(14), 0, dp(6));
         content.addView(estimateLabel);
         content.addView(estimateScroll, matchFixed(dp(40)));
-        TextView stepsLabel = text("作业步骤", 10, INK, true);
-        stepsLabel.setPadding(0, dp(14), 0, dp(5));
-        content.addView(stepsLabel);
-        content.addView(stepsInput, matchWrap());
-        TextView stepsHint = text("步骤留空就是不拆分。", 9, MUTED, false);
-        stepsHint.setPadding(0, dp(4), 0, 0);
-        content.addView(stepsHint);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content, matchWrap());
 
@@ -3640,20 +3778,7 @@ public class MainActivity extends Activity {
                 }
                 put(currentTask, "title", title);
                 put(currentTask, "estimatedMinutes", selectedEstimate[0]);
-                List<String> stepTitles = parseStepTitles(stepsInput.getText().toString());
-                if (stepTitles.isEmpty()) {
-                    currentTask.remove("steps");
-                } else {
-                    JSONArray steps = new JSONArray();
-                    for (int index = 0; index < stepTitles.size(); index++) {
-                        JSONObject step = new JSONObject();
-                        put(step, "id", taskId + "-step-" + index);
-                        put(step, "title", stepTitles.get(index));
-                        put(step, "done", false);
-                        steps.put(step);
-                    }
-                    put(currentTask, "steps", steps);
-                }
+                currentTask.remove("steps");
                 saveTaskData();
                 renderAll();
                 dialog.dismiss();
@@ -3889,14 +4014,12 @@ public class MainActivity extends Activity {
         if (editable) titleRow.addView(text("✎", 11, Color.rgb(111, 143, 200), true));
         taskCopy.addView(titleRow, matchWrap());
         String estimateLabel = "预计 " + estimatedMinutes(task) + " 分钟";
-        String stepSummary = taskStepSummary(task);
-        String stepSuffix = stepSummary.isEmpty() ? "" : " · " + stepSummary;
-        String meta = estimateLabel + stepSuffix;
-        if ("active".equals(status)) meta = estimateLabel + " · 已用 " + taskDurationLabel(task) + stepSuffix;
-        else if ("paused".equals(status)) meta = estimateLabel + " · 已用 " + taskDurationLabel(task) + stepSuffix;
+        String meta = estimateLabel;
+        if ("active".equals(status)) meta = estimateLabel + " · 已用 " + taskDurationLabel(task);
+        else if ("paused".equals(status)) meta = estimateLabel + " · 已用 " + taskDurationLabel(task);
         else if ("done".equals(status)) meta = (hasText(task, "completedDate") ? formatShortDate(task.optString("completedDate")) + " " : "")
                 + task.optString("completedAt", "已") + " 完成 · " + estimateLabel
-                + " · 实际 " + taskActualMinutes(task) + " 分钟" + stepSuffix;
+                + " · 实际 " + taskActualMinutes(task) + " 分钟";
         else if (weekendMode && planSaved && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成 · " + estimateLabel;
         if (task.optBoolean("breakAfter") && !"done".equals(status)) meta += " · ☕ 完成后休息";
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
@@ -3910,12 +4033,10 @@ public class MainActivity extends Activity {
                     () -> performTaskAction("delete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "active".equals(status)) {
             addTaskActionButton(actions, "休息一下", false, false, () -> performTaskAction("pause", taskIndex));
-            addTaskActionButton(actions, currentTaskStep(task) == null ? "完成" : "完成本步", true, false,
-                    () -> performTaskAction("complete", taskIndex));
+            addTaskActionButton(actions, "完成", true, false, () -> performTaskAction("complete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "paused".equals(status)) {
             addTaskActionButton(actions, "继续", true, false, () -> performTaskAction("start", taskIndex));
-            addTaskActionButton(actions, currentTaskStep(task) == null ? "完成" : "完成本步", false, false,
-                    () -> performTaskAction("complete", taskIndex));
+            addTaskActionButton(actions, "完成", false, false, () -> performTaskAction("complete", taskIndex));
         } else if (confirmed && canDoToday && allowActions && "done".equals(status)) {
             addTaskActionButton(actions, "撤销完成", false, false, () -> performTaskAction("undo", taskIndex));
         } else if (confirmed && canDoToday && allowActions) {
@@ -3928,7 +4049,6 @@ public class MainActivity extends Activity {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }
         item.addView(mainRow, matchWrap());
-        if (current && taskSteps(task).length() > 0) addTaskStepsList(item, task);
         if (editable) {
             item.setClickable(true);
             item.setFocusable(true);
@@ -3938,28 +4058,6 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(current ? 7 : 8);
         target.addView(item, params);
-    }
-
-    private void addTaskStepsList(LinearLayout target, JSONObject task) {
-        JSONArray steps = taskSteps(task);
-        JSONObject currentStep = currentTaskStep(task);
-        LinearLayout list = vertical();
-        list.setPadding(dp(10), dp(8), dp(10), dp(8));
-        list.setBackground(rounded(Color.argb(175, 255, 255, 255), 10,
-                Color.argb(175, 255, 255, 255), 0));
-        for (int index = 0; index < steps.length(); index++) {
-            JSONObject step = steps.optJSONObject(index);
-            if (step == null) continue;
-            boolean done = step.optBoolean("done");
-            boolean active = step == currentStep;
-            TextView row = text((done ? "✓  " : active ? "→  " : "    ") + step.optString("title"),
-                    10, done ? Color.rgb(84, 133, 116) : active ? INK : MUTED, active);
-            if (index > 0) row.setPadding(0, dp(5), 0, 0);
-            list.addView(row);
-        }
-        LinearLayout.LayoutParams params = matchWrap();
-        params.topMargin = dp(9);
-        target.addView(list, params);
     }
 
     private void renderWeekendTaskPlanner() {
@@ -4314,6 +4412,7 @@ public class MainActivity extends Activity {
         }
         if ("start".equals(action)) {
             if (hasActiveBreakSession()) clearBreakSession();
+            if (hasActiveStartPlanSession() || startPlanDialog != null) clearStartPlanSession();
             JSONObject active = activeTask(false);
             if (active != null && active != task) {
                 toast("请先暂停或完成“" + active.optString("title", "当前作业") + "”");
@@ -4332,20 +4431,6 @@ public class MainActivity extends Activity {
             offerBreakSourceTaskIndex = index;
             offerBreakFromPause = true;
         } else if ("complete".equals(action)) {
-            JSONObject step = currentTaskStep(task);
-            if (step != null) {
-                put(step, "done", true);
-                put(step, "completedAt", currentTime());
-                JSONObject nextStep = currentTaskStep(task);
-                if (nextStep != null) {
-                    saveTaskData();
-                    renderAll();
-                    dismissTaskFocusDialog();
-                    showTaskFocusDialog(task, index);
-                    toast("完成一步，接下来：" + nextStep.optString("title"));
-                    return;
-                }
-            }
             stopTaskClock(task, "done");
             dismissTaskFocusDialog();
             put(task, "completedAt", currentTime());
@@ -4408,24 +4493,6 @@ public class MainActivity extends Activity {
             }
         } else if ("undo".equals(action)) {
             put(task, "status", "paused");
-            JSONArray steps = taskSteps(task);
-            if (steps.length() > 0) {
-                boolean allStepsDone = true;
-                for (int stepIndex = 0; stepIndex < steps.length(); stepIndex++) {
-                    JSONObject step = steps.optJSONObject(stepIndex);
-                    if (step == null || !step.optBoolean("done")) {
-                        allStepsDone = false;
-                        break;
-                    }
-                }
-                if (allStepsDone) {
-                    JSONObject lastStep = steps.optJSONObject(steps.length() - 1);
-                    if (lastStep != null) {
-                        put(lastStep, "done", false);
-                        lastStep.remove("completedAt");
-                    }
-                }
-            }
             task.remove("completedAt");
             task.remove("completedDate");
             if (weekendKey == null) {

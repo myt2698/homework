@@ -418,7 +418,7 @@
     </div>
   </div>
 
-  <div class="step-editor-modal" id="taskEditModal" role="dialog" aria-modal="true" aria-labelledby="taskEditTitle" aria-describedby="taskEditHelp" hidden>
+  <div class="task-edit-modal" id="taskEditModal" role="dialog" aria-modal="true" aria-labelledby="taskEditTitle" hidden>
     <div class="task-edit-dialog">
       <button class="focus-close" id="taskEditCloseButton" type="button" aria-label="关闭作业修改">×</button>
       <p class="section-kicker">修改作业</p>
@@ -437,29 +437,9 @@
           <option value="30">30 分钟</option>
         </select>
       </label>
-      <label class="task-edit-field">
-        <span>作业步骤</span>
-        <textarea id="taskEditSteps" rows="5" maxlength="500" placeholder="用 1. 2. 3. 或换行分开"></textarea>
-      </label>
-      <p class="step-editor-help" id="taskEditHelp">步骤留空就是不拆分。</p>
-      <div class="step-editor-actions">
+      <div class="task-edit-actions">
         <button class="secondary-button" id="taskEditCancelButton" type="button">取消</button>
         <button class="primary-button" id="taskEditSaveButton" type="button">保存修改</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="step-editor-modal" id="stepEditorModal" role="dialog" aria-modal="true" aria-labelledby="stepEditorTitle" aria-describedby="stepEditorHelp" hidden>
-    <div class="step-editor-dialog">
-      <button class="focus-close" id="stepEditorCloseButton" type="button" aria-label="关闭步骤编辑">×</button>
-      <p class="section-kicker">拆分长作业</p>
-      <h2 id="stepEditorTitle">把作业拆成小步骤</h2>
-      <p class="step-editor-task" id="stepEditorTaskTitle"></p>
-      <p class="step-editor-help" id="stepEditorHelp">用 1. 2. 3. 或换行分开；清空后保存可取消拆分。</p>
-      <textarea id="stepEditorInput" rows="6" maxlength="500" placeholder="例如：&#10;1. 读题并圈关键词&#10;2. 完成练习&#10;3. 检查订正"></textarea>
-      <div class="step-editor-actions">
-        <button class="secondary-button" id="stepEditorCancelButton" type="button">取消</button>
-        <button class="primary-button" id="stepEditorSaveButton" type="button">保存步骤</button>
       </div>
     </div>
   </div>
@@ -470,10 +450,6 @@
       <p class="section-kicker">专注计时中</p>
       <span class="focus-subject" id="focusModalSubject">语文</span>
       <h2 id="focusModalTitle">当前作业</h2>
-      <div class="focus-step" id="focusModalStep" hidden>
-        <span>当前步骤</span>
-        <strong id="focusModalStepTitle"></strong>
-      </div>
       <span class="focus-clock-label">已用时间</span>
       <div class="focus-clock" id="focusModalElapsed">00 : 00</div>
       <div class="focus-estimate-card">
@@ -489,11 +465,44 @@
     </div>
   </div>
 
+  <div class="focus-modal" id="startPlanModal" role="dialog" aria-modal="true" aria-labelledby="startPlanTitle" hidden>
+    <div class="focus-dialog start-plan-dialog">
+      <button class="focus-close" id="startPlanCloseButton" type="button" aria-label="关闭开始安排">×</button>
+      <h2 id="startPlanTitle">我准备什么时候开始？</h2>
+      <div class="scheduled-task" id="startPlanTaskCard" data-subject="语文">
+        <span>第一项作业</span>
+        <strong id="startPlanTask"></strong>
+      </div>
+      <div id="startPlanOptions">
+        <div class="start-plan-quick-actions">
+          <button type="button" data-start-delay="0">现在开始</button>
+          <button type="button" data-start-delay="5">5分钟后</button>
+          <button type="button" data-start-delay="10">10分钟后</button>
+          <button type="button" data-start-delay="15">15分钟后</button>
+        </div>
+        <div class="start-plan-time-row">
+          <label for="startPlanTime">我准备</label>
+          <input id="startPlanTime" type="time">
+          <button id="saveStartPlanButton" type="button">定好时间</button>
+        </div>
+      </div>
+      <div class="start-plan-countdown" id="startPlanCountdownPanel" hidden>
+        <span class="start-plan-clock-label">距离开始还有</span>
+        <div class="start-plan-clock" id="startPlanCountdown">05 : 00</div>
+        <p id="startPlanScheduledTime"></p>
+        <div class="start-plan-actions">
+          <button class="secondary-button" id="adjustStartPlanButton" type="button">重新选时间</button>
+          <button class="primary-button" id="startPlannedTaskButton" type="button">我准备好了，开始第一项</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="focus-modal" id="breakChoiceModal" role="dialog" aria-modal="true" aria-labelledby="breakChoiceTitle" hidden>
     <div class="focus-dialog break-choice-dialog">
       <button class="focus-close" id="breakChoiceCloseButton" type="button" aria-label="关闭休息安排">×</button>
       <h2 id="breakChoiceTitle">休息多久？</h2>
-      <div class="break-next-task"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
+      <div class="break-next-task scheduled-task" id="breakChoiceTaskCard" data-subject="语文"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
       <div class="break-quick-actions">
         <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="5">5分钟</button>
         <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="10">10分钟</button>
@@ -515,7 +524,7 @@
       <span class="focus-clock-label">距离回来还有</span>
       <div class="focus-clock break-clock" id="breakCountdown">05 : 00</div>
       <p class="break-planned-return" id="breakPlannedReturn">我计划 19:10 回来</p>
-      <div class="break-next-task"><span>回来后做</span><strong id="breakTimerNextTask"></strong></div>
+      <div class="break-next-task scheduled-task" id="breakTimerTaskCard" data-subject="语文"><span>回来后做</span><strong id="breakTimerNextTask"></strong></div>
       <div class="focus-dialog-actions break-timer-actions">
         <button class="secondary-button" id="extendBreakButton" type="button">再休息 3 分钟</button>
         <button class="primary-button" id="startNextTaskButton" type="button">我回来了，开始下一项</button>

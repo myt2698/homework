@@ -535,12 +535,6 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .break-divider { display: flex; gap: 8px; min-height: 34px; padding: 7px 11px; border-block: 1px dashed #8ebae9; align-items: center; color: #376b9e; background: #f2f8ff; }
 .break-divider strong { font-size: .75rem; }
 .break-divider small { color: #6280a0; font-size: .66rem; }
-.task-step-list { display: grid; gap: 5px; margin: 10px 0 0; padding: 9px 10px; border-radius: 10px; color: var(--muted); background: rgba(255,255,255,.66); list-style: none; }
-.task-step-list li { display: flex; gap: 7px; align-items: center; font-size: .7rem; }
-.task-step-list li span { width: 14px; color: #7b91b7; font-weight: 900; }
-.task-step-list li.current { color: var(--ink); font-weight: 800; }
-.task-step-list li.current span { color: var(--green); }
-.task-step-list li.done { color: #548574; text-decoration: line-through; }
 .active-task-banner { display: flex; flex-direction: column; margin-top: 14px; padding: 15px 16px; border-radius: 18px; color: #fff; background: linear-gradient(135deg, #4b82ef, #6e9ef5); box-shadow: 0 10px 22px rgba(75,130,239,.2); }
 .active-task-banner[hidden] { display: none; }
 .active-task-banner span { color: rgba(255,255,255,.72); font-size: .68rem; }
@@ -645,7 +639,7 @@ body.modal-open { overflow: hidden; }
 .task-entry-dialog .task-entry { display: flex; min-height: 0; flex: 1 1 auto; margin-top: 18px; overflow: hidden; flex-direction: column; }
 .task-entry-dialog .task-entry-pending { flex: 1 1 auto; }
 
-.step-editor-modal {
+.task-edit-modal {
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -655,8 +649,7 @@ body.modal-open { overflow: hidden; }
   background: rgba(36,50,74,.48);
   backdrop-filter: blur(5px);
 }
-.step-editor-modal[hidden] { display: none; }
-.step-editor-dialog,
+.task-edit-modal[hidden] { display: none; }
 .task-edit-dialog {
   position: relative;
   width: min(520px, 100%);
@@ -666,26 +659,9 @@ body.modal-open { overflow: hidden; }
   background: var(--surface);
   box-shadow: 0 28px 80px rgba(0,0,0,.28);
 }
-.step-editor-dialog h2, .task-edit-dialog h2 { margin-right: 42px; font-size: 1.18rem; }
-.step-editor-task { margin: 12px 0 0; color: var(--ink); font-size: .88rem; font-weight: 800; line-height: 1.55; }
-.step-editor-help { margin: 6px 0 14px; color: var(--muted); font-size: .74rem; line-height: 1.55; }
-.step-editor-dialog textarea {
-  width: 100%;
-  min-height: 150px;
-  padding: 13px 14px;
-  resize: vertical;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-  outline: none;
-  color: var(--ink);
-  background: #fff;
-  font: inherit;
-  font-size: .86rem;
-  line-height: 1.7;
-}
-.step-editor-dialog textarea:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
-.step-editor-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; margin-top: 16px; }
-.step-editor-actions button { width: 100%; min-width: 0; }
+.task-edit-dialog h2 { margin-right: 42px; font-size: 1.18rem; }
+.task-edit-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; margin-top: 16px; }
+.task-edit-actions button { width: 100%; min-width: 0; }
 .task-edit-field { display: grid; gap: 6px; margin-top: 14px; color: var(--ink); font-size: .76rem; font-weight: 800; }
 .task-edit-field textarea,
 .task-edit-field select {
@@ -1009,11 +985,6 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 .focus-close { position: absolute; top: 13px; right: 14px; width: 34px; height: 34px; border: 0; border-radius: 50%; color: var(--muted); background: var(--page); font-size: 1.3rem; cursor: pointer; }
 .focus-subject { display: inline-block; margin-top: 8px; padding: 5px 10px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: .72rem; font-weight: 800; }
 .focus-dialog h2 { max-width: 330px; margin: 12px auto 0; font-size: 1.25rem; line-height: 1.45; }
-.focus-step { margin: 13px auto -5px; padding: 9px 12px; border-radius: 12px; color: #456ba8; background: var(--green-soft); }
-.focus-step[hidden] { display: none; }
-.focus-step span, .focus-step strong { display: block; }
-.focus-step span { color: var(--muted); font-size: .65rem; }
-.focus-step strong { margin-top: 3px; font-size: .83rem; }
 .focus-clock-label { display: block; margin-top: 18px; color: var(--muted); font-size: .68rem; font-weight: 750; }
 .focus-clock { margin: 3px 0 12px; color: var(--green); font-size: clamp(3.2rem, 15vw, 5rem); font-weight: 850; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .focus-estimate-card { display: flex; min-height: 44px; margin-bottom: 13px; padding: 9px 13px; border-radius: 13px; align-items: center; justify-content: space-between; gap: 10px; color: #456ba8; background: var(--green-soft); font-size: .75rem; }
@@ -1024,24 +995,43 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 .focus-reminder { margin: 18px 0; color: var(--muted); font-size: .78rem; }
 .focus-dialog-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 9px; }
 .focus-dialog-actions button { width: 100%; min-width: 0; }
-.break-choice-dialog, .break-timer-dialog { width: min(460px, 100%); }
+.break-choice-dialog, .break-timer-dialog, .start-plan-dialog { width: min(460px, 100%); }
 .break-choice-dialog h2, .break-timer-dialog h2 { margin-bottom: 17px; }
-.break-next-task { display: grid; gap: 4px; margin: 15px 0; padding: 12px 14px; border-radius: 14px; color: #456ba8; background: var(--green-soft); }
-.break-next-task span { color: var(--muted); font-size: .68rem; }
-.break-next-task strong { font-size: .92rem; }
+.scheduled-task { --subject-color: #756f65; --subject-soft: #f2efe9; display: grid; gap: 5px; margin: 15px 0; padding: 12px 14px; border: 1px solid var(--subject-color); border-left: 4px solid var(--subject-color); border-radius: 14px; color: var(--ink); background: linear-gradient(90deg, var(--subject-soft), #fff 88%); text-align: left; }
+.scheduled-task[data-subject="语文"] { --subject-color: #c56b45; --subject-soft: #fbe9df; }
+.scheduled-task[data-subject="数学"] { --subject-color: #4075ae; --subject-soft: #e7f0fa; }
+.scheduled-task[data-subject="英语"] { --subject-color: #765ca7; --subject-soft: #eee9f8; }
+.scheduled-task[data-subject="科学"] { --subject-color: #377e68; --subject-soft: #e4f3ed; }
+.scheduled-task span { color: var(--subject-color); font-size: .68rem; font-weight: 800; }
+.scheduled-task strong { color: var(--ink); font-size: .92rem; }
 .break-quick-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.break-quick-actions button { min-width: 0; padding-inline: 8px; }
-.break-return-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 10px; align-items: center; }
-.break-return-row label { color: var(--muted); font-size: .73rem; }
-.break-return-row input { min-width: 0; padding: 10px 8px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: #fff; }
-.break-return-row button { padding: 10px 12px; }
+.break-quick-actions button { min-width: 0; padding-inline: 8px; border-color: #e6bd67; color: #8a631b; background: #fff8e6; }
+.break-return-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 10px; padding: 9px 10px; border: 1px solid #f0d79e; border-radius: 13px; align-items: center; background: #fffaf0; }
+.break-return-row label { color: #8a631b; font-size: .73rem; font-weight: 750; }
+.break-return-row input { min-width: 0; padding: 10px 8px; border: 1px solid #e5c77f; border-radius: 11px; color: var(--ink); background: #fff; }
+.break-return-row button { padding: 10px 12px; border-color: #e6bd67; color: #8a631b; background: #fff5d8; }
 .break-start-now { width: 100%; margin-top: 14px; }
-.break-clock { color: #4b82ef; }
+.break-clock { color: #b77712; }
 .break-planned-return { margin: -4px 0 10px; color: var(--muted); font-size: .75rem; }
 .break-timer-dialog.time-up { background: linear-gradient(145deg, #fff9e9, #fff); }
 .break-timer-dialog.time-up .break-clock { color: var(--amber); }
 .break-timer-actions { margin-top: 18px; }
 .break-cancel-button { margin-top: 8px; color: var(--muted); }
+.start-plan-dialog h2 { margin-bottom: 4px; }
+.start-plan-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.start-plan-quick-actions button, .start-plan-time-row button { min-height: 42px; padding: 8px 10px; border: 1px solid #e6bd67; border-radius: 12px; color: #8a631b; background: #fff8e6; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; }
+.start-plan-quick-actions button:first-child { border-color: var(--green); color: #fff; background: var(--green); }
+.start-plan-time-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 10px; padding: 9px 10px; border: 1px solid #f0d79e; border-radius: 13px; align-items: center; background: #fffaf0; }
+.start-plan-time-row label { color: #8a631b; font-size: .73rem; font-weight: 750; }
+.start-plan-time-row input { min-width: 0; padding: 10px 8px; border: 1px solid #e5c77f; border-radius: 11px; color: var(--ink); background: #fff; }
+.start-plan-countdown[hidden] { display: none; }
+.start-plan-clock-label { display: block; margin-top: 18px; color: #8a631b; font-size: .7rem; font-weight: 800; }
+.start-plan-clock { margin: 4px 0; color: #b77712; font-size: clamp(3rem, 14vw, 4.6rem); font-weight: 850; font-variant-numeric: tabular-nums; }
+.start-plan-countdown > p { margin: 0 0 15px; color: var(--muted); font-size: .75rem; }
+.start-plan-actions { display: grid; grid-template-columns: 1fr 1.45fr; gap: 9px; }
+.start-plan-actions button { width: 100%; min-width: 0; }
+.start-plan-dialog.time-up { background: linear-gradient(145deg, #fff9e9, #fff); }
+.start-plan-dialog.time-up .start-plan-clock { color: var(--amber); }
 .toast {
   position: fixed;
   bottom: 26px;
@@ -1082,12 +1072,12 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 
 @media (max-width: 500px) {
   .app-shell { width: min(100% - 16px, 440px); padding-top: 11px; }
-  .weekend-plan-modal, .task-entry-modal, .step-editor-modal { padding: 8px; }
+  .weekend-plan-modal, .task-entry-modal, .task-edit-modal { padding: 8px; }
   .weekend-plan-dialog { max-height: calc(100vh - 16px); border-radius: 20px; }
   .weekend-plan-dialog .weekend-task-planner { padding: 22px 14px 16px; border-radius: 20px; }
   .task-entry-dialog { height: calc(100vh - 16px); max-height: calc(100vh - 16px); padding: 24px 14px 16px; border-radius: 20px; }
   .task-entry-sticky-footer { margin: 8px -14px -16px; padding: 9px 14px 12px; }
-  .step-editor-dialog { padding: 24px 16px 16px; border-radius: 20px; }
+  .task-edit-dialog { padding: 24px 16px 16px; border-radius: 20px; }
   .card { padding: 14px 12px; border-radius: 18px; }
   .topbar { margin-bottom: 10px; padding: 0 2px; }
   .topbar-actions { gap: 2px; }
