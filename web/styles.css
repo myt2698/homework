@@ -350,6 +350,10 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry-launcher-arrow { color: #6588c9; font-size: 1.65rem; line-height: 1; }
 .task-entry { margin-top: 16px; padding: 14px; border: 1px dashed #bfd3f6; border-radius: 17px; background: #f7faff; }
 .task-entry[hidden] { display: none; }
+.task-entry-empty { display: grid; min-height: 0; flex: 1 1 auto; place-content: center; justify-items: center; gap: 8px; color: #4c6da6; text-align: center; }
+.task-entry-empty[hidden] { display: none; }
+.task-entry-empty img { display: block; width: clamp(112px, 24vw, 154px); height: auto; max-height: 44vh; object-fit: contain; }
+.task-entry-empty strong { font-size: .88rem; letter-spacing: .02em; }
 .task-entry-composer { flex: 0 0 auto; margin-top: auto; }
 .task-entry.has-pending .task-entry-composer { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #bfd3f6; }
 .task-entry-input-row { display: flex; gap: 8px; align-items: flex-end; }

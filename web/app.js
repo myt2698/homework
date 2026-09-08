@@ -128,6 +128,7 @@
     subjectPickerButton: $("#subjectPickerButton"), subjectPickerLabel: $("#subjectPickerLabel"),
     subjectTabs: $("#subjectTabs"),
     taskEntryComposer: $("#taskEntryComposer"),
+    taskEntryEmpty: $("#taskEntryEmpty"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
     taskEntryStickyFooter: $("#taskEntryStickyFooter"),
@@ -1949,6 +1950,7 @@
     const pendingTasks = pendingTaskOrder(tasks);
     elements.taskEntryComposer.hidden = !canEnterTasks;
     elements.taskEntry.classList.toggle("has-pending", canEnterTasks && !confirmed && canEditList && pendingTasks.length > 0);
+    elements.taskEntryEmpty.hidden = !canEnterTasks || confirmed || !canEditList || pendingTasks.length > 0;
     elements.taskEntryPendingSection.hidden = !canEnterTasks || confirmed || !canEditList || pendingTasks.length === 0;
     elements.taskEntryPendingSummary.textContent = `${pendingTasks.length} 项`;
     elements.taskEntryPendingList.innerHTML = confirmed ? ""

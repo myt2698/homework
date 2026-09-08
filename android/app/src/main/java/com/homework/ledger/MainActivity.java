@@ -37,6 +37,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -272,6 +273,7 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryLauncher;
     private TextView taskEntryLauncherStatus;
     private LinearLayout taskEntryComposerPanel;
+    private LinearLayout taskEntryEmptyPanel;
     private LinearLayout taskEntryPendingPanel;
     private TextView taskEntryPendingSummary;
     private LinearLayout taskEntryPendingList;
@@ -1366,6 +1368,21 @@ public class MainActivity extends Activity {
         taskEntryScrollView.addView(taskEntryScrollableContent, matchWrap());
         taskEntryPanel.addView(taskEntryScrollView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        taskEntryEmptyPanel = vertical();
+        taskEntryEmptyPanel.setGravity(Gravity.CENTER);
+        ImageView taskEntryEmptyImage = new ImageView(this);
+        taskEntryEmptyImage.setImageResource(R.drawable.homework_entry_empty);
+        taskEntryEmptyImage.setContentDescription("小朋友坐在书桌前写作业");
+        taskEntryEmptyImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        taskEntryEmptyPanel.addView(taskEntryEmptyImage, fixed(dp(148), dp(148)));
+        TextView taskEntryEmptyText = text("开始录入作业吧", 13, Color.rgb(76, 109, 166), true);
+        taskEntryEmptyText.setGravity(Gravity.CENTER);
+        taskEntryEmptyPanel.addView(taskEntryEmptyText, matchWrap());
+        taskEntryEmptyPanel.setVisibility(View.GONE);
+        taskEntryPanel.addView(taskEntryEmptyPanel, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
         LinearLayout.LayoutParams composerParams = matchWrap();
         composerParams.topMargin = dp(12);
         taskEntryPanel.addView(taskEntryComposerPanel, composerParams);
@@ -2888,6 +2905,9 @@ public class MainActivity extends Activity {
         boolean canUndoDelete = lastDeletedTask != null && currentDate.equals(lastDeletedTaskDate)
                 && !confirmed && canEditList;
         taskEntryUndoDeleteButton.setVisibility(canUndoDelete ? View.VISIBLE : View.GONE);
+        boolean showTaskEntryEmpty = canEnterTasks && tasks.length() == 0;
+        taskEntryScrollView.setVisibility(showTaskEntryEmpty ? View.GONE : View.VISIBLE);
+        taskEntryEmptyPanel.setVisibility(showTaskEntryEmpty ? View.VISIBLE : View.GONE);
         taskEntryPendingPanel.setVisibility(canEnterTasks && tasks.length() > 0 ? View.VISIBLE : View.GONE);
         taskEntryPendingSummary.setText(tasks.length() + " 项");
         taskEntryPendingList.removeAllViews();
