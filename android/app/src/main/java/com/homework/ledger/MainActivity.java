@@ -1340,9 +1340,6 @@ public class MainActivity extends Activity {
         pendingHead.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout pendingCopy = vertical();
         pendingCopy.addView(text("我录好的作业", 14, INK, true));
-        TextView pendingHelp = text("我按科目检查一下，看看有没有听错或漏掉", 10, Color.rgb(101, 115, 140), false);
-        pendingHelp.setPadding(0, dp(3), 0, 0);
-        pendingCopy.addView(pendingHelp);
         pendingHead.addView(pendingCopy, weightedWrap(1));
         taskEntryPendingSummary = text("0 项", 10, GREEN, true);
         taskEntryPendingSummary.setPadding(dp(8), dp(4), dp(8), dp(4));
