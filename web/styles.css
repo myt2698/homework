@@ -1015,7 +1015,7 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 .focus-step span { color: var(--muted); font-size: .65rem; }
 .focus-step strong { margin-top: 3px; font-size: .83rem; }
 .focus-clock-label { display: block; margin-top: 18px; color: var(--muted); font-size: .68rem; font-weight: 750; }
-.focus-clock { margin: 3px 0 12px; color: var(--green); font-size: clamp(3.2rem, 15vw, 5rem); font-weight: 850; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+.focus-clock { margin: 3px 0 12px; color: var(--green); font-size: clamp(3.2rem, 15vw, 5rem); font-weight: 850; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .focus-estimate-card { display: flex; min-height: 44px; margin-bottom: 13px; padding: 9px 13px; border-radius: 13px; align-items: center; justify-content: space-between; gap: 10px; color: #456ba8; background: var(--green-soft); font-size: .75rem; }
 .focus-estimate-card span { color: var(--muted); }
 .focus-estimate-card strong, .focus-estimate-card b { color: #456ba8; font-size: .78rem; }

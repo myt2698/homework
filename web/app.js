@@ -411,8 +411,8 @@
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainder = seconds % 60;
     return hours > 0
-      ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
-      : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+      ? `${String(hours).padStart(2, "0")}\u2009:\u2009${String(minutes).padStart(2, "0")}\u2009:\u2009${String(remainder).padStart(2, "0")}`
+      : `${String(minutes).padStart(2, "0")}\u2009:\u2009${String(remainder).padStart(2, "0")}`;
   }
   function taskEstimateComparisonLabel(task) {
     const difference = estimatedMinutes(task) * 60000 - taskElapsedMs(task);
@@ -746,7 +746,7 @@
     const remaining = Math.max(0, Number(breakSession.endAt) - Date.now());
     const seconds = Math.ceil(remaining / 1000);
     elements.breakCountdown.textContent = remaining > 0
-      ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
+      ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}\u2009:\u2009${String(seconds % 60).padStart(2, "0")}`
       : "时间到";
     elements.breakTimerTitle.textContent = remaining > 0 ? "我正在休息" : "我计划的休息时间到了";
     elements.breakPlannedReturn.textContent = `我计划 ${timeFromEpoch(breakSession.endAt)} 回来`;

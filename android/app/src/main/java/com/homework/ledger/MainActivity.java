@@ -2238,8 +2238,8 @@ public class MainActivity extends Activity {
         long minutes = (seconds % 3600L) / 60L;
         long remainder = seconds % 60L;
         return hours > 0
-                ? String.format(Locale.CHINA, "%02d:%02d:%02d", hours, minutes, remainder)
-                : String.format(Locale.CHINA, "%02d:%02d", minutes, remainder);
+                ? String.format(Locale.CHINA, "%02d : %02d : %02d", hours, minutes, remainder)
+                : String.format(Locale.CHINA, "%02d : %02d", minutes, remainder);
     }
 
     private String taskEstimateComparisonLabel(JSONObject task) {
@@ -2638,7 +2638,7 @@ public class MainActivity extends Activity {
         TextView label = text("距离回来还有", 10, MUTED, true);
         label.setGravity(Gravity.CENTER);
         content.addView(label);
-        breakCountdownView = text("05:00", 48, GREEN, true);
+        breakCountdownView = text("05 : 00", 48, GREEN, true);
         breakCountdownView.setGravity(Gravity.CENTER);
         breakCountdownView.setPadding(0, dp(3), 0, dp(10));
         content.addView(breakCountdownView);
@@ -2697,7 +2697,7 @@ public class MainActivity extends Activity {
         long seconds = (remaining + 999L) / 1000L;
         if (breakCountdownView != null) {
             breakCountdownView.setText(remaining > 0
-                    ? String.format(Locale.CHINA, "%02d:%02d", seconds / 60L, seconds % 60L) : "时间到");
+                    ? String.format(Locale.CHINA, "%02d : %02d", seconds / 60L, seconds % 60L) : "时间到");
             breakCountdownView.setTextColor(remaining > 0 ? GREEN : AMBER);
         }
         if (breakNextTaskView != null) breakNextTaskView.setText("回来后做  ·  "
