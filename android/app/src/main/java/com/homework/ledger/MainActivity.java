@@ -271,7 +271,6 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryPanel;
     private LinearLayout taskEntryLauncher;
     private TextView taskEntryLauncherStatus;
-    private TextView taskEntryDialogStatus;
     private LinearLayout taskEntryComposerPanel;
     private LinearLayout taskEntryPendingPanel;
     private TextView taskEntryPendingSummary;
@@ -1509,17 +1508,8 @@ public class MainActivity extends Activity {
         setTaskDraftError(null);
 
         LinearLayout content = vertical();
-        content.setPadding(dp(18), dp(18), dp(18), dp(8));
-        TextView kicker = text("我的作业清单", 10, GREEN, true);
-        kicker.setLetterSpacing(0.1f);
-        content.addView(kicker);
-        content.addView(text("把今天的作业收进清单", 18, INK, true));
-        taskEntryDialogStatus = text("我选好科目，把作业说出来或写下来。", 10, Color.rgb(101, 115, 140), false);
-        taskEntryDialogStatus.setPadding(0, dp(5), 0, 0);
-        content.addView(taskEntryDialogStatus);
-        LinearLayout.LayoutParams entryParams = matchWrap();
-        entryParams.topMargin = dp(14);
-        content.addView(taskEntryPanel, entryParams);
+        content.setPadding(dp(18), dp(8), dp(18), dp(8));
+        content.addView(taskEntryPanel, matchWrap());
 
         taskEntryScrollView = new ScrollView(this);
         taskEntryScrollView.setFillViewport(true);
@@ -1538,7 +1528,6 @@ public class MainActivity extends Activity {
             }
             if (taskEntryDialog == dialog) taskEntryDialog = null;
             taskEntryScrollView = null;
-            taskEntryDialogStatus = null;
             taskEntryConfirmButton = null;
         });
         dialog.show();
@@ -2859,11 +2848,6 @@ public class MainActivity extends Activity {
                 ? "已录入 " + tasks.length() + " 项，可继续补充其他科目"
                 : "选择科目，语音或文字录入";
         taskEntryLauncherStatus.setText(entryStatus);
-        if (taskEntryDialogStatus != null) {
-            taskEntryDialogStatus.setText(tasks.length() > 0
-                    ? "我已经收好 " + tasks.length() + " 项，可以检查或继续录入。"
-                    : "我选好科目，把作业说出来或写下来。");
-        }
         if (!canEnterTasks) dismissTaskEntryDialog();
         taskEntryComposerPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
         ViewGroup.LayoutParams composerLayout = taskEntryComposerPanel.getLayoutParams();

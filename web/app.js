@@ -124,7 +124,7 @@
     ledgerButton: $("#ledgerButton"), ledgerTitle: $("#ledgerTitle"), ledgerStatus: $("#ledgerStatus"),
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryDialog: $("#taskEntryDialog"), taskEntryCloseButton: $("#taskEntryCloseButton"),
-    taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
+    taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
     taskEntryComposer: $("#taskEntryComposer"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
@@ -1788,9 +1788,6 @@
       ? `已录入 ${tasks.length} 项，可继续补充其他科目`
       : "选择科目，语音或文字录入";
     elements.taskEntryLauncherStatus.textContent = entryStatus;
-    elements.taskEntryModalStatus.textContent = tasks.length
-      ? `我已经收好 ${tasks.length} 项，可以检查或继续录入。`
-      : "我选好科目，把作业说出来或写下来。";
     if (!canEnterTasks) closeTaskEntryModal();
     elements.emptyTaskList.hidden = tasks.length > 0 || canEnterTasks;
     elements.emptyTaskList.textContent = key && !isFriday
