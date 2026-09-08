@@ -128,7 +128,7 @@
     taskEntryComposer: $("#taskEntryComposer"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
-    taskEntryStickyFooter: $("#taskEntryStickyFooter"), taskEntryFooterCount: $("#taskEntryFooterCount"),
+    taskEntryStickyFooter: $("#taskEntryStickyFooter"),
     taskEntryUndoDeleteButton: $("#taskEntryUndoDeleteButton"), taskDraftError: $("#taskDraftError"),
     stepEditorModal: $("#stepEditorModal"), stepEditorCloseButton: $("#stepEditorCloseButton"),
     stepEditorTaskTitle: $("#stepEditorTaskTitle"), stepEditorInput: $("#stepEditorInput"),
@@ -1935,7 +1935,6 @@
     const canUndoDelete = Boolean(lastDeletedTask && lastDeletedTask.date === date && !confirmed && canEditList);
     elements.taskEntryUndoDeleteButton.hidden = !canUndoDelete;
     elements.taskEntryStickyFooter.hidden = !canEnterTasks || confirmed || !canEditList || pendingTasks.length === 0;
-    elements.taskEntryFooterCount.textContent = `${pendingTasks.length} 项`;
 
     if (!confirmed) {
       elements.taskList.innerHTML = "";

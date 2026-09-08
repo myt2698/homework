@@ -2842,7 +2842,7 @@ public class MainActivity extends Activity {
         if (!confirmed) renderPendingTaskGroups(tasks);
         if (taskEntryConfirmButton != null) {
             taskEntryConfirmButton.setVisibility(canEnterTasks && tasks.length() > 0 ? View.VISIBLE : View.GONE);
-            taskEntryConfirmButton.setText(tasks.length() + " 项 · 都录好了，去排顺序");
+            taskEntryConfirmButton.setText("都录好了，去排顺序");
         }
         emptyTaskView.setVisibility(tasks.length() == 0 && !canEnterTasks ? View.VISIBLE : View.GONE);
         emptyTaskView.setText(weekendMode && !isFriday
