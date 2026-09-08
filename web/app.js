@@ -2781,7 +2781,7 @@
     const item = taskKeywordItems(selectedTaskSubject).find((keyword) => String(keyword.id) === String(id));
     if (!item) return;
     const current = elements.taskDraft.value.trim();
-    elements.taskDraft.value = current ? `${current} ${item.label} ` : `${item.label} `;
+    elements.taskDraft.value = current ? `${current} ${item.label}` : item.label;
     resizeTaskDraft();
     setTaskDraftError();
     elements.taskDraft.focus();

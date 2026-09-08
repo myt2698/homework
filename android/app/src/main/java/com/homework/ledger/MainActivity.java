@@ -1822,7 +1822,7 @@ public class MainActivity extends Activity {
     private void applyTaskKeyword(String keyword) {
         if (taskDraftInput == null) return;
         String current = taskDraftInput.getText().toString().trim();
-        String next = current.isEmpty() ? keyword + " " : current + " " + keyword + " ";
+        String next = current.isEmpty() ? keyword : current + " " + keyword;
         taskDraftInput.setText(next);
         taskDraftInput.requestFocus();
         taskDraftInput.setSelection(taskDraftInput.length());
