@@ -2637,7 +2637,8 @@
     const actionLabel = listening ? "结束语音录入" : "开始报作业";
     elements.voiceTaskButton.setAttribute("aria-label", actionLabel);
     elements.voiceTaskButton.title = actionLabel;
-    if (message) elements.voiceStatus.textContent = message;
+    elements.voiceStatus.textContent = message || "";
+    elements.voiceStatus.hidden = !message;
   }
 
   function selectTaskSubject(subject) {
@@ -2646,7 +2647,7 @@
       button.setAttribute("aria-checked", String(button.dataset.subject === subject));
     });
     elements.addTasksButton.textContent = `加入${subject}作业`;
-    elements.taskDraft.placeholder = `例如：1. ${subject}背诵第3课  2. 练习册第12页  3. 阅读课文`;
+    elements.taskDraft.placeholder = "请录入…";
   }
 
   function exportBackup() {

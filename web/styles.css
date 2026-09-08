@@ -375,22 +375,20 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
   cursor: pointer;
 }
 .voice-button.listening { border-color: var(--red); color: var(--red); background: var(--red-soft); }
-.task-entry textarea {
+.task-draft-input {
   width: 100%;
-  min-height: 82px;
-  margin-top: 12px;
-  padding: 11px 12px;
-  resize: vertical;
+  height: 42px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 11px;
   outline: none;
   color: var(--ink);
   background: #fff;
   font: inherit;
-  line-height: 1.55;
+  line-height: 1.4;
 }
-.task-entry textarea:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
-.task-entry textarea[aria-invalid="true"] { border-color: #df7e7e; box-shadow: 0 0 0 3px rgba(219,83,83,.1); }
+.task-draft-input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75,130,239,.12); }
+.task-draft-input[aria-invalid="true"] { border-color: #df7e7e; box-shadow: 0 0 0 3px rgba(219,83,83,.1); }
 .task-draft-error { display: block; margin-top: 5px; color: #b83f3f; font-size: .72rem; font-weight: 700; }
 .task-draft-error[hidden] { display: none; }
 .task-entry-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }

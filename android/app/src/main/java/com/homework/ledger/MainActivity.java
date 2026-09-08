@@ -434,9 +434,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void onModelReady() {
                     setVoiceTaskButtonIdle();
-                    if (voiceTaskStatusView != null) {
-                        voiceTaskStatusView.setText("可以说：语文，背诵第3课；数学，口算20题（录音不上传）");
-                    }
+                    setVoiceTaskStatus(null);
                 }
 
                 @Override
@@ -445,9 +443,7 @@ public class MainActivity extends Activity {
                         voiceTaskButton.setEnabled(true);
                         setVoiceTaskButtonIcon("重试加载离线语音", false);
                     }
-                    if (voiceTaskStatusView != null) {
-                        voiceTaskStatusView.setText("离线语音模型加载失败，点击按钮重试");
-                    }
+                    setVoiceTaskStatus("离线语音模型加载失败，点击按钮重试");
                 }
 
                 @Override
@@ -455,9 +451,7 @@ public class MainActivity extends Activity {
                     if (discardVoiceResultAfterStop) return;
                     latestVoicePartial = text;
                     setTaskDraftFromVoice(text);
-                    if (voiceTaskStatusView != null && !text.isEmpty()) {
-                        voiceTaskStatusView.setText("正在离线识别：" + trailingText(text, 22));
-                    }
+                    if (!text.isEmpty()) setVoiceTaskStatus("正在离线识别：" + trailingText(text, 22));
                 }
 
                 @Override
@@ -470,9 +464,7 @@ public class MainActivity extends Activity {
                         latestVoicePartial = "";
                         if (taskDraftInput != null) taskDraftInput.setText("");
                         setVoiceTaskButtonIdle();
-                        if (voiceTaskStatusView != null) {
-                            voiceTaskStatusView.setText("录音已停止，内容已清空，可以重新录入");
-                        }
+                        setVoiceTaskStatus("录音已停止，内容已清空，可以重新录入");
                         return;
                     }
                     latestVoicePartial = text;
@@ -481,14 +473,10 @@ public class MainActivity extends Activity {
                     boolean shouldAddTasks = addTasksAfterVoiceStops;
                     addTasksAfterVoiceStops = false;
                     if (text.isEmpty()) {
-                        if (voiceTaskStatusView != null) {
-                            voiceTaskStatusView.setText("没有听清，请靠近麦克风后重试");
-                        }
+                        setVoiceTaskStatus("没有听清，请靠近麦克风后重试");
                         if (!shouldAddTasks) toast("没有识别到语音，请重试或直接输入文字");
                     } else {
-                        if (voiceTaskStatusView != null) {
-                            voiceTaskStatusView.setText("文字已经放进输入框，我检查一下再加入清单");
-                        }
+                        setVoiceTaskStatus("文字已经放进输入框，我检查一下再加入清单");
                         if (!shouldAddTasks) toast("离线语音已转成文字，请核对");
                     }
                     if (shouldAddTasks) addTasksFromDraft();
@@ -504,18 +492,14 @@ public class MainActivity extends Activity {
                         latestVoicePartial = "";
                         if (taskDraftInput != null) taskDraftInput.setText("");
                         setVoiceTaskButtonIdle();
-                        if (voiceTaskStatusView != null) {
-                            voiceTaskStatusView.setText("录音已停止，内容已清空，可以重新录入");
-                        }
+                        setVoiceTaskStatus("录音已停止，内容已清空，可以重新录入");
                         return;
                     }
                     setTaskDraftFromVoice(latestVoicePartial);
                     setVoiceTaskButtonIdle();
                     boolean shouldAddTasks = addTasksAfterVoiceStops;
                     addTasksAfterVoiceStops = false;
-                    if (voiceTaskStatusView != null) {
-                        voiceTaskStatusView.setText("录音或离线识别失败，请重试");
-                    }
+                    setVoiceTaskStatus("录音或离线识别失败，请重试");
                     if (shouldAddTasks) {
                         addTasksFromDraft();
                     } else {
@@ -658,9 +642,7 @@ public class MainActivity extends Activity {
             voiceTaskButton.setEnabled(false);
             setVoiceTaskButtonIcon("正在准备离线语音", false);
         }
-        if (voiceTaskStatusView != null) {
-            voiceTaskStatusView.setText("正在本机加载中文识别模型，首次需要几秒钟");
-        }
+        setVoiceTaskStatus("正在本机加载中文识别模型，首次需要几秒钟");
         offlineVoiceRecognizer.initialize(offlineVoiceListener);
     }
 
@@ -703,9 +685,7 @@ public class MainActivity extends Activity {
             voiceTaskButton.setEnabled(true);
             setVoiceTaskButtonIcon("结束语音录入", true);
         }
-        if (voiceTaskStatusView != null) {
-            voiceTaskStatusView.setText("正在本机识别，可以连续报多项作业");
-        }
+        setVoiceTaskStatus("正在本机识别，可以连续报多项作业");
         timerHandler.removeCallbacks(offlineVoiceTimeout);
         timerHandler.postDelayed(offlineVoiceTimeout, VOICE_RECORDING_LIMIT_MS);
     }
@@ -718,9 +698,7 @@ public class MainActivity extends Activity {
             voiceTaskButton.setEnabled(false);
             setVoiceTaskButtonIcon("正在整理语音识别结果", true);
         }
-        if (voiceTaskStatusView != null) {
-            voiceTaskStatusView.setText("录音已停止，正在完成离线识别");
-        }
+        setVoiceTaskStatus("录音已停止，正在完成离线识别");
     }
 
     private void setTaskDraftFromVoice(String spoken) {
@@ -747,6 +725,13 @@ public class MainActivity extends Activity {
         voiceTaskButton.setTextColor(listening ? RED : GREEN);
         voiceTaskButton.setBackground(rounded(listening ? RED_SOFT : GREEN_SOFT, 10,
                 listening ? RED : Color.rgb(156, 188, 245), 1));
+    }
+
+    private void setVoiceTaskStatus(String message) {
+        if (voiceTaskStatusView == null) return;
+        boolean visible = message != null && !message.isEmpty();
+        voiceTaskStatusView.setText(visible ? message : "");
+        voiceTaskStatusView.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     private String trailingText(String value, int maximumCharacters) {
@@ -1278,7 +1263,6 @@ public class MainActivity extends Activity {
         }
         taskEntryComposerPanel.addView(subjectTabs, matchFixed(dp(39)));
         selectTaskSubject(selectedTaskSubject);
-        taskEntryComposerPanel.addView(space(9));
         voiceTaskButton = new Button(this);
         voiceTaskButton.setText("🎙");
         voiceTaskButton.setContentDescription("正在准备离线语音");
@@ -1289,29 +1273,29 @@ public class MainActivity extends Activity {
         voiceTaskButton.setEnabled(false);
         voiceTaskButton.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
         voiceTaskButton.setOnClickListener(v -> startVoiceTaskInput());
-        voiceTaskStatusView = text("正在本机加载中文识别模型", 10, MUTED, false);
-        voiceTaskStatusView.setPadding(0, dp(7), 0, 0);
-        taskEntryComposerPanel.addView(voiceTaskStatusView);
+        voiceTaskStatusView = text("", 10, MUTED, false);
+        voiceTaskStatusView.setPadding(0, dp(5), 0, 0);
+        voiceTaskStatusView.setVisibility(View.GONE);
 
         taskDraftInput = new EditText(this);
         taskDraftInput.setTextSize(14);
         taskDraftInput.setTextColor(INK);
         taskDraftInput.setHintTextColor(Color.rgb(160, 159, 150));
-        taskDraftInput.setHint("例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文");
-        taskDraftInput.setGravity(Gravity.TOP | Gravity.START);
-        taskDraftInput.setMinLines(3);
-        taskDraftInput.setMaxLines(6);
-        taskDraftInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        taskDraftInput.setHint("请录入…");
+        taskDraftInput.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        taskDraftInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        taskDraftInput.setSingleLine(true);
         taskDraftInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
         taskDraftInput.setPadding(dp(11), dp(9), dp(11), dp(9));
         taskDraftInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
-        LinearLayout.LayoutParams draftParams = matchWrap();
+        LinearLayout.LayoutParams draftParams = matchFixed(dp(43));
         draftParams.topMargin = dp(10);
         taskEntryComposerPanel.addView(taskDraftInput, draftParams);
         taskDraftErrorView = text("先说出或输入作业内容", 10, RED, true);
         taskDraftErrorView.setPadding(dp(2), dp(5), 0, 0);
         taskDraftErrorView.setVisibility(View.GONE);
         taskEntryComposerPanel.addView(taskDraftErrorView);
+        taskEntryComposerPanel.addView(voiceTaskStatusView);
         taskDraftInput.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -1679,9 +1663,7 @@ public class MainActivity extends Activity {
             button.setBackground(rounded(selected ? subjectColor : taskSubjectSoftColor(tabSubject),
                     10, subjectColor, 1));
         }
-        if (taskDraftInput != null) {
-            taskDraftInput.setHint("例如：1. " + subject + "背诵第3课  2. 练习册第12页  3. 阅读课文");
-        }
+        if (taskDraftInput != null) taskDraftInput.setHint("请录入…");
         if (taskEntryAddButton != null) taskEntryAddButton.setText("加入" + subject + "作业");
     }
 
@@ -1759,9 +1741,7 @@ public class MainActivity extends Activity {
                 && (offlineVoiceRecognizer.isRecording() || offlineVoiceRecognizer.isBusy())) {
             addTasksAfterVoiceStops = true;
             stopOfflineVoiceInput();
-            if (voiceTaskStatusView != null) {
-                voiceTaskStatusView.setText("录音已停止，识别完成后会自动加入清单");
-            }
+            setVoiceTaskStatus("录音已停止，识别完成后会自动加入清单");
             return;
         }
         addTasksFromDraft();
@@ -1777,11 +1757,9 @@ public class MainActivity extends Activity {
         if (voiceActive) stopOfflineVoiceInput();
         if (taskDraftInput != null) taskDraftInput.setText("");
         setTaskDraftError(null);
-        if (voiceTaskStatusView != null) {
-            voiceTaskStatusView.setText(voiceActive
-                    ? "录音已停止，正在清空识别结果"
-                    : "内容已清空，可以重新录入");
-        }
+        setVoiceTaskStatus(voiceActive
+                ? "录音已停止，正在清空识别结果"
+                : "内容已清空，可以重新录入");
     }
 
     private void addTasksFromDraft() {

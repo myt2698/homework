@@ -371,9 +371,9 @@
             <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
             <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
           </div>
-          <textarea id="taskDraft" rows="3" maxlength="500" aria-describedby="voiceStatus taskDraftError" aria-invalid="false" placeholder="例如：1. 背诵第3课  2. 练习册第12页  3. 阅读课文"></textarea>
+          <input class="task-draft-input" id="taskDraft" type="text" maxlength="500" autocomplete="off" aria-describedby="voiceStatus taskDraftError" aria-invalid="false" placeholder="请录入…">
           <small class="task-draft-error" id="taskDraftError" role="alert" hidden>先说出或输入作业内容</small>
-          <small class="voice-entry-status" id="voiceStatus">可以说：语文，背诵第3课；数学，口算20题</small>
+          <small class="voice-entry-status" id="voiceStatus" hidden></small>
           <div class="task-entry-actions">
             <button class="primary-button compact-button" id="addTasksButton" type="button">加入语文作业</button>
             <button class="voice-button" id="voiceTaskButton" type="button" aria-label="开始报作业" title="开始报作业">🎙</button>
