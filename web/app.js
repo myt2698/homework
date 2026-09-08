@@ -22,7 +22,7 @@
     英语: ["校本", "预习课本", "复习"],
     科学: []
   };
-  const ESTIMATE_OPTIONS = [5, 10, 15, 20, 30];
+  const ESTIMATE_OPTIONS = [5, 10, 15, 20, 30, 35, 40, 45, 50, 60];
   const DICTATION_LESSONS = [
     { id: "lesson-1", label: "第1课", words: "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波 随时 河堤 拥堵 高墙".split(" ") },
     { id: "lesson-2", label: "第2课", words: "繁星 密密麻麻 忘记 谈话 渐渐 模糊 周围 飞舞 柔和 梦幻 怀抱 沉睡 安静 熟人 躺倒".split(" ") },
@@ -205,7 +205,8 @@
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
     startPlanModal: $("#startPlanModal"), startPlanCloseButton: $("#startPlanCloseButton"),
     startPlanTitle: $("#startPlanTitle"), startPlanTaskCard: $("#startPlanTaskCard"),
-    startPlanTask: $("#startPlanTask"), startPlanOptions: $("#startPlanOptions"),
+    startPlanTask: $("#startPlanTask"), startPlanTaskLabel: $("#startPlanTaskLabel"),
+    startPlanOptions: $("#startPlanOptions"),
     startPlanTime: $("#startPlanTime"), saveStartPlanButton: $("#saveStartPlanButton"),
     startPlanCountdownPanel: $("#startPlanCountdownPanel"), startPlanCountdown: $("#startPlanCountdown"),
     startPlanScheduledTime: $("#startPlanScheduledTime"), adjustStartPlanButton: $("#adjustStartPlanButton"),
@@ -497,12 +498,18 @@
     closeStartPlanModal();
   }
 
-  function openStartPlanChoice(taskId, date = elements.recordDate.value) {
+  function taskCanBeScheduled(task, date = elements.recordDate.value) {
+    return Boolean(task && ["pending", "paused"].includes(task.status || "pending")
+      && taskListConfirmed(date) && taskOrderSaved(date) && taskCanRunToday(task, date));
+  }
+
+  function openStartPlanChoice(taskId, date = elements.recordDate.value, kind = "first") {
     const task = tasksForDate(date).find((item) => String(item.id) === String(taskId));
-    if (!task || (task.status || "pending") !== "pending" || !taskCanRunToday(task, date)) return;
+    if (!taskCanBeScheduled(task, date)) return;
     if (startPlanSession) clearStartPlanSession();
     if (elements.recordDate.value !== date) setRecordDate(date);
-    elements.startPlanTitle.textContent = "我准备什么时候开始？";
+    elements.startPlanTitle.textContent = kind === "next" ? "我准备什么时候开始下一项？" : "我准备什么时候开始？";
+    elements.startPlanTaskLabel.textContent = kind === "next" ? "下一项作业" : "第一项作业";
     elements.startPlanTask.textContent = `${task.subject || "其他"} · ${task.title}`;
     setScheduledTaskCard(elements.startPlanTaskCard, task);
     elements.startPlanOptions.hidden = false;
@@ -511,18 +518,20 @@
     elements.startPlanModal.querySelector(".start-plan-dialog")?.classList.remove("time-up");
     elements.startPlanModal.dataset.taskId = String(task.id);
     elements.startPlanModal.dataset.date = date;
+    elements.startPlanModal.dataset.kind = kind;
     const suggested = new Date(Date.now() + 30 * 60000);
     elements.startPlanTime.value = `${String(suggested.getHours()).padStart(2, "0")}:${String(suggested.getMinutes()).padStart(2, "0")}`;
     elements.startPlanModal.hidden = false;
     document.body.classList.add("modal-open");
   }
 
-  function scheduleFirstTask(taskId, date, startAt) {
+  function scheduleTaskStart(taskId, date, startAt, kind = "first") {
     const task = tasksForDate(date).find((item) => String(item.id) === String(taskId));
-    if (!task || !Number(startAt)) return;
+    if (!taskCanBeScheduled(task, date) || !Number.isFinite(Number(startAt))) return;
     startPlanSession = {
       taskId: String(taskId),
       date,
+      kind,
       startAt: Number(startAt),
       alerted: false
     };
@@ -534,11 +543,13 @@
     if (!startPlanSession) return closeStartPlanModal();
     const task = tasksForDate(startPlanSession.date)
       .find((item) => String(item.id) === String(startPlanSession.taskId));
-    if (!task || (task.status || "pending") !== "pending" || !taskCanRunToday(task, startPlanSession.date)) {
+    if (!taskCanBeScheduled(task, startPlanSession.date)) {
       clearStartPlanSession();
       return;
     }
     elements.startPlanTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    const isNextTask = startPlanSession.kind === "next";
+    elements.startPlanTaskLabel.textContent = isNextTask ? "下一项作业" : "第一项作业";
     setScheduledTaskCard(elements.startPlanTaskCard, task);
     const now = Date.now();
     const remaining = Math.max(0, Number(startPlanSession.startAt) - now);
@@ -548,7 +559,8 @@
       : "时间到";
     elements.startPlanTitle.textContent = remaining > 0 ? "我按计划准备开始" : "我计划的开始时间到了";
     elements.startPlanScheduledTime.textContent = `我计划 ${timeFromEpoch(startPlanSession.startAt)} 开始`;
-    elements.startPlannedTaskButton.textContent = remaining > 0 ? "我准备好了，提前开始" : "开始我的第一项";
+    elements.startPlannedTaskButton.textContent = remaining > 0 ? "我准备好了，提前开始"
+      : isNextTask ? "开始我的下一项" : "开始我的第一项";
     elements.startPlanModal.querySelector(".start-plan-dialog")?.classList.toggle("time-up", remaining <= 0);
     if (remaining <= 0 && !startPlanSession.alerted) {
       startPlanSession.alerted = true;
@@ -568,6 +580,7 @@
     if (elements.recordDate.value !== startPlanSession.date) setRecordDate(startPlanSession.date);
     elements.startPlanModal.dataset.taskId = String(startPlanSession.taskId);
     elements.startPlanModal.dataset.date = startPlanSession.date;
+    elements.startPlanModal.dataset.kind = startPlanSession.kind || "first";
     elements.startPlanOptions.hidden = true;
     elements.startPlanCountdownPanel.hidden = false;
     elements.startPlanCloseButton.hidden = true;
@@ -575,10 +588,10 @@
     document.body.classList.add("modal-open");
     renderStartPlanTimer();
     window.clearInterval(startPlanTimer);
-    startPlanTimer = window.setInterval(renderStartPlanTimer, 1000);
+    if (startPlanSession) startPlanTimer = window.setInterval(renderStartPlanTimer, 1000);
   }
 
-  function startFirstTaskFromPlan() {
+  function startTaskFromPlan() {
     const taskId = startPlanSession?.taskId || elements.startPlanModal.dataset.taskId;
     const date = startPlanSession?.date || elements.startPlanModal.dataset.date;
     if (!taskId) return;
@@ -590,9 +603,10 @@
   function adjustStartPlan() {
     const taskId = startPlanSession?.taskId;
     const date = startPlanSession?.date;
+    const kind = startPlanSession?.kind || "first";
     if (!taskId || !date) return;
     clearStartPlanSession();
-    openStartPlanChoice(taskId, date);
+    openStartPlanChoice(taskId, date, kind);
   }
 
   function loadBreakSession() {
@@ -2674,6 +2688,7 @@
     const weekend = key ? weekendForDate(date, true) : null;
     const tasks = tasksForDate();
     let openFocusAfterRender = false;
+    let nextStartPlanTaskId = null;
     let offerBreakTaskId = null;
     let offerBreakMode = "checkpoint";
     let offerBreakSourceTaskId = null;
@@ -2768,10 +2783,7 @@
         else showToast(`我又闯过一关！已经完成 ${todayDone} 项`);
       }
       const nextTask = nextTaskForToday(date);
-      if (task.breakAfter && nextTask) {
-        offerBreakTaskId = String(nextTask.id);
-        offerBreakSourceTaskId = String(task.id);
-      }
+      if (nextTask) nextStartPlanTaskId = String(nextTask.id);
     } else if (action === "undo") {
       task.status = "paused";
       delete task.completedAt;
@@ -2792,6 +2804,7 @@
     persist();
     render();
     if (openFocusAfterRender) openFocusModal(id);
+    else if (nextStartPlanTaskId) openStartPlanChoice(nextStartPlanTaskId, date, "next");
     else if (offerBreakTaskId) openBreakChoice(offerBreakTaskId, offerBreakMode, offerBreakSourceTaskId);
   }
 
@@ -3300,8 +3313,8 @@
     const date = elements.startPlanModal.dataset.date;
     const delay = Number(button.dataset.startDelay);
     if (!taskId || !date) return;
-    if (delay === 0) startFirstTaskFromPlan();
-    else scheduleFirstTask(taskId, date, Date.now() + delay * 60000);
+    if (delay === 0) startTaskFromPlan();
+    else scheduleTaskStart(taskId, date, Date.now() + delay * 60000, elements.startPlanModal.dataset.kind);
   });
   elements.saveStartPlanButton.addEventListener("click", () => {
     if (!elements.startPlanTime.value) return showToast("先选好准备开始的时间");
@@ -3309,10 +3322,11 @@
     const startAt = new Date();
     startAt.setHours(hours, minutes, 0, 0);
     if (startAt.getTime() <= Date.now()) return showToast("请选择晚于现在的时间");
-    scheduleFirstTask(elements.startPlanModal.dataset.taskId, elements.startPlanModal.dataset.date, startAt.getTime());
+    scheduleTaskStart(elements.startPlanModal.dataset.taskId, elements.startPlanModal.dataset.date,
+      startAt.getTime(), elements.startPlanModal.dataset.kind);
   });
   elements.adjustStartPlanButton.addEventListener("click", adjustStartPlan);
-  elements.startPlannedTaskButton.addEventListener("click", startFirstTaskFromPlan);
+  elements.startPlannedTaskButton.addEventListener("click", startTaskFromPlan);
   elements.breakChoiceCloseButton.addEventListener("click", closeBreakChoice);
   elements.breakChoiceModal.addEventListener("click", (event) => {
     if (event.target === elements.breakChoiceModal) closeBreakChoice();
