@@ -1356,9 +1356,16 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams pendingListParams = matchWrap();
         pendingListParams.topMargin = dp(5);
         taskEntryPendingPanel.addView(taskEntryPendingList, pendingListParams);
+        LinearLayout taskEntryScrollableContent = vertical();
         LinearLayout.LayoutParams pendingParams = matchWrap();
-        taskEntryPanel.addView(taskEntryPendingPanel, pendingParams);
-        taskEntryPanel.addView(taskEntryUndoDeleteButton, undoParams);
+        taskEntryScrollableContent.addView(taskEntryPendingPanel, pendingParams);
+        taskEntryScrollableContent.addView(taskEntryUndoDeleteButton, undoParams);
+        taskEntryScrollView = new ScrollView(this);
+        taskEntryScrollView.setFillViewport(false);
+        taskEntryScrollView.setClipToPadding(false);
+        taskEntryScrollView.addView(taskEntryScrollableContent, matchWrap());
+        taskEntryPanel.addView(taskEntryScrollView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         LinearLayout.LayoutParams composerParams = matchWrap();
         composerParams.topMargin = dp(12);
         taskEntryPanel.addView(taskEntryComposerPanel, composerParams);
@@ -1496,13 +1503,11 @@ public class MainActivity extends Activity {
 
         LinearLayout content = vertical();
         content.setPadding(dp(18), dp(8), dp(18), dp(8));
-        content.addView(taskEntryPanel, matchWrap());
-
-        taskEntryScrollView = new ScrollView(this);
-        taskEntryScrollView.setFillViewport(true);
-        taskEntryScrollView.addView(content, matchWrap());
+        int availableHeight = getResources().getDisplayMetrics().heightPixels;
+        int entryHeight = Math.min(dp(620), Math.round(availableHeight * 0.72f));
+        content.addView(taskEntryPanel, matchFixed(entryHeight));
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(taskEntryScrollView)
+                .setView(content)
                 .setPositiveButton("都录好了，去排顺序", null)
                 .setNegativeButton("关闭", null)
                 .create();
@@ -1514,7 +1519,6 @@ public class MainActivity extends Activity {
                 ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
             }
             if (taskEntryDialog == dialog) taskEntryDialog = null;
-            taskEntryScrollView = null;
             taskEntryConfirmButton = null;
         });
         dialog.show();

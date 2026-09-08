@@ -1065,10 +1065,15 @@
     document.body.classList.remove("modal-open");
   }
 
-  function scrollTaskEntryToBottom() {
+  function keepTaskEntryComposerFixed(taskId) {
     window.requestAnimationFrame(() => {
       if (elements.taskEntryModal.hidden) return;
-      elements.taskEntryDialog.scrollTo({ top: elements.taskEntryDialog.scrollHeight, behavior: "smooth" });
+      const addedRow = taskId
+        ? [...elements.taskEntryPendingList.querySelectorAll("[data-pending-task-id]")]
+          .find((row) => row.dataset.pendingTaskId === String(taskId))
+        : null;
+      if (addedRow) addedRow.scrollIntoView({ block: "nearest" });
+      else elements.taskEntryPendingSection.scrollTop = elements.taskEntryPendingSection.scrollHeight;
       elements.taskDraft.focus();
       elements.taskDraft.setSelectionRange(elements.taskDraft.value.length, elements.taskDraft.value.length);
     });
@@ -1755,7 +1760,7 @@
   function pendingTaskRow(task) {
     const id = escapeHtml(String(task.id));
     if (String(editingPendingTaskId || "") === String(task.id)) {
-      return `<div class="pending-task-row" data-subject="${escapeHtml(task.subject || "其他")}">
+      return `<div class="pending-task-row" data-subject="${escapeHtml(task.subject || "其他")}" data-pending-task-id="${id}">
         <input class="pending-task-edit-input" data-pending-edit-id="${id}" maxlength="120" value="${escapeAttribute(task.title || "")}" aria-label="修改${escapeAttribute(task.subject || "作业")}内容">
         <div class="pending-task-actions">
           ${taskButton("保存", "save-edit", task.id)}
@@ -1763,7 +1768,7 @@
         </div>
       </div>`;
     }
-    return `<div class="pending-task-row" data-subject="${escapeHtml(task.subject || "其他")}">
+    return `<div class="pending-task-row" data-subject="${escapeHtml(task.subject || "其他")}" data-pending-task-id="${id}">
       <strong class="pending-task-title">${escapeHtml(task.title || "未命名作业")}</strong>
       <div class="pending-task-actions">
         ${taskButton("修改", "edit", task.id)}
@@ -2218,7 +2223,7 @@
     const owner = taskOwnerForDate(elements.recordDate.value, true);
     const existing = Array.isArray(owner.tasks) ? owner.tasks : [];
     const stamp = Date.now();
-    owner.tasks = pendingTaskOrder(existing.concat(parsed.map((task, index) => ({
+    const addedTasks = parsed.map((task, index) => ({
       id: `${stamp}-${index}`,
       addedAt: stamp,
       addedSequence: index,
@@ -2228,7 +2233,8 @@
       elapsedMs: 0,
       estimatedMinutes: 15,
       ...(key ? { plannedDay: "saturday" } : {})
-    }))));
+    }));
+    owner.tasks = pendingTaskOrder(existing.concat(addedTasks));
     if (key) {
       owner.confirmed = false;
       delete owner.confirmedAt;
@@ -2248,7 +2254,7 @@
     editingPendingTaskId = null;
     persist();
     render();
-    scrollTaskEntryToBottom();
+    keepTaskEntryComposerFixed(addedTasks[addedTasks.length - 1].id);
     showToast(`我把 ${parsed.length} 项作业收进清单了`);
   }
 
