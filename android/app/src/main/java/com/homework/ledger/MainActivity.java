@@ -323,7 +323,7 @@ public class MainActivity extends Activity {
     private TextView weekendTaskResultLabel;
     private TextView weekendTaskResultAmount;
     private Button weekendTaskPenaltyButton;
-    private final List<Button> subjectTabButtons = new ArrayList<>();
+    private Button taskSubjectPickerButton;
     private String selectedTaskSubject = "语文";
     private boolean taskListExpanded;
     private boolean completedTasksExpanded;
@@ -1244,29 +1244,14 @@ public class MainActivity extends Activity {
         taskEntryPanel.setBackground(rounded(PAGE, 14, PAGE, 0));
 
         taskEntryComposerPanel = vertical();
-        LinearLayout subjectTabs = vertical();
-        LinearLayout[] subjectTabRows = {horizontal(), horizontal()};
-        subjectTabButtons.clear();
-        for (int subjectIndex = 0; subjectIndex < TASK_SUBJECTS.length; subjectIndex++) {
-            String subject = TASK_SUBJECTS[subjectIndex];
-            final String tabSubject = subject;
-            Button tab = new Button(this);
-            tab.setText(subject);
-            tab.setTextSize(11);
-            tab.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            tab.setAllCaps(false);
-            tab.setMinHeight(0);
-            tab.setMinimumHeight(0);
-            tab.setOnClickListener(v -> selectTaskSubject(tabSubject));
-            LinearLayout.LayoutParams tabParams = weightedFixed(1, dp(36));
-            if (subjectIndex % 2 == 1) tabParams.leftMargin = dp(6);
-            subjectTabRows[subjectIndex / 2].addView(tab, tabParams);
-            subjectTabButtons.add(tab);
-        }
-        subjectTabs.addView(subjectTabRows[0], matchFixed(dp(36)));
-        LinearLayout.LayoutParams secondSubjectRowParams = matchFixed(dp(36));
-        secondSubjectRowParams.topMargin = dp(6);
-        subjectTabs.addView(subjectTabRows[1], secondSubjectRowParams);
+        taskSubjectPickerButton = new Button(this);
+        taskSubjectPickerButton.setTextSize(12);
+        taskSubjectPickerButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        taskSubjectPickerButton.setAllCaps(false);
+        taskSubjectPickerButton.setMinHeight(0);
+        taskSubjectPickerButton.setMinimumHeight(0);
+        taskSubjectPickerButton.setPadding(dp(6), 0, dp(6), 0);
+        taskSubjectPickerButton.setOnClickListener(v -> showTaskSubjectPicker());
         selectTaskSubject(selectedTaskSubject);
         voiceTaskButton = new Button(this);
         voiceTaskButton.setText("🎙");
@@ -1286,25 +1271,21 @@ public class MainActivity extends Activity {
         taskDraftInput.setTextSize(14);
         taskDraftInput.setTextColor(INK);
         taskDraftInput.setHintTextColor(Color.rgb(160, 159, 150));
-        taskDraftInput.setHint("请录入…");
+        taskDraftInput.setHint("请输入一项作业…");
         taskDraftInput.setGravity(Gravity.TOP | Gravity.START);
-        taskDraftInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        taskDraftInput.setMinLines(2);
+        taskDraftInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        taskDraftInput.setHorizontallyScrolling(false);
+        taskDraftInput.setMinLines(1);
         taskDraftInput.setMaxLines(2);
+        taskDraftInput.setMinHeight(dp(43));
+        taskDraftInput.setMaxHeight(dp(78));
+        taskDraftInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
         taskDraftInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
         taskDraftInput.setPadding(dp(11), dp(9), dp(11), dp(9));
         taskDraftInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
-        LinearLayout taskEntryInputRow = horizontal();
-        taskEntryInputRow.setGravity(Gravity.TOP);
-        taskEntryInputRow.addView(subjectTabs, fixed(dp(112), dp(78)));
-        taskEntryInputRow.addView(spaceHorizontal(8));
-        taskEntryInputRow.addView(taskDraftInput, weightedFixed(1, dp(78)));
-        taskEntryComposerPanel.addView(taskEntryInputRow, matchFixed(dp(78)));
         taskDraftErrorView = text("先说出或输入作业内容", 10, RED, true);
         taskDraftErrorView.setPadding(dp(2), dp(5), 0, 0);
         taskDraftErrorView.setVisibility(View.GONE);
-        taskEntryComposerPanel.addView(taskDraftErrorView);
-        taskEntryComposerPanel.addView(voiceTaskStatusView);
         taskDraftInput.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -1312,28 +1293,43 @@ public class MainActivity extends Activity {
             }
             public void afterTextChanged(Editable editable) { }
         });
+        taskDraftInput.setOnEditorActionListener((view, actionId, event) -> {
+            boolean enterPressed = event != null
+                    && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == android.view.KeyEvent.ACTION_DOWN
+                    && !event.isShiftPressed();
+            if (actionId != android.view.inputmethod.EditorInfo.IME_ACTION_DONE && !enterPressed) return false;
+            generateTasksFromDraft();
+            return true;
+        });
 
-        LinearLayout entryActions = horizontal();
         taskEntryAddButton = new Button(this);
-        taskEntryAddButton.setText("加入语文作业");
-        taskEntryAddButton.setTextSize(12);
+        taskEntryAddButton.setText("＋");
+        taskEntryAddButton.setContentDescription("加入语文作业");
+        taskEntryAddButton.setTextSize(20);
         taskEntryAddButton.setTextColor(Color.WHITE);
         taskEntryAddButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         taskEntryAddButton.setAllCaps(false);
+        taskEntryAddButton.setMinHeight(0);
+        taskEntryAddButton.setMinimumHeight(0);
+        taskEntryAddButton.setPadding(0, 0, 0, 0);
         taskEntryAddButton.setBackground(rounded(GREEN, 10, GREEN, 0));
         taskEntryAddButton.setOnClickListener(v -> generateTasksFromDraft());
-        entryActions.addView(taskEntryAddButton, weightedFixed(1, dp(43)));
-        entryActions.addView(spaceHorizontal(6));
+
+        LinearLayout taskEntryInputRow = horizontal();
+        taskEntryInputRow.setGravity(Gravity.BOTTOM);
+        taskEntryInputRow.addView(taskSubjectPickerButton, fixed(dp(72), dp(43)));
+        taskEntryInputRow.addView(spaceHorizontal(6));
+        taskEntryInputRow.addView(taskDraftInput, weightedWrap(1));
+        taskEntryInputRow.addView(spaceHorizontal(6));
+        taskEntryInputRow.addView(taskEntryAddButton, fixed(dp(42), dp(43)));
+        taskEntryInputRow.addView(spaceHorizontal(6));
         voiceTaskButton.setPadding(0, 0, 0, 0);
         voiceTaskButton.setBackground(rounded(GREEN_SOFT, 10, Color.rgb(156, 188, 245), 1));
-        entryActions.addView(voiceTaskButton, fixed(dp(46), dp(43)));
-        entryActions.addView(spaceHorizontal(6));
-        Button clear = textButton("清空");
-        clear.setOnClickListener(v -> clearTaskDraftAndStopVoice());
-        entryActions.addView(clear, fixed(dp(62), dp(43)));
-        LinearLayout.LayoutParams entryActionParams = matchWrap();
-        entryActionParams.topMargin = dp(9);
-        taskEntryComposerPanel.addView(entryActions, entryActionParams);
+        taskEntryInputRow.addView(voiceTaskButton, fixed(dp(42), dp(43)));
+        taskEntryComposerPanel.addView(taskEntryInputRow, matchWrap());
+        taskEntryComposerPanel.addView(taskDraftErrorView);
+        taskEntryComposerPanel.addView(voiceTaskStatusView);
 
         taskEntryUndoDeleteButton = textButton("↶ 撤销刚才删除");
         taskEntryUndoDeleteButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1660,22 +1656,64 @@ public class MainActivity extends Activity {
 
     private void selectTaskSubject(String subject) {
         selectedTaskSubject = subject;
-        for (int index = 0; index < subjectTabButtons.size(); index++) {
-            Button button = subjectTabButtons.get(index);
-            String tabSubject = TASK_SUBJECTS[index];
-            boolean selected = tabSubject.equals(subject);
-            int subjectColor = taskSubjectColor(tabSubject);
-            button.setTextColor(selected ? Color.WHITE : subjectColor);
-            button.setBackground(rounded(selected ? subjectColor : taskSubjectSoftColor(tabSubject),
-                    10, subjectColor, 1));
+        if (taskSubjectPickerButton != null) {
+            int subjectColor = taskSubjectColor(subject);
+            taskSubjectPickerButton.setText(subject + "⌄");
+            taskSubjectPickerButton.setTextColor(Color.WHITE);
+            taskSubjectPickerButton.setBackground(rounded(subjectColor, 10, subjectColor, 1));
         }
-        if (taskDraftInput != null) taskDraftInput.setHint("请录入…");
-        if (taskEntryAddButton != null) taskEntryAddButton.setText("加入" + subject + "作业");
+        if (taskDraftInput != null) taskDraftInput.setHint("请输入一项作业…");
+        if (taskEntryAddButton != null) taskEntryAddButton.setContentDescription("加入" + subject + "作业");
+    }
+
+    private void showTaskSubjectPicker() {
+        LinearLayout options = vertical();
+        options.setPadding(dp(12), dp(4), dp(12), dp(8));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("选择科目")
+                .setView(options)
+                .setNegativeButton("取消", null)
+                .create();
+        LinearLayout[] rows = {horizontal(), horizontal()};
+        for (int index = 0; index < TASK_SUBJECTS.length; index++) {
+            String subject = TASK_SUBJECTS[index];
+            Button option = new Button(this);
+            option.setText(subject);
+            option.setTextSize(13);
+            option.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            option.setAllCaps(false);
+            option.setTextColor(subject.equals(selectedTaskSubject) ? Color.WHITE : taskSubjectColor(subject));
+            option.setBackground(rounded(subject.equals(selectedTaskSubject)
+                    ? taskSubjectColor(subject) : taskSubjectSoftColor(subject),
+                    10, taskSubjectColor(subject), 1));
+            option.setOnClickListener(v -> {
+                selectTaskSubject(subject);
+                dialog.dismiss();
+                if (taskDraftInput != null) {
+                    taskDraftInput.requestFocus();
+                    taskDraftInput.setSelection(taskDraftInput.length());
+                }
+            });
+            LinearLayout.LayoutParams optionParams = weightedFixed(1, dp(44));
+            if (index % 2 == 1) optionParams.leftMargin = dp(7);
+            rows[index / 2].addView(option, optionParams);
+        }
+        options.addView(rows[0], matchFixed(dp(44)));
+        LinearLayout.LayoutParams secondRowParams = matchFixed(dp(44));
+        secondRowParams.topMargin = dp(7);
+        options.addView(rows[1], secondRowParams);
+        dialog.show();
     }
 
     private void scrollTaskEntryToBottom() {
         if (taskEntryScrollView == null) return;
-        taskEntryScrollView.post(() -> taskEntryScrollView.fullScroll(View.FOCUS_DOWN));
+        taskEntryScrollView.post(() -> {
+            taskEntryScrollView.fullScroll(View.FOCUS_DOWN);
+            if (taskDraftInput != null) {
+                taskDraftInput.requestFocus();
+                taskDraftInput.setSelection(taskDraftInput.length());
+            }
+        });
     }
 
     private void setTaskDraftError(String message) {

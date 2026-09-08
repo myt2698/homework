@@ -365,21 +365,21 @@
         </div>
         <div class="task-entry-composer" id="taskEntryComposer">
           <div class="task-entry-input-row">
-            <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
-              <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
-              <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
-              <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
-              <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+            <div class="subject-picker" id="subjectPicker">
+              <button class="subject-picker-button" id="subjectPickerButton" type="button" data-subject="语文" aria-haspopup="true" aria-expanded="false">语文⌄</button>
+              <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目" hidden>
+                <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
+                <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
+                <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
+                <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+              </div>
             </div>
-            <textarea class="task-draft-input" id="taskDraft" rows="2" maxlength="500" aria-describedby="voiceStatus taskDraftError" aria-invalid="false" placeholder="请录入…"></textarea>
+            <textarea class="task-draft-input" id="taskDraft" rows="1" maxlength="500" aria-describedby="voiceStatus taskDraftError" aria-invalid="false" placeholder="请输入一项作业…"></textarea>
+            <button class="add-task-icon-button" id="addTasksButton" type="button" aria-label="加入语文作业" title="加入语文作业">＋</button>
+            <button class="voice-button" id="voiceTaskButton" type="button" aria-label="开始报作业" title="开始报作业">🎙</button>
           </div>
           <small class="task-draft-error" id="taskDraftError" role="alert" hidden>先说出或输入作业内容</small>
           <small class="voice-entry-status" id="voiceStatus" hidden></small>
-          <div class="task-entry-actions">
-            <button class="primary-button compact-button" id="addTasksButton" type="button">加入语文作业</button>
-            <button class="voice-button" id="voiceTaskButton" type="button" aria-label="开始报作业" title="开始报作业">🎙</button>
-            <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
-          </div>
         </div>
       </div>
       <div class="task-entry-sticky-footer" id="taskEntryStickyFooter" hidden>

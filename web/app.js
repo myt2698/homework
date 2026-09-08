@@ -124,7 +124,8 @@
     ledgerButton: $("#ledgerButton"), ledgerTitle: $("#ledgerTitle"), ledgerStatus: $("#ledgerStatus"),
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryDialog: $("#taskEntryDialog"), taskEntryCloseButton: $("#taskEntryCloseButton"),
-    taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
+    taskEntry: $("#taskEntry"), subjectPicker: $("#subjectPicker"),
+    subjectPickerButton: $("#subjectPickerButton"), subjectTabs: $("#subjectTabs"),
     taskEntryComposer: $("#taskEntryComposer"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
@@ -135,7 +136,7 @@
     stepEditorCancelButton: $("#stepEditorCancelButton"), stepEditorSaveButton: $("#stepEditorSaveButton"),
     voiceTaskButton: $("#voiceTaskButton"), voiceStatus: $("#voiceStatus"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
-    clearTaskDraftButton: $("#clearTaskDraftButton"), taskSummary: $("#taskSummary"),
+    taskSummary: $("#taskSummary"),
     taskPanel: $("#taskPanel"), taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
     taskOrderButton: $("#taskOrderButton"),
     activeTaskBanner: $("#activeTaskBanner"), activeTaskTitle: $("#activeTaskTitle"),
@@ -1049,6 +1050,7 @@
     if (elements.taskEntryLauncher.hidden) return;
     editingPendingTaskId = null;
     setTaskDraftError();
+    setSubjectPickerOpen(false);
     elements.taskEntryModal.hidden = false;
     document.body.classList.add("modal-open");
     renderTasks();
@@ -1057,6 +1059,7 @@
 
   function closeTaskEntryModal() {
     if (elements.taskEntryModal.hidden) return;
+    setSubjectPickerOpen(false);
     elements.taskEntryModal.hidden = true;
     document.body.classList.remove("modal-open");
   }
@@ -1065,7 +1068,19 @@
     window.requestAnimationFrame(() => {
       if (elements.taskEntryModal.hidden) return;
       elements.taskEntryDialog.scrollTo({ top: elements.taskEntryDialog.scrollHeight, behavior: "smooth" });
+      elements.taskDraft.focus();
+      elements.taskDraft.setSelectionRange(elements.taskDraft.value.length, elements.taskDraft.value.length);
     });
+  }
+
+  function resizeTaskDraft() {
+    elements.taskDraft.style.height = "42px";
+    elements.taskDraft.style.height = `${Math.min(elements.taskDraft.scrollHeight, 72)}px`;
+  }
+
+  function setSubjectPickerOpen(open) {
+    elements.subjectTabs.hidden = !open;
+    elements.subjectPickerButton.setAttribute("aria-expanded", String(open));
   }
 
   function setTaskDraftError(message = "") {
@@ -2228,6 +2243,7 @@
     delete owner.orderSaved;
     delete owner.orderSavedAt;
     elements.taskDraft.value = "";
+    resizeTaskDraft();
     editingPendingTaskId = null;
     persist();
     render();
@@ -2645,8 +2661,13 @@
     elements.subjectTabs.querySelectorAll("button[data-subject]").forEach((button) => {
       button.setAttribute("aria-checked", String(button.dataset.subject === subject));
     });
-    elements.addTasksButton.textContent = `加入${subject}作业`;
-    elements.taskDraft.placeholder = "请录入…";
+    elements.subjectPickerButton.dataset.subject = subject;
+    elements.subjectPickerButton.textContent = `${subject}⌄`;
+    const addLabel = `加入${subject}作业`;
+    elements.addTasksButton.setAttribute("aria-label", addLabel);
+    elements.addTasksButton.title = addLabel;
+    elements.taskDraft.placeholder = "请输入一项作业…";
+    setSubjectPickerOpen(false);
   }
 
   function exportBackup() {
@@ -2707,6 +2728,7 @@
       if (transcript.trim()) {
         const prefix = elements.taskDraft.value.trim() ? "；" : "";
         elements.taskDraft.value += `${prefix}${transcript.trim()}`;
+        resizeTaskDraft();
         setTaskDraftError();
       }
     };
@@ -2888,18 +2910,28 @@
   elements.mathThinkingButton.addEventListener("click", () => togglePrep("mathThinkingDone", "mathThinkingAt", "数学思维状态已更新"));
   elements.englishReadingButton.addEventListener("click", () => togglePrep("englishReadingDone", "englishReadingAt", "英文阅读状态已更新"));
   elements.voiceTaskButton.addEventListener("click", toggleVoiceInput);
+  elements.subjectPickerButton.addEventListener("click", () => {
+    setSubjectPickerOpen(elements.subjectTabs.hidden);
+  });
   elements.subjectTabs.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-subject]");
-    if (button) selectTaskSubject(button.dataset.subject);
+    if (button) {
+      selectTaskSubject(button.dataset.subject);
+      elements.taskDraft.focus();
+    }
   });
   elements.addTasksButton.addEventListener("click", addTasksFromDraft);
   elements.taskDraft.addEventListener("input", () => {
+    resizeTaskDraft();
     if (elements.taskDraft.value.trim()) setTaskDraftError();
   });
-  elements.clearTaskDraftButton.addEventListener("click", () => {
-    elements.taskDraft.value = "";
-    setTaskDraftError();
-    elements.taskDraft.focus();
+  elements.taskDraft.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    addTasksFromDraft();
+  });
+  document.addEventListener("click", (event) => {
+    if (!elements.subjectPicker.contains(event.target)) setSubjectPickerOpen(false);
   });
   elements.taskEntryUndoDeleteButton.addEventListener("click", undoPendingTaskDelete);
   elements.taskEntryConfirmButton.addEventListener("click", toggleTaskListConfirmation);
@@ -3085,6 +3117,7 @@
   elements.dictationLessonSelect.innerHTML = DICTATION_LESSONS
     .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);
+  resizeTaskDraft();
   renderDictation();
   renderAlarmSettings();
   loadDictationRecordingWords();
