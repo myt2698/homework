@@ -294,7 +294,7 @@
       <div>
         <p class="eyebrow">⚙ 安静放在这里</p>
         <h1 id="settingsPageTitle">设置</h1>
-        <p class="hero-cheer">日期、提示音和数据管理集中在这里。</p>
+        <p class="hero-cheer">日期、快捷词、提示音和数据管理集中在这里。</p>
       </div>
     </header>
 
@@ -320,6 +320,25 @@
       </div>
     </section>
 
+    <section class="card settings-card keyword-settings-card">
+      <div class="settings-section-heading">
+        <div><p class="section-kicker">快捷录入</p><h2>作业关键词</h2></div>
+        <small>决定录作业时显示哪些词</small>
+      </div>
+      <div class="keyword-settings-subjects" id="keywordSettingsSubjects" role="tablist" aria-label="选择关键词科目">
+        <button type="button" data-keyword-settings-subject="语文" role="tab" aria-selected="true">语文</button>
+        <button type="button" data-keyword-settings-subject="数学" role="tab" aria-selected="false">数学</button>
+        <button type="button" data-keyword-settings-subject="英语" role="tab" aria-selected="false">英语</button>
+        <button type="button" data-keyword-settings-subject="科学" role="tab" aria-selected="false">科学</button>
+      </div>
+      <div class="keyword-settings-list" id="keywordSettingsList"></div>
+      <div class="keyword-settings-add">
+        <input id="keywordSettingsInput" type="text" maxlength="12" placeholder="添加一个关键词" aria-label="添加作业关键词">
+        <button class="primary-button compact-button" id="addKeywordButton" type="button">添加</button>
+      </div>
+      <p class="settings-description">隐藏后不会出现在录入页；删除内置词后，也可以随时重新添加。</p>
+    </section>
+
     <section class="card settings-card alarm-settings-card">
       <div class="settings-section-heading">
         <div><p class="section-kicker">休息结束提醒</p><h2>我的“回来写作业”提示音</h2></div>
@@ -343,7 +362,7 @@
         <button class="secondary-button" id="importDataButton" type="button">恢复备份</button>
         <input id="importDataInput" type="file" accept="application/json,.json" hidden>
       </div>
-      <p class="settings-description">备份包含作业、计划、打卡和自定义词语；提示音录音仅保存在当前设备。</p>
+      <p class="settings-description">备份包含作业、计划、打卡、听写词语和作业关键词；提示音录音仅保存在当前设备。</p>
     </section>
   </section>
 
@@ -368,6 +387,7 @@
           <button class="task-entry-undo" id="taskEntryUndoDeleteButton" type="button" hidden>↶ 撤销刚才删除</button>
         </div>
         <div class="task-entry-composer" id="taskEntryComposer">
+          <div class="task-keyword-suggestions" id="taskKeywordSuggestions" aria-label="当前科目的快捷关键词" hidden></div>
           <div class="task-entry-input-row">
             <div class="subject-picker" id="subjectPicker">
               <button class="subject-picker-button" id="subjectPickerButton" type="button" data-subject="语文" aria-haspopup="true" aria-expanded="false"><span id="subjectPickerLabel">语文</span><span class="subject-picker-arrow" aria-hidden="true">▾</span></button>

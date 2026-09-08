@@ -37,6 +37,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -76,11 +77,18 @@ public class MainActivity extends Activity {
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
     private static final String KEY_DICTATION_LESSON = "dictation_lesson";
     private static final String KEY_BREAK_SESSION = "break_session";
+    private static final String KEY_TASK_KEYWORDS = "task_keywords";
     private static final int EXPORT_BACKUP_REQUEST = 301;
     private static final int IMPORT_BACKUP_REQUEST = 302;
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
     private static final String[] SPORTS = {"跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"};
     private static final String[] TASK_SUBJECTS = {"语文", "数学", "英语", "科学"};
+    private static final String[][] DEFAULT_TASK_KEYWORDS = {
+            {"背诵", "默写", "生抄本", "作文", "小练习", "预习", "小古文", "订正", "朗读"},
+            {"口算", "课作本", "书本", "小练习"},
+            {"校本", "预习课本"},
+            {}
+    };
     private static final int[] ESTIMATE_OPTIONS = {5, 10, 15, 20, 30};
     private static final String DICTATION_VOICE_GUIDANCE =
             "使用逐词人工录制的语音；每个词连续播放两遍，两遍间隔1秒，四字词后停3秒，其余词语停2秒。";
@@ -150,6 +158,7 @@ public class MainActivity extends Activity {
     private JSONObject records;
     private JSONObject weekends;
     private JSONObject dictationCustomWords;
+    private JSONObject taskKeywords;
     private JSONObject breakSession;
     private String startDate;
     private String currentDate;
@@ -273,6 +282,8 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryLauncher;
     private TextView taskEntryLauncherStatus;
     private LinearLayout taskEntryComposerPanel;
+    private HorizontalScrollView taskKeywordSuggestionScroll;
+    private LinearLayout taskKeywordSuggestionRow;
     private LinearLayout taskEntryEmptyPanel;
     private LinearLayout taskEntryPendingPanel;
     private TextView taskEntryPendingSummary;
@@ -327,6 +338,10 @@ public class MainActivity extends Activity {
     private Button weekendTaskPenaltyButton;
     private Button taskSubjectPickerButton;
     private String selectedTaskSubject = "语文";
+    private String selectedTaskKeywordSettingsSubject = "语文";
+    private LinearLayout taskKeywordSettingsSubjects;
+    private LinearLayout taskKeywordSettingsList;
+    private EditText taskKeywordSettingsInput;
     private boolean taskListExpanded;
     private boolean completedTasksExpanded;
     private JSONObject lastDeletedTask;
@@ -523,6 +538,7 @@ public class MainActivity extends Activity {
         records = readRecords();
         weekends = readJson(KEY_WEEKENDS);
         dictationCustomWords = readJson(KEY_DICTATION_CUSTOM);
+        taskKeywords = readTaskKeywords();
         breakSession = readJson(KEY_BREAK_SESSION);
         String savedDictationLesson = preferences.getString(KEY_DICTATION_LESSON, DICTATION_LESSONS[0][0]);
         for (int index = 0; index < DICTATION_LESSONS.length; index++) {
@@ -1330,9 +1346,19 @@ public class MainActivity extends Activity {
         voiceTaskButton.setPadding(0, 0, 0, 0);
         voiceTaskButton.setBackground(rounded(GREEN_SOFT, 10, Color.rgb(156, 188, 245), 1));
         taskEntryInputRow.addView(voiceTaskButton, fixed(dp(42), dp(43)));
+
+        taskKeywordSuggestionScroll = new HorizontalScrollView(this);
+        taskKeywordSuggestionScroll.setHorizontalScrollBarEnabled(false);
+        taskKeywordSuggestionScroll.setFillViewport(false);
+        taskKeywordSuggestionRow = horizontal();
+        taskKeywordSuggestionScroll.addView(taskKeywordSuggestionRow, matchWrap());
+        LinearLayout.LayoutParams keywordSuggestionParams = matchFixed(dp(36));
+        keywordSuggestionParams.bottomMargin = dp(7);
+        taskEntryComposerPanel.addView(taskKeywordSuggestionScroll, keywordSuggestionParams);
         taskEntryComposerPanel.addView(taskEntryInputRow, matchWrap());
         taskEntryComposerPanel.addView(taskDraftErrorView);
         taskEntryComposerPanel.addView(voiceTaskStatusView);
+        renderTaskKeywordSuggestions();
 
         taskEntryUndoDeleteButton = textButton("↶ 撤销刚才删除");
         taskEntryUndoDeleteButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1676,6 +1702,118 @@ public class MainActivity extends Activity {
         return panel;
     }
 
+    private JSONObject defaultTaskKeywords() {
+        JSONObject defaults = new JSONObject();
+        for (int subjectIndex = 0; subjectIndex < TASK_SUBJECTS.length; subjectIndex++) {
+            JSONArray entries = new JSONArray();
+            for (int keywordIndex = 0; keywordIndex < DEFAULT_TASK_KEYWORDS[subjectIndex].length; keywordIndex++) {
+                JSONObject entry = new JSONObject();
+                put(entry, "id", "builtin-" + subjectIndex + "-" + keywordIndex);
+                put(entry, "label", DEFAULT_TASK_KEYWORDS[subjectIndex][keywordIndex]);
+                put(entry, "visible", true);
+                entries.put(entry);
+            }
+            put(defaults, TASK_SUBJECTS[subjectIndex], entries);
+        }
+        return defaults;
+    }
+
+    private JSONObject normalizeTaskKeywords(JSONObject source) {
+        JSONObject normalized = new JSONObject();
+        JSONObject defaults = defaultTaskKeywords();
+        for (int subjectIndex = 0; subjectIndex < TASK_SUBJECTS.length; subjectIndex++) {
+            String subject = TASK_SUBJECTS[subjectIndex];
+            JSONArray raw = source == null ? null : source.optJSONArray(subject);
+            if (raw == null) raw = defaults.optJSONArray(subject);
+            JSONArray entries = new JSONArray();
+            List<String> labels = new ArrayList<>();
+            for (int index = 0; raw != null && index < raw.length(); index++) {
+                Object value = raw.opt(index);
+                JSONObject candidate = value instanceof JSONObject ? (JSONObject) value : null;
+                String label = candidate == null ? String.valueOf(value).trim()
+                        : candidate.optString("label", "").trim();
+                if (label.isEmpty() || "null".equals(label) || labels.contains(label)) continue;
+                labels.add(label);
+                JSONObject entry = new JSONObject();
+                put(entry, "id", candidate != null && !candidate.optString("id", "").isEmpty()
+                        ? candidate.optString("id") : "keyword-" + subjectIndex + "-" + index + "-" + label);
+                put(entry, "label", label);
+                put(entry, "visible", candidate == null || candidate.optBoolean("visible", true));
+                entries.put(entry);
+            }
+            put(normalized, subject, entries);
+        }
+        return normalized;
+    }
+
+    private JSONObject readTaskKeywords() {
+        String saved = preferences.getString(KEY_TASK_KEYWORDS, null);
+        if (saved == null) return defaultTaskKeywords();
+        try {
+            return normalizeTaskKeywords(new JSONObject(saved));
+        } catch (JSONException exception) {
+            return defaultTaskKeywords();
+        }
+    }
+
+    private JSONArray taskKeywordArray(String subject) {
+        if (taskKeywords == null) taskKeywords = defaultTaskKeywords();
+        JSONArray keywords = taskKeywords.optJSONArray(subject);
+        if (keywords == null) {
+            keywords = new JSONArray();
+            put(taskKeywords, subject, keywords);
+        }
+        return keywords;
+    }
+
+    private void saveTaskKeywords() {
+        preferences.edit().putString(KEY_TASK_KEYWORDS, taskKeywords.toString()).apply();
+        renderTaskKeywordSuggestions();
+        renderTaskKeywordSettings();
+    }
+
+    private void renderTaskKeywordSuggestions() {
+        if (taskKeywordSuggestionRow == null || taskKeywordSuggestionScroll == null) return;
+        taskKeywordSuggestionRow.removeAllViews();
+        JSONArray keywords = taskKeywordArray(selectedTaskSubject);
+        for (int index = 0; index < keywords.length(); index++) {
+            JSONObject entry = keywords.optJSONObject(index);
+            if (entry == null || !entry.optBoolean("visible", true)) continue;
+            String label = entry.optString("label", "").trim();
+            if (label.isEmpty()) continue;
+            Button chip = new Button(this);
+            chip.setText(label);
+            chip.setTextSize(11);
+            chip.setTextColor(taskSubjectColor(selectedTaskSubject));
+            chip.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            chip.setAllCaps(false);
+            chip.setMinHeight(0);
+            chip.setMinimumHeight(0);
+            chip.setMinWidth(0);
+            chip.setMinimumWidth(0);
+            chip.setPadding(dp(10), 0, dp(10), 0);
+            chip.setBackground(rounded(taskSubjectSoftColor(selectedTaskSubject), 16,
+                    taskSubjectColor(selectedTaskSubject), 1));
+            chip.setOnClickListener(v -> applyTaskKeyword(label));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(32));
+            params.rightMargin = dp(6);
+            taskKeywordSuggestionRow.addView(chip, params);
+        }
+        taskKeywordSuggestionScroll.setVisibility(
+                taskKeywordSuggestionRow.getChildCount() == 0 ? View.GONE : View.VISIBLE);
+    }
+
+    private void applyTaskKeyword(String keyword) {
+        if (taskDraftInput == null) return;
+        String current = taskDraftInput.getText().toString().trim();
+        String next = current.isEmpty() ? keyword + " " : current + " " + keyword + " ";
+        taskDraftInput.setText(next);
+        taskDraftInput.requestFocus();
+        taskDraftInput.setSelection(taskDraftInput.length());
+        setTaskDraftError(null);
+    }
+
     private void selectTaskSubject(String subject) {
         selectedTaskSubject = subject;
         if (taskSubjectPickerButton != null) {
@@ -1686,6 +1824,7 @@ public class MainActivity extends Activity {
         }
         if (taskDraftInput != null) taskDraftInput.setHint("请输入一项作业…");
         if (taskEntryAddButton != null) taskEntryAddButton.setContentDescription("加入" + subject + "作业");
+        renderTaskKeywordSuggestions();
     }
 
     private void showTaskSubjectPicker() {
@@ -2877,17 +3016,17 @@ public class MainActivity extends Activity {
                 : questMode ? progressDone + " / " + progressTotal
                 : progressDone + " / " + progressTotal + " 项完成");
         taskPanelTitleView.setText(!confirmed
-                ? ledgerReady ? tasks.length() > 0 ? "我的作业还在整理中" : "今天的作业" : "先核对今天的作业"
+                ? ledgerReady ? "" : "先核对今天的作业"
                 : sortingMode ? "安排我的闯关顺序"
                 : orderPendingWeekend ? "还差一步：确定顺序"
                 : "作业清单");
         taskPanelHelpView.setText(!confirmed
-                ? ledgerReady ? "点击“录入作业”，在一个页面里继续补充和核对。" : "核对钉钉，并把新增作业补到成长记录册。"
+                ? ledgerReady ? "" : "核对钉钉，并把新增作业补到成长记录册。"
                 : sortingMode ? "这是我的计划，我可以决定先做哪一项。"
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : "");
-        taskPanelTitleView.setVisibility(questMode ? View.GONE : View.VISIBLE);
-        taskPanelHelpView.setVisibility(questMode ? View.GONE : View.VISIBLE);
+        taskPanelTitleView.setVisibility(questMode || (!confirmed && ledgerReady) ? View.GONE : View.VISIBLE);
+        taskPanelHelpView.setVisibility(questMode || taskPanelHelpView.getText().length() == 0 ? View.GONE : View.VISIBLE);
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
         taskEntryLauncher.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
         taskEntryPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
@@ -6132,7 +6271,7 @@ public class MainActivity extends Activity {
         LinearLayout headerCopy = vertical();
         headerCopy.addView(text("⚙ 安静放在这里", 10, GREEN, true));
         headerCopy.addView(text("设置", 25, GREEN_DARK, true));
-        TextView description = text("日期、提示音和数据管理集中在这里。", 10, MUTED, false);
+        TextView description = text("日期、快捷词、提示音和数据管理集中在这里。", 10, MUTED, false);
         description.setPadding(0, dp(3), 0, 0);
         headerCopy.addView(description);
         header.addView(headerCopy, weightedWrap(1));
@@ -6162,6 +6301,9 @@ public class MainActivity extends Activity {
         startParams.topMargin = dp(8);
         dateCard.addView(start, startParams);
         content.addView(dateCard, matchWrap());
+        content.addView(space(14));
+
+        content.addView(buildTaskKeywordSettingsCard(), matchWrap());
         content.addView(space(14));
 
         LinearLayout alarmCard = card();
@@ -6216,13 +6358,231 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams restoreParams = matchFixed(dp(46));
         restoreParams.topMargin = dp(8);
         dataCard.addView(restore, restoreParams);
-        TextView note = text("备份包含作业、计划、打卡和自定义词语；提示音录音仅保存在当前设备。删除记录请进入“足迹—管理记录”。", 10, MUTED, false);
+        TextView note = text("备份包含作业、计划、打卡、听写词语和作业关键词；提示音录音仅保存在当前设备。删除记录请进入“足迹—管理记录”。", 10, MUTED, false);
         note.setPadding(0, dp(11), 0, 0);
         note.setLineSpacing(dp(3), 1f);
         dataCard.addView(note);
         content.addView(dataCard, matchWrap());
         renderBreakAlarmSettings();
         return scroll;
+    }
+
+    private LinearLayout buildTaskKeywordSettingsCard() {
+        LinearLayout keywordCard = card();
+        keywordCard.addView(text("快捷录入", 10, GREEN, true));
+        keywordCard.addView(text("作业关键词", 20, INK, true));
+        TextView description = text("决定录作业时显示哪些词；内置词也可以隐藏、排序或删除。", 10, MUTED, false);
+        description.setPadding(0, dp(6), 0, 0);
+        description.setLineSpacing(dp(2), 1f);
+        keywordCard.addView(description);
+
+        taskKeywordSettingsSubjects = vertical();
+        LinearLayout.LayoutParams subjectParams = matchWrap();
+        subjectParams.topMargin = dp(12);
+        keywordCard.addView(taskKeywordSettingsSubjects, subjectParams);
+
+        taskKeywordSettingsList = vertical();
+        LinearLayout.LayoutParams listParams = matchWrap();
+        listParams.topMargin = dp(10);
+        keywordCard.addView(taskKeywordSettingsList, listParams);
+
+        LinearLayout addRow = horizontal();
+        addRow.setGravity(Gravity.CENTER_VERTICAL);
+        taskKeywordSettingsInput = new EditText(this);
+        taskKeywordSettingsInput.setTextSize(13);
+        taskKeywordSettingsInput.setTextColor(INK);
+        taskKeywordSettingsInput.setHintTextColor(Color.rgb(150, 158, 173));
+        taskKeywordSettingsInput.setHint("添加一个关键词");
+        taskKeywordSettingsInput.setSingleLine(true);
+        taskKeywordSettingsInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        taskKeywordSettingsInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(12)});
+        taskKeywordSettingsInput.setPadding(dp(11), 0, dp(11), 0);
+        taskKeywordSettingsInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
+        taskKeywordSettingsInput.setOnEditorActionListener((view, actionId, event) -> {
+            boolean enterPressed = event != null
+                    && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == android.view.KeyEvent.ACTION_DOWN;
+            if (actionId != android.view.inputmethod.EditorInfo.IME_ACTION_DONE && !enterPressed) return false;
+            addTaskKeywordSetting();
+            return true;
+        });
+        addRow.addView(taskKeywordSettingsInput, weightedFixed(1, dp(43)));
+        addRow.addView(spaceHorizontal(8));
+        Button add = smallButton("添加");
+        add.setTextColor(Color.WHITE);
+        add.setBackground(rounded(GREEN, 11, GREEN, 0));
+        add.setOnClickListener(v -> addTaskKeywordSetting());
+        addRow.addView(add, fixed(dp(72), dp(43)));
+        LinearLayout.LayoutParams addParams = matchFixed(dp(43));
+        addParams.topMargin = dp(10);
+        keywordCard.addView(addRow, addParams);
+
+        TextView note = text("隐藏后不会出现在录入页；删除后仍可在这里重新添加。", 10, MUTED, false);
+        note.setPadding(0, dp(9), 0, 0);
+        keywordCard.addView(note);
+        renderTaskKeywordSettings();
+        return keywordCard;
+    }
+
+    private void renderTaskKeywordSettings() {
+        if (taskKeywordSettingsSubjects == null || taskKeywordSettingsList == null) return;
+        taskKeywordSettingsSubjects.removeAllViews();
+        LinearLayout[] subjectRows = {horizontal(), horizontal()};
+        for (int index = 0; index < TASK_SUBJECTS.length; index++) {
+            String subject = TASK_SUBJECTS[index];
+            boolean selected = subject.equals(selectedTaskKeywordSettingsSubject);
+            Button subjectButton = new Button(this);
+            subjectButton.setText(subject);
+            subjectButton.setTextSize(12);
+            subjectButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            subjectButton.setAllCaps(false);
+            subjectButton.setTextColor(selected ? Color.WHITE : taskSubjectColor(subject));
+            subjectButton.setMinHeight(0);
+            subjectButton.setMinimumHeight(0);
+            subjectButton.setBackground(rounded(selected ? taskSubjectColor(subject)
+                    : taskSubjectSoftColor(subject), 10, taskSubjectColor(subject), 1));
+            subjectButton.setOnClickListener(v -> {
+                selectedTaskKeywordSettingsSubject = subject;
+                renderTaskKeywordSettings();
+            });
+            LinearLayout.LayoutParams params = weightedFixed(1, dp(40));
+            if (index % 2 == 1) params.leftMargin = dp(7);
+            subjectRows[index / 2].addView(subjectButton, params);
+        }
+        taskKeywordSettingsSubjects.addView(subjectRows[0], matchFixed(dp(40)));
+        LinearLayout.LayoutParams secondRowParams = matchFixed(dp(40));
+        secondRowParams.topMargin = dp(7);
+        taskKeywordSettingsSubjects.addView(subjectRows[1], secondRowParams);
+
+        taskKeywordSettingsList.removeAllViews();
+        JSONArray keywords = taskKeywordArray(selectedTaskKeywordSettingsSubject);
+        if (keywords.length() == 0) {
+            TextView empty = text("这个科目还没有关键词，可以在下方添加", 11, MUTED, false);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(dp(8), dp(18), dp(8), dp(18));
+            empty.setBackground(rounded(Color.TRANSPARENT, 12, LINE, 1));
+            taskKeywordSettingsList.addView(empty, matchWrap());
+            return;
+        }
+        for (int index = 0; index < keywords.length(); index++) {
+            JSONObject entry = keywords.optJSONObject(index);
+            if (entry == null) continue;
+            String id = entry.optString("id");
+            String label = entry.optString("label");
+            boolean visible = entry.optBoolean("visible", true);
+            LinearLayout row = horizontal();
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(10), dp(5), dp(6), dp(5));
+            row.setBackground(rounded(Color.rgb(248, 251, 255), 11, LINE, 1));
+            TextView name = text(label, 12, visible ? INK : MUTED, true);
+            row.addView(name, weightedWrap(1));
+            Button visibility = taskKeywordActionButton(visible ? "显示中" : "已隐藏",
+                    visible ? Color.rgb(76, 109, 166) : MUTED);
+            visibility.setOnClickListener(v -> changeTaskKeywordSetting(id, "toggle"));
+            row.addView(visibility, fixed(dp(64), dp(32)));
+            row.addView(spaceHorizontal(4));
+            Button up = taskKeywordActionButton("↑", Color.rgb(76, 109, 166));
+            up.setEnabled(index > 0);
+            up.setOnClickListener(v -> changeTaskKeywordSetting(id, "up"));
+            row.addView(up, fixed(dp(34), dp(32)));
+            row.addView(spaceHorizontal(4));
+            Button down = taskKeywordActionButton("↓", Color.rgb(76, 109, 166));
+            down.setEnabled(index < keywords.length() - 1);
+            down.setOnClickListener(v -> changeTaskKeywordSetting(id, "down"));
+            row.addView(down, fixed(dp(34), dp(32)));
+            row.addView(spaceHorizontal(4));
+            Button delete = taskKeywordActionButton("删除", RED);
+            delete.setOnClickListener(v -> changeTaskKeywordSetting(id, "delete"));
+            row.addView(delete, fixed(dp(48), dp(32)));
+            LinearLayout.LayoutParams rowParams = matchFixed(dp(44));
+            if (index > 0) rowParams.topMargin = dp(7);
+            taskKeywordSettingsList.addView(row, rowParams);
+        }
+    }
+
+    private Button taskKeywordActionButton(String label, int color) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(10);
+        button.setTextColor(color);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setAllCaps(false);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        button.setPadding(0, 0, 0, 0);
+        button.setBackground(rounded(Color.WHITE, 8, LINE, 1));
+        return button;
+    }
+
+    private void addTaskKeywordSetting() {
+        if (taskKeywordSettingsInput == null) return;
+        String label = taskKeywordSettingsInput.getText().toString().trim();
+        if (label.isEmpty()) {
+            toast("请输入一个关键词");
+            return;
+        }
+        JSONArray keywords = taskKeywordArray(selectedTaskKeywordSettingsSubject);
+        for (int index = 0; index < keywords.length(); index++) {
+            if (label.equals(keywords.optJSONObject(index).optString("label"))) {
+                toast("这个关键词已经有了");
+                return;
+            }
+        }
+        JSONObject entry = new JSONObject();
+        put(entry, "id", "custom-" + System.currentTimeMillis());
+        put(entry, "label", label);
+        put(entry, "visible", true);
+        keywords.put(entry);
+        taskKeywordSettingsInput.setText("");
+        saveTaskKeywords();
+        taskKeywordSettingsInput.requestFocus();
+        toast("关键词已添加");
+    }
+
+    private void changeTaskKeywordSetting(String id, String action) {
+        JSONArray keywords = taskKeywordArray(selectedTaskKeywordSettingsSubject);
+        int targetIndex = -1;
+        for (int index = 0; index < keywords.length(); index++) {
+            JSONObject entry = keywords.optJSONObject(index);
+            if (entry != null && id.equals(entry.optString("id"))) {
+                targetIndex = index;
+                break;
+            }
+        }
+        if (targetIndex < 0) return;
+        JSONObject entry = keywords.optJSONObject(targetIndex);
+        if ("delete".equals(action)) {
+            final int deleteIndex = targetIndex;
+            final String label = entry.optString("label");
+            new AlertDialog.Builder(this)
+                    .setTitle("删除关键词")
+                    .setMessage("删除关键词“" + label + "”吗？")
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("删除", (dialog, which) -> {
+                        keywords.remove(deleteIndex);
+                        saveTaskKeywords();
+                        toast("关键词已删除");
+                    })
+                    .show();
+            return;
+        }
+        if ("toggle".equals(action)) {
+            put(entry, "visible", !entry.optBoolean("visible", true));
+        } else if ("up".equals(action) && targetIndex > 0) {
+            Object previous = keywords.opt(targetIndex - 1);
+            keywords.put(targetIndex - 1, entry);
+            keywords.put(targetIndex, previous);
+        } else if ("down".equals(action) && targetIndex < keywords.length() - 1) {
+            Object next = keywords.opt(targetIndex + 1);
+            keywords.put(targetIndex + 1, entry);
+            keywords.put(targetIndex, next);
+        } else {
+            return;
+        }
+        saveTaskKeywords();
+        toast("关键词设置已更新");
     }
 
     private void showSettingsPage() {
@@ -6238,6 +6598,7 @@ public class MainActivity extends Activity {
         dictationPageView.setVisibility(View.GONE);
         settingsPageView.setVisibility(View.VISIBLE);
         renderBreakAlarmSettings();
+        renderTaskKeywordSettings();
         if (settingsPageView instanceof ScrollView) ((ScrollView) settingsPageView).scrollTo(0, 0);
     }
 
@@ -6431,9 +6792,10 @@ public class MainActivity extends Activity {
         put(state, "records", records);
         put(state, "weekends", weekends);
         put(state, "dictationCustom", dictationCustomWords);
+        put(state, "taskKeywords", taskKeywords);
         JSONObject payload = new JSONObject();
         put(payload, "format", "homework-ledger-backup");
-        put(payload, "version", 2);
+        put(payload, "version", 3);
         put(payload, "exportedAt", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.CHINA)
                 .format(Calendar.getInstance().getTime()));
         put(payload, "state", state);
@@ -6484,12 +6846,14 @@ public class MainActivity extends Activity {
                     weekends = source.optJSONObject("weekends");
                     JSONObject restoredWords = source.optJSONObject("dictationCustom");
                     dictationCustomWords = restoredWords == null ? new JSONObject() : restoredWords;
+                    taskKeywords = normalizeTaskKeywords(source.optJSONObject("taskKeywords"));
                     currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
                     preferences.edit()
                             .putString(KEY_START_DATE, startDate)
                             .putString(KEY_RECORDS, records.toString())
                             .putString(KEY_WEEKENDS, weekends.toString())
                             .putString(KEY_DICTATION_CUSTOM, dictationCustomWords.toString())
+                            .putString(KEY_TASK_KEYWORDS, taskKeywords.toString())
                             .apply();
                     dismissTaskEntryDialog();
                     dismissTaskFocusDialog();

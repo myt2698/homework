@@ -13,6 +13,12 @@
   const TIME_FIELDS = ["startTime", "dinnerTime", "resumeTime", "finishTime"];
   const SPORTS = ["跳绳", "踢毽子", "坐位体前屈", "50米", "仰卧起坐"];
   const TASK_SUBJECTS = ["语文", "数学", "英语", "科学"];
+  const DEFAULT_TASK_KEYWORDS = {
+    语文: ["背诵", "默写", "生抄本", "作文", "小练习", "预习", "小古文", "订正", "朗读"],
+    数学: ["口算", "课作本", "书本", "小练习"],
+    英语: ["校本", "预习课本"],
+    科学: []
+  };
   const ESTIMATE_OPTIONS = [5, 10, 15, 20, 30];
   const DICTATION_LESSONS = [
     { id: "lesson-1", label: "第1课", words: "奇观 据说 人山人海 顿时 风平浪静 逐渐 齐头并进 浩浩荡荡 山崩地裂 霎时 余波 随时 河堤 拥堵 高墙".split(" ") },
@@ -60,8 +66,39 @@
     records: {},
     weekends: {},
     dictationCustom: {},
-    dictationLesson: DICTATION_LESSONS[0].id
+    dictationLesson: DICTATION_LESSONS[0].id,
+    taskKeywords: defaultTaskKeywords()
   });
+
+  function defaultTaskKeywords() {
+    return Object.fromEntries(TASK_SUBJECTS.map((subject) => [subject,
+      DEFAULT_TASK_KEYWORDS[subject].map((label, index) => ({
+        id: `builtin-${TASK_SUBJECTS.indexOf(subject)}-${index}`,
+        label,
+        visible: true
+      }))
+    ]));
+  }
+
+  function normalizeTaskKeywords(value) {
+    const defaults = defaultTaskKeywords();
+    const source = value && typeof value === "object" ? value : null;
+    return Object.fromEntries(TASK_SUBJECTS.map((subject) => {
+      const raw = source && Array.isArray(source[subject]) ? source[subject] : defaults[subject];
+      const seen = new Set();
+      const items = raw.map((item, index) => {
+        const label = typeof item === "string" ? item.trim() : String(item?.label || "").trim();
+        if (!label || seen.has(label)) return null;
+        seen.add(label);
+        return {
+          id: typeof item === "object" && item?.id ? String(item.id) : `keyword-${subject}-${index}-${label}`,
+          label,
+          visible: typeof item === "object" ? item.visible !== false : true
+        };
+      }).filter(Boolean);
+      return [subject, items];
+    }));
+  }
 
   function loadState() {
     try {
@@ -73,6 +110,7 @@
         records: parsed.records && typeof parsed.records === "object" ? parsed.records : {},
         weekends: parsed.weekends && typeof parsed.weekends === "object" ? parsed.weekends : {},
         dictationCustom: parsed.dictationCustom && typeof parsed.dictationCustom === "object" ? parsed.dictationCustom : {},
+        taskKeywords: normalizeTaskKeywords(parsed.taskKeywords),
         dictationLesson: typeof parsed.dictationLesson === "string"
           && DICTATION_LESSONS.some((lesson) => lesson.id === parsed.dictationLesson)
           ? parsed.dictationLesson
@@ -101,6 +139,8 @@
     nextDictationLessonButton: $("#nextDictationLessonButton"),
     settingsButton: $("#settingsButton"), closeSettingsButton: $("#closeSettingsButton"),
     startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
+    keywordSettingsSubjects: $("#keywordSettingsSubjects"), keywordSettingsList: $("#keywordSettingsList"),
+    keywordSettingsInput: $("#keywordSettingsInput"), addKeywordButton: $("#addKeywordButton"),
     exportDataButton: $("#exportDataButton"), importDataButton: $("#importDataButton"),
     importDataInput: $("#importDataInput"), historyManageButton: $("#historyManageButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
@@ -128,6 +168,7 @@
     subjectPickerButton: $("#subjectPickerButton"), subjectPickerLabel: $("#subjectPickerLabel"),
     subjectTabs: $("#subjectTabs"),
     taskEntryComposer: $("#taskEntryComposer"),
+    taskKeywordSuggestions: $("#taskKeywordSuggestions"),
     taskEntryEmpty: $("#taskEntryEmpty"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
@@ -176,6 +217,7 @@
   let speechRecognition = null;
   let speechListening = false;
   let selectedTaskSubject = "语文";
+  let selectedKeywordSettingsSubject = "语文";
   let focusModalTaskId = null;
   let stepEditorTaskId = null;
   let taskListExpanded = false;
@@ -556,6 +598,7 @@
     elements.dictationPage.hidden = true;
     elements.settingsPage.hidden = false;
     renderAlarmSettings();
+    renderTaskKeywordSettings();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1856,18 +1899,18 @@
     const progressTotal = questMode ? questTasks.length : tasks.length;
     const progressDone = questMode ? questDone.length : doneCount;
     elements.taskPanelTitle.textContent = !confirmed
-      ? ledgerReady ? tasks.length ? "我的作业还在整理中" : "今天的作业" : "先核对今天的作业"
+      ? ledgerReady ? "" : "先核对今天的作业"
       : sortingMode ? "安排我的闯关顺序"
       : orderPendingWeekend ? "还差一步：确定顺序"
         : "我选一项，轻松开始！";
     elements.taskPanelHelp.textContent = !confirmed
-      ? ledgerReady ? tasks.length ? "检查有没有遗漏，确认后就可以安排顺序。" : "全部录好后，再一起核对。" : ""
+      ? ""
       : sortingMode
       ? "这是我的计划，我可以决定先做哪一项。"
       : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
         : "我一次专心做一项，每完成一项都在前进！";
-    elements.taskPanelTitle.hidden = questMode;
-    elements.taskPanelHelp.hidden = questMode;
+    elements.taskPanelTitle.hidden = questMode || (!confirmed && ledgerReady);
+    elements.taskPanelHelp.hidden = questMode || !elements.taskPanelHelp.textContent;
     elements.taskSummary.textContent = !confirmed && tasks.length
       ? `已录 ${tasks.length} 项` : progressTotal ? questMode ? `${progressDone} / ${progressTotal}` : `${progressDone} / ${progressTotal} 项完成` : "0 项";
     elements.activeTaskBanner.hidden = !active || questMode;
@@ -2665,6 +2708,80 @@
     elements.voiceStatus.hidden = !message;
   }
 
+  function taskKeywordItems(subject = selectedTaskSubject) {
+    if (!state.taskKeywords || !Array.isArray(state.taskKeywords[subject])) {
+      state.taskKeywords = normalizeTaskKeywords(state.taskKeywords);
+    }
+    return state.taskKeywords[subject];
+  }
+
+  function renderTaskKeywordSuggestions() {
+    const keywords = taskKeywordItems(selectedTaskSubject).filter((item) => item.visible !== false);
+    elements.taskKeywordSuggestions.dataset.subject = selectedTaskSubject;
+    elements.taskKeywordSuggestions.hidden = keywords.length === 0;
+    elements.taskKeywordSuggestions.innerHTML = keywords
+      .map((item) => `<button type="button" data-task-keyword-id="${escapeAttribute(item.id)}">${escapeHtml(item.label)}</button>`)
+      .join("");
+  }
+
+  function applyTaskKeyword(id) {
+    const item = taskKeywordItems(selectedTaskSubject).find((keyword) => String(keyword.id) === String(id));
+    if (!item) return;
+    const current = elements.taskDraft.value.trim();
+    elements.taskDraft.value = current ? `${current} ${item.label} ` : `${item.label} `;
+    resizeTaskDraft();
+    setTaskDraftError();
+    elements.taskDraft.focus();
+    elements.taskDraft.setSelectionRange(elements.taskDraft.value.length, elements.taskDraft.value.length);
+  }
+
+  function renderTaskKeywordSettings() {
+    elements.keywordSettingsSubjects.querySelectorAll("button[data-keyword-settings-subject]").forEach((button) => {
+      button.setAttribute("aria-selected", String(button.dataset.keywordSettingsSubject === selectedKeywordSettingsSubject));
+    });
+    const keywords = taskKeywordItems(selectedKeywordSettingsSubject);
+    elements.keywordSettingsList.innerHTML = keywords.length ? keywords.map((item, index) => `
+      <div class="keyword-settings-row${item.visible === false ? " is-hidden" : ""}" data-keyword-id="${escapeAttribute(item.id)}">
+        <strong class="keyword-settings-name">${escapeHtml(item.label)}</strong>
+        <button class="keyword-visibility-button${item.visible === false ? " is-hidden" : ""}" type="button" data-keyword-action="toggle">${item.visible === false ? "已隐藏" : "显示中"}</button>
+        <button class="keyword-order-button" type="button" data-keyword-action="up" aria-label="上移${escapeAttribute(item.label)}"${index === 0 ? " disabled" : ""}>↑</button>
+        <button class="keyword-order-button" type="button" data-keyword-action="down" aria-label="下移${escapeAttribute(item.label)}"${index === keywords.length - 1 ? " disabled" : ""}>↓</button>
+        <button class="keyword-delete-button" type="button" data-keyword-action="delete">删除</button>
+      </div>`).join("") : `<div class="keyword-settings-empty">这个科目还没有关键词，可以在下方添加</div>`;
+  }
+
+  function saveTaskKeywordSettings(message) {
+    persist();
+    renderTaskKeywordSettings();
+    renderTaskKeywordSuggestions();
+    if (message) showToast(message);
+  }
+
+  function addTaskKeyword() {
+    const label = elements.keywordSettingsInput.value.trim();
+    if (!label) return showToast("请输入一个关键词");
+    const keywords = taskKeywordItems(selectedKeywordSettingsSubject);
+    if (keywords.some((item) => item.label === label)) return showToast("这个关键词已经有了");
+    keywords.push({ id: `custom-${Date.now()}`, label, visible: true });
+    elements.keywordSettingsInput.value = "";
+    saveTaskKeywordSettings("关键词已添加");
+    elements.keywordSettingsInput.focus();
+  }
+
+  function changeTaskKeyword(id, action) {
+    const keywords = taskKeywordItems(selectedKeywordSettingsSubject);
+    const index = keywords.findIndex((item) => String(item.id) === String(id));
+    if (index < 0) return;
+    if (action === "toggle") keywords[index].visible = keywords[index].visible === false;
+    else if (action === "up" && index > 0) [keywords[index - 1], keywords[index]] = [keywords[index], keywords[index - 1]];
+    else if (action === "down" && index < keywords.length - 1) [keywords[index], keywords[index + 1]] = [keywords[index + 1], keywords[index]];
+    else if (action === "delete") {
+      if (!window.confirm(`删除关键词“${keywords[index].label}”吗？`)) return;
+      keywords.splice(index, 1);
+    } else return;
+    saveTaskKeywordSettings(action === "delete" ? "关键词已删除" : "关键词设置已更新");
+  }
+
   function selectTaskSubject(subject) {
     selectedTaskSubject = subject;
     elements.subjectTabs.querySelectorAll("button[data-subject]").forEach((button) => {
@@ -2677,10 +2794,11 @@
     elements.addTasksButton.title = addLabel;
     elements.taskDraft.placeholder = "请输入一项作业…";
     setSubjectPickerOpen(false);
+    renderTaskKeywordSuggestions();
   }
 
   function exportBackup() {
-    const payload = { format: "homework-ledger-backup", version: 2, exportedAt: new Date().toISOString(), state };
+    const payload = { format: "homework-ledger-backup", version: 3, exportedAt: new Date().toISOString(), state };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -2704,12 +2822,17 @@
         startDate: parsedStart > todayIso() ? todayIso() : parsedStart,
         records: source.records && typeof source.records === "object" ? source.records : {},
         weekends: source.weekends && typeof source.weekends === "object" ? source.weekends : {},
-        dictationCustom: source.dictationCustom && typeof source.dictationCustom === "object" ? source.dictationCustom : {}
+        dictationCustom: source.dictationCustom && typeof source.dictationCustom === "object" ? source.dictationCustom : {},
+        dictationLesson: typeof source.dictationLesson === "string" ? source.dictationLesson : DICTATION_LESSONS[0].id,
+        taskKeywords: normalizeTaskKeywords(source.taskKeywords)
       };
+      selectedDictationLesson = state.dictationLesson;
       persist();
       elements.recordDate.value = todayIso() < state.startDate ? state.startDate : todayIso();
       closeFocusModal();
       render();
+      renderTaskKeywordSuggestions();
+      renderTaskKeywordSettings();
       showToast("备份已恢复");
     } catch (_) {
       showToast("备份文件无法识别，请选择本应用导出的文件");
@@ -2808,6 +2931,23 @@
 
   elements.settingsButton.addEventListener("click", openSettingsPage);
   elements.closeSettingsButton.addEventListener("click", closeSettingsPage);
+  elements.keywordSettingsSubjects.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-keyword-settings-subject]");
+    if (!button) return;
+    selectedKeywordSettingsSubject = button.dataset.keywordSettingsSubject;
+    renderTaskKeywordSettings();
+  });
+  elements.keywordSettingsList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-keyword-action]");
+    const row = button?.closest("[data-keyword-id]");
+    if (button && row) changeTaskKeyword(row.dataset.keywordId, button.dataset.keywordAction);
+  });
+  elements.addKeywordButton.addEventListener("click", addTaskKeyword);
+  elements.keywordSettingsInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.isComposing) return;
+    event.preventDefault();
+    addTaskKeyword();
+  });
   elements.recordAlarmButton.addEventListener("click", toggleAlarmRecording);
   elements.previewAlarmButton.addEventListener("click", () => playAlarm(1));
   elements.resetAlarmButton.addEventListener("click", () => {
@@ -2928,6 +3068,10 @@
       selectTaskSubject(button.dataset.subject);
       elements.taskDraft.focus();
     }
+  });
+  elements.taskKeywordSuggestions.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-task-keyword-id]");
+    if (button) applyTaskKeyword(button.dataset.taskKeywordId);
   });
   elements.addTasksButton.addEventListener("click", addTasksFromDraft);
   elements.taskDraft.addEventListener("input", () => {
@@ -3126,6 +3270,7 @@
   elements.dictationLessonSelect.innerHTML = DICTATION_LESSONS
     .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);
+  renderTaskKeywordSettings();
   resizeTaskDraft();
   renderDictation();
   renderAlarmSettings();

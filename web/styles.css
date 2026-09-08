@@ -356,6 +356,12 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry-empty strong { font-size: .88rem; letter-spacing: .02em; }
 .task-entry-composer { flex: 0 0 auto; margin-top: auto; }
 .task-entry.has-pending .task-entry-composer { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #bfd3f6; }
+.task-keyword-suggestions { --subject-color: #c56b45; --subject-soft: #fbe9df; display: flex; margin-bottom: 8px; padding-bottom: 2px; overflow-x: auto; gap: 6px; scrollbar-width: thin; }
+.task-keyword-suggestions[hidden] { display: none; }
+.task-keyword-suggestions[data-subject="数学"] { --subject-color: #4075ae; --subject-soft: #e7f0fa; }
+.task-keyword-suggestions[data-subject="英语"] { --subject-color: #765ca7; --subject-soft: #eee9f8; }
+.task-keyword-suggestions[data-subject="科学"] { --subject-color: #377e68; --subject-soft: #e4f3ed; }
+.task-keyword-suggestions button { flex: 0 0 auto; min-height: 30px; padding: 4px 10px; border: 1px solid var(--subject-color); border-radius: 999px; color: var(--subject-color); background: var(--subject-soft); font: inherit; font-size: .68rem; font-weight: 760; cursor: pointer; }
 .task-entry-input-row { display: flex; gap: 8px; align-items: flex-end; }
 .subject-picker { position: relative; flex: 0 0 76px; }
 .subject-picker-button, .subject-tabs button { --subject-color: #756f65; --subject-soft: #f2efe9; min-width: 0; border: 1px solid var(--subject-color); border-radius: 10px; color: var(--subject-color); background: var(--subject-soft); font: inherit; font-size: .76rem; font-weight: 800; cursor: pointer; }
@@ -931,6 +937,25 @@ body.modal-open { overflow: hidden; }
 .alarm-record-actions button { min-width: 0; }
 .alarm-record-actions .listening { color: #fff; background: var(--red); box-shadow: 0 8px 18px rgba(221,88,104,.22); }
 .alarm-record-hint { color: var(--muted); font-size: .7rem; }
+.keyword-settings-subjects { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.keyword-settings-subjects button { --subject-color: #c56b45; min-height: 38px; padding: 6px 8px; border: 1px solid var(--subject-color); border-radius: 11px; color: var(--subject-color); background: #fff; font: inherit; font-size: .75rem; font-weight: 800; cursor: pointer; }
+.keyword-settings-subjects button[data-keyword-settings-subject="数学"] { --subject-color: #4075ae; }
+.keyword-settings-subjects button[data-keyword-settings-subject="英语"] { --subject-color: #765ca7; }
+.keyword-settings-subjects button[data-keyword-settings-subject="科学"] { --subject-color: #377e68; }
+.keyword-settings-subjects button[aria-selected="true"] { color: #fff; background: var(--subject-color); }
+.keyword-settings-list { display: grid; gap: 7px; }
+.keyword-settings-empty { padding: 18px 10px; border: 1px dashed var(--line); border-radius: 13px; color: var(--muted); font-size: .75rem; text-align: center; }
+.keyword-settings-row { display: flex; min-height: 44px; padding: 6px 7px 6px 12px; border: 1px solid var(--line); border-radius: 12px; align-items: center; gap: 8px; background: #f8fbff; }
+.keyword-settings-row.is-hidden .keyword-settings-name { color: var(--muted); text-decoration: line-through; }
+.keyword-settings-name { min-width: 0; flex: 1; font-size: .78rem; font-weight: 760; }
+.keyword-visibility-button, .keyword-order-button, .keyword-delete-button { min-width: 0; min-height: 30px; padding: 4px 8px; border: 1px solid #c7d7f3; border-radius: 9px; color: #4c6da6; background: #fff; font: inherit; font-size: .66rem; font-weight: 760; cursor: pointer; }
+.keyword-visibility-button.is-hidden { color: #777f8e; background: #eef1f5; }
+.keyword-order-button { width: 31px; padding-inline: 0; font-size: .82rem; }
+.keyword-order-button:disabled { opacity: .32; cursor: default; }
+.keyword-delete-button { color: #b94c4c; border-color: #efd0d0; }
+.keyword-settings-add { display: flex; gap: 8px; }
+.keyword-settings-add input { min-width: 0; min-height: 42px; flex: 1; }
+.keyword-settings-add button { flex: 0 0 auto; }
 
 footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650; text-align: center; }
 .focus-modal {
@@ -1052,6 +1077,9 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .settings-date-block input { min-width: 0; }
   .settings-card { padding: 17px 14px; }
   .settings-section-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .keyword-settings-subjects { grid-template-columns: repeat(2, 1fr); }
+  .keyword-settings-row { flex-wrap: wrap; }
+  .keyword-settings-name { flex-basis: calc(100% - 86px); }
   .settings-page-fields .settings-row { display: grid; grid-template-columns: 1fr auto; }
   .settings-page-fields .settings-row label { grid-column: 1 / -1; }
   .settings-page-fields .settings-row input { width: 100%; margin-left: 0; }
