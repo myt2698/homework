@@ -351,8 +351,9 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry { margin-top: 16px; padding: 14px; border: 1px dashed #bfd3f6; border-radius: 17px; background: #f7faff; }
 .task-entry[hidden] { display: none; }
 .task-entry.has-pending .task-entry-composer { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #bfd3f6; }
-.subject-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 11px; }
-.subject-tabs button { --subject-color: #756f65; --subject-soft: #f2efe9; padding: 9px 8px; border: 1px solid var(--subject-color); border-radius: 10px; color: var(--subject-color); background: var(--subject-soft); font-size: .78rem; font-weight: 750; cursor: pointer; }
+.task-entry-input-row { display: grid; grid-template-columns: minmax(112px, 128px) minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.subject-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+.subject-tabs button { --subject-color: #756f65; --subject-soft: #f2efe9; min-width: 0; padding: 5px 6px; border: 1px solid var(--subject-color); border-radius: 10px; color: var(--subject-color); background: var(--subject-soft); font-size: .76rem; font-weight: 750; cursor: pointer; }
 .subject-tabs button[data-subject="语文"] { --subject-color: #c56b45; --subject-soft: #fbe9df; }
 .subject-tabs button[data-subject="数学"] { --subject-color: #4075ae; --subject-soft: #e7f0fa; }
 .subject-tabs button[data-subject="英语"] { --subject-color: #765ca7; --subject-soft: #eee9f8; }
@@ -377,8 +378,9 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .voice-button.listening { border-color: var(--red); color: var(--red); background: var(--red-soft); }
 .task-draft-input {
   width: 100%;
-  height: 42px;
+  height: 74px;
   padding: 9px 12px;
+  resize: none;
   border: 1px solid var(--line);
   border-radius: 11px;
   outline: none;
@@ -1080,6 +1082,11 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   .dictation-word-actions button { flex: 1; }
   .quest-section-title { align-items: flex-start; flex-direction: column; gap: 2px; }
   .quest-current-card { padding: 12px 11px; }
+}
+
+@media (max-width: 340px) {
+  .task-entry-input-row { grid-template-columns: 1fr; }
+  .subject-tabs { grid-template-columns: repeat(4, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

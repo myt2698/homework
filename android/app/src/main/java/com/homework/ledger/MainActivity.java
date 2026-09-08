@@ -1244,9 +1244,11 @@ public class MainActivity extends Activity {
         taskEntryPanel.setBackground(rounded(PAGE, 14, PAGE, 0));
 
         taskEntryComposerPanel = vertical();
-        LinearLayout subjectTabs = horizontal();
+        LinearLayout subjectTabs = vertical();
+        LinearLayout[] subjectTabRows = {horizontal(), horizontal()};
         subjectTabButtons.clear();
-        for (String subject : TASK_SUBJECTS) {
+        for (int subjectIndex = 0; subjectIndex < TASK_SUBJECTS.length; subjectIndex++) {
+            String subject = TASK_SUBJECTS[subjectIndex];
             final String tabSubject = subject;
             Button tab = new Button(this);
             tab.setText(subject);
@@ -1256,12 +1258,15 @@ public class MainActivity extends Activity {
             tab.setMinHeight(0);
             tab.setMinimumHeight(0);
             tab.setOnClickListener(v -> selectTaskSubject(tabSubject));
-            LinearLayout.LayoutParams tabParams = weightedFixed(1, dp(39));
-            if (subjectTabs.getChildCount() > 0) tabParams.leftMargin = dp(6);
-            subjectTabs.addView(tab, tabParams);
+            LinearLayout.LayoutParams tabParams = weightedFixed(1, dp(36));
+            if (subjectIndex % 2 == 1) tabParams.leftMargin = dp(6);
+            subjectTabRows[subjectIndex / 2].addView(tab, tabParams);
             subjectTabButtons.add(tab);
         }
-        taskEntryComposerPanel.addView(subjectTabs, matchFixed(dp(39)));
+        subjectTabs.addView(subjectTabRows[0], matchFixed(dp(36)));
+        LinearLayout.LayoutParams secondSubjectRowParams = matchFixed(dp(36));
+        secondSubjectRowParams.topMargin = dp(6);
+        subjectTabs.addView(subjectTabRows[1], secondSubjectRowParams);
         selectTaskSubject(selectedTaskSubject);
         voiceTaskButton = new Button(this);
         voiceTaskButton.setText("🎙");
@@ -1282,15 +1287,19 @@ public class MainActivity extends Activity {
         taskDraftInput.setTextColor(INK);
         taskDraftInput.setHintTextColor(Color.rgb(160, 159, 150));
         taskDraftInput.setHint("请录入…");
-        taskDraftInput.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        taskDraftInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        taskDraftInput.setSingleLine(true);
+        taskDraftInput.setGravity(Gravity.TOP | Gravity.START);
+        taskDraftInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        taskDraftInput.setMinLines(2);
+        taskDraftInput.setMaxLines(2);
         taskDraftInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
         taskDraftInput.setPadding(dp(11), dp(9), dp(11), dp(9));
         taskDraftInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
-        LinearLayout.LayoutParams draftParams = matchFixed(dp(43));
-        draftParams.topMargin = dp(10);
-        taskEntryComposerPanel.addView(taskDraftInput, draftParams);
+        LinearLayout taskEntryInputRow = horizontal();
+        taskEntryInputRow.setGravity(Gravity.TOP);
+        taskEntryInputRow.addView(subjectTabs, fixed(dp(112), dp(78)));
+        taskEntryInputRow.addView(spaceHorizontal(8));
+        taskEntryInputRow.addView(taskDraftInput, weightedFixed(1, dp(78)));
+        taskEntryComposerPanel.addView(taskEntryInputRow, matchFixed(dp(78)));
         taskDraftErrorView = text("先说出或输入作业内容", 10, RED, true);
         taskDraftErrorView.setPadding(dp(2), dp(5), 0, 0);
         taskDraftErrorView.setVisibility(View.GONE);
