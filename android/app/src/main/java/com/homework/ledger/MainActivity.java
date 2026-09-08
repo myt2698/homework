@@ -387,8 +387,6 @@ public class MainActivity extends Activity {
     private int breakChoiceTaskIndex = -1;
     private int breakChoiceSourceTaskIndex = -1;
     private boolean breakChoiceFromPause;
-    private boolean breakChoiceChanged;
-    private Button changeBreakTaskButton;
     private TextView taskFocusElapsedView;
     private TextView taskFocusStepView;
     private TextView taskFocusComparisonView;
@@ -2380,18 +2378,6 @@ public class MainActivity extends Activity {
         return -1;
     }
 
-    private List<Integer> availableBreakTaskIndexes() {
-        List<Integer> indexes = new ArrayList<>();
-        JSONArray tasks = taskArray(false);
-        for (int index = 0; index < tasks.length(); index++) {
-            JSONObject task = tasks.optJSONObject(index);
-            if (task != null && !"done".equals(task.optString("status")) && taskCanRunToday(task)) {
-                indexes.add(index);
-            }
-        }
-        return indexes;
-    }
-
     private String breakKindLabel(String kind) {
         if ("toilet".equals(kind)) return "上厕所";
         if ("short".equals(kind)) return "短休息";
@@ -2425,7 +2411,6 @@ public class MainActivity extends Activity {
         put(entry, "trigger", breakChoiceFromPause ? "pause" : "checkpoint");
         if (sourceTask != null) put(entry, "sourceTaskId", sourceTask.optString("id"));
         if (task != null) put(entry, "nextTaskId", task.optString("id"));
-        put(entry, "nextTaskChanged", breakChoiceChanged);
         put(entry, "startedAt", startedAt);
         put(entry, "plannedEndAt", endAt);
         put(entry, "plannedMinutes", Math.max(1L, (endAt - startedAt + 59999L) / 60000L));
@@ -2492,24 +2477,6 @@ public class MainActivity extends Activity {
         if (task == null) return;
         nextTaskView.setText((breakChoiceFromPause ? "休息回来，我要做  ·  " : "回来后做  ·  ")
                 + task.optString("subject", "其他") + " · " + task.optString("title", "下一项作业"));
-        if (changeBreakTaskButton != null) {
-            changeBreakTaskButton.setVisibility(availableBreakTaskIndexes().size() < 2 ? View.GONE : View.VISIBLE);
-            changeBreakTaskButton.setEnabled(!breakChoiceChanged);
-            changeBreakTaskButton.setText(breakChoiceChanged ? "已更换下一项" : "换一个下一项（仅一次）");
-        }
-    }
-
-    private void changeBreakChoiceTask(TextView nextTaskView) {
-        if (breakChoiceChanged) return;
-        List<Integer> candidates = availableBreakTaskIndexes();
-        if (candidates.size() < 2) return;
-        int position = candidates.indexOf(breakChoiceTaskIndex);
-        int nextPosition = position < 0 ? 0 : (position + 1) % candidates.size();
-        int nextIndex = candidates.get(nextPosition);
-        if (nextIndex == breakChoiceTaskIndex) return;
-        breakChoiceTaskIndex = nextIndex;
-        breakChoiceChanged = true;
-        updateBreakChoiceTask(nextTaskView);
     }
 
     private void showBreakChoiceDialog(int taskIndex, boolean fromPause, int sourceTaskIndex) {
@@ -2520,7 +2487,6 @@ public class MainActivity extends Activity {
         breakChoiceTaskIndex = taskIndex;
         breakChoiceSourceTaskIndex = sourceTaskIndex;
         breakChoiceFromPause = fromPause;
-        breakChoiceChanged = false;
         LinearLayout content = vertical();
         content.setPadding(dp(22), dp(6), dp(22), 0);
         TextView next = text("", 12, Color.rgb(69, 107, 168), true);
@@ -2543,12 +2509,6 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams mealParams = matchFixed(dp(46));
         mealParams.topMargin = dp(6);
         content.addView(meal, mealParams);
-        changeBreakTaskButton = smallButton("换一个下一项（仅一次）");
-        changeBreakTaskButton.setTextColor(Color.rgb(69, 107, 168));
-        changeBreakTaskButton.setOnClickListener(v -> changeBreakChoiceTask(next));
-        LinearLayout.LayoutParams changeParams = matchFixed(dp(42));
-        changeParams.topMargin = dp(9);
-        content.addView(changeBreakTaskButton, changeParams);
         updateBreakChoiceTask(next);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -2593,8 +2553,6 @@ public class MainActivity extends Activity {
                 breakChoiceTaskIndex = -1;
                 breakChoiceSourceTaskIndex = -1;
                 breakChoiceFromPause = false;
-                breakChoiceChanged = false;
-                changeBreakTaskButton = null;
             }
         });
         dialog.show();

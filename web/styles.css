@@ -1029,8 +1029,6 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 .break-next-task { display: grid; gap: 4px; margin: 15px 0; padding: 12px 14px; border-radius: 14px; color: #456ba8; background: var(--green-soft); }
 .break-next-task span { color: var(--muted); font-size: .68rem; }
 .break-next-task strong { font-size: .92rem; }
-.break-change-task { width: 100%; margin: -4px 0 11px; color: #4b6fae; }
-.break-change-task:disabled { opacity: .5; cursor: default; }
 .break-quick-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .break-quick-actions button { min-width: 0; padding-inline: 8px; }
 .break-return-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 10px; align-items: center; }

@@ -197,7 +197,6 @@
     alarmRecordHint: $("#alarmRecordHint"), breakChoiceModal: $("#breakChoiceModal"),
     breakChoiceCloseButton: $("#breakChoiceCloseButton"),
     breakChoiceTitle: $("#breakChoiceTitle"), breakChoiceNextTask: $("#breakChoiceNextTask"),
-    changeBreakNextTaskButton: $("#changeBreakNextTaskButton"),
     breakReturnTime: $("#breakReturnTime"), startTimedBreakButton: $("#startTimedBreakButton"),
     startNextTaskNowButton: $("#startNextTaskNowButton"), breakTimerModal: $("#breakTimerModal"),
     breakTimerTitle: $("#breakTimerTitle"), breakCountdown: $("#breakCountdown"),
@@ -246,7 +245,6 @@
   let breakChoiceTaskId = null;
   let breakChoiceSourceTaskId = null;
   let breakChoiceMode = "checkpoint";
-  let breakChoiceChanged = false;
   let breakTimer = null;
   let breakSession = loadBreakSession();
   let alarmRecorder = null;
@@ -629,10 +627,6 @@
     return tasksForDate(date).find((task) => task.status !== "done" && taskCanRunToday(task, date)) || null;
   }
 
-  function availableBreakTasks(date = elements.recordDate.value) {
-    return tasksForDate(date).filter((task) => task.status !== "done" && taskCanRunToday(task, date));
-  }
-
   function breakKindLabel(kind) {
     if (kind === "toilet") return "上厕所";
     if (kind === "short") return "短休息";
@@ -656,7 +650,6 @@
       trigger: breakChoiceMode,
       sourceTaskId: breakChoiceSourceTaskId,
       nextTaskId: breakChoiceTaskId,
-      nextTaskChanged: breakChoiceChanged,
       startedAt,
       plannedEndAt: endAt,
       plannedMinutes: Math.max(1, Math.ceil((endAt - startedAt) / 60000)),
@@ -689,7 +682,6 @@
     breakChoiceTaskId = null;
     breakChoiceSourceTaskId = null;
     breakChoiceMode = "checkpoint";
-    breakChoiceChanged = false;
     elements.breakChoiceModal.hidden = true;
     if (elements.breakTimerModal.hidden) document.body.classList.remove("modal-open");
   }
@@ -698,21 +690,6 @@
     const task = taskById(breakChoiceTaskId);
     if (!task) return;
     elements.breakChoiceNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
-    const candidates = availableBreakTasks();
-    elements.changeBreakNextTaskButton.hidden = candidates.length < 2;
-    elements.changeBreakNextTaskButton.disabled = breakChoiceChanged;
-    elements.changeBreakNextTaskButton.textContent = breakChoiceChanged ? "已更换下一项" : "换一个下一项（仅一次）";
-  }
-
-  function changeBreakNextTask() {
-    if (breakChoiceChanged) return;
-    const candidates = availableBreakTasks();
-    const currentIndex = candidates.findIndex((task) => String(task.id) === String(breakChoiceTaskId));
-    const next = candidates[(currentIndex + 1 + candidates.length) % candidates.length];
-    if (!next || String(next.id) === String(breakChoiceTaskId)) return;
-    breakChoiceTaskId = String(next.id);
-    breakChoiceChanged = true;
-    updateBreakChoiceTask();
   }
 
   function openBreakChoice(taskId, mode = "checkpoint", sourceTaskId = null) {
@@ -721,7 +698,6 @@
     breakChoiceTaskId = String(taskId);
     breakChoiceSourceTaskId = sourceTaskId ? String(sourceTaskId) : null;
     breakChoiceMode = mode;
-    breakChoiceChanged = false;
     elements.breakChoiceTitle.textContent = "休息多久？";
     elements.startNextTaskNowButton.textContent = mode === "pause" ? "不休息，继续这项" : "不休息，开始下一项";
     updateBreakChoiceTask();
@@ -3264,7 +3240,6 @@
     if (focusModalTaskId) performTaskAction("complete", focusModalTaskId);
   });
   elements.breakChoiceCloseButton.addEventListener("click", closeBreakChoice);
-  elements.changeBreakNextTaskButton.addEventListener("click", changeBreakNextTask);
   elements.breakChoiceModal.addEventListener("click", (event) => {
     if (event.target === elements.breakChoiceModal) closeBreakChoice();
   });
