@@ -124,6 +124,7 @@ public class MainActivity extends Activity {
     private static final long VOICE_RECORDING_LIMIT_MS = 120_000L;
     private static final long DICTATION_RECORDING_MIN_MS = 400L;
     private static final long BREAK_ALARM_RECORDING_MIN_MS = 500L;
+    private static final long BREAK_REMINDER_INTERVAL_MS = 5 * 60000L;
     private static final Pattern SUBJECT_PATTERN = Pattern.compile("^(语文|数学|英语|科学|道法|体育|音乐|美术|其他)[\\s：:、，,-]*(.*)$");
     private static final Pattern SUBJECT_ANYWHERE_PATTERN = Pattern.compile("(语文|数学|英语|科学|道法|体育|音乐|美术|其他)(?:作业)?");
     private static final Pattern NUMBERED_TASK_PATTERN = Pattern.compile(
@@ -2651,7 +2652,8 @@ public class MainActivity extends Activity {
             clearBreakSession();
             return;
         }
-        long remaining = Math.max(0L, breakSession.optLong("endAt") - System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        long remaining = Math.max(0L, breakSession.optLong("endAt") - now);
         long seconds = (remaining + 999L) / 1000L;
         if (breakCountdownView != null) {
             breakCountdownView.setText(remaining > 0
@@ -2671,9 +2673,16 @@ public class MainActivity extends Activity {
         if (start != null) start.setText(remaining > 0 ? "我提前回来了，开始下一项" : "开始下一项");
         if (remaining == 0L && !breakSession.optBoolean("alerted")) {
             put(breakSession, "alerted", true);
+            put(breakSession, "nextAlertAt", now + BREAK_REMINDER_INTERVAL_MS);
             saveBreakSession();
             vibrateBreakAlarm();
             playBreakAlarm(2);
+        } else if (remaining == 0L && now >= breakSession.optLong(
+                "nextAlertAt", breakSession.optLong("endAt") + BREAK_REMINDER_INTERVAL_MS)) {
+            put(breakSession, "nextAlertAt", now + BREAK_REMINDER_INTERVAL_MS);
+            saveBreakSession();
+            vibrateBreakAlarm();
+            playBreakAlarm(1);
         }
     }
 
@@ -2695,6 +2704,7 @@ public class MainActivity extends Activity {
         put(breakSession, "endAt", endAt);
         put(breakSession, "extended", true);
         put(breakSession, "alerted", false);
+        breakSession.remove("nextAlertAt");
         JSONObject entry = breakLogById(breakSession.optString("breakId"));
         if (entry != null) {
             put(entry, "plannedEndAt", endAt);

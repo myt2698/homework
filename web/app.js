@@ -4,6 +4,7 @@
   const STORAGE_KEY = "homework-ledger-v1";
   const BREAK_SESSION_KEY = "homework-break-session-v1";
   const BREAK_ALARM_KEY = "homework-break-alarm-v1";
+  const BREAK_REMINDER_INTERVAL_MS = 5 * 60000;
   const RULES = {
     best: { label: "8:30 及以前", amount: 1.5 },
     good: { label: "8:30 后至 8:40", amount: 1 },
@@ -719,7 +720,8 @@
     const task = tasksForDate(breakSession.date).find((item) => String(item.id) === String(breakSession.taskId));
     if (!task || task.status === "done") return cancelBreak(false);
     elements.breakTimerNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
-    const remaining = Math.max(0, Number(breakSession.endAt) - Date.now());
+    const now = Date.now();
+    const remaining = Math.max(0, Number(breakSession.endAt) - now);
     const seconds = Math.ceil(remaining / 1000);
     elements.breakCountdown.textContent = remaining > 0
       ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}\u2009:\u2009${String(seconds % 60).padStart(2, "0")}`
@@ -731,8 +733,13 @@
     elements.startNextTaskButton.textContent = remaining <= 0 ? "开始下一项" : "我提前回来了，开始下一项";
     if (remaining <= 0 && !breakSession.alerted) {
       breakSession.alerted = true;
+      breakSession.nextAlertAt = now + BREAK_REMINDER_INTERVAL_MS;
       saveBreakSession();
       playAlarm(2);
+    } else if (remaining <= 0 && now >= Number(breakSession.nextAlertAt || Number(breakSession.endAt) + BREAK_REMINDER_INTERVAL_MS)) {
+      breakSession.nextAlertAt = now + BREAK_REMINDER_INTERVAL_MS;
+      saveBreakSession();
+      playAlarm(1);
     }
   }
 
@@ -3263,6 +3270,7 @@
     breakSession.endAt = Math.max(Date.now(), Number(breakSession.endAt)) + 3 * 60000;
     breakSession.extended = true;
     breakSession.alerted = false;
+    delete breakSession.nextAlertAt;
     const owner = taskOwnerForDate(breakSession.date, true);
     const log = Array.isArray(owner.breaks)
       ? owner.breaks.find((entry) => String(entry.id) === String(breakSession.breakId)) : null;
