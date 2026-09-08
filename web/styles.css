@@ -354,7 +354,8 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry-input-row { display: flex; gap: 8px; align-items: flex-end; }
 .subject-picker { position: relative; flex: 0 0 76px; }
 .subject-picker-button, .subject-tabs button { --subject-color: #756f65; --subject-soft: #f2efe9; min-width: 0; border: 1px solid var(--subject-color); border-radius: 10px; color: var(--subject-color); background: var(--subject-soft); font: inherit; font-size: .76rem; font-weight: 800; cursor: pointer; }
-.subject-picker-button { width: 100%; height: 42px; padding: 0 7px; color: #fff; background: var(--subject-color); }
+.subject-picker-button { display: flex; width: 100%; height: 42px; padding: 0 7px; align-items: center; justify-content: center; gap: 4px; color: #fff; background: var(--subject-color); }
+.subject-picker-arrow { display: inline-flex; height: 1em; align-items: center; justify-content: center; font-size: .82em; line-height: 1; }
 .subject-picker-button[data-subject="语文"], .subject-tabs button[data-subject="语文"] { --subject-color: #c56b45; --subject-soft: #fbe9df; }
 .subject-picker-button[data-subject="数学"], .subject-tabs button[data-subject="数学"] { --subject-color: #4075ae; --subject-soft: #e7f0fa; }
 .subject-picker-button[data-subject="英语"], .subject-tabs button[data-subject="英语"] { --subject-color: #765ca7; --subject-soft: #eee9f8; }

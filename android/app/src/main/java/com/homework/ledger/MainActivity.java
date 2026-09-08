@@ -1251,6 +1251,7 @@ public class MainActivity extends Activity {
         taskSubjectPickerButton.setMinHeight(0);
         taskSubjectPickerButton.setMinimumHeight(0);
         taskSubjectPickerButton.setPadding(dp(6), 0, dp(6), 0);
+        taskSubjectPickerButton.setGravity(Gravity.CENTER);
         taskSubjectPickerButton.setOnClickListener(v -> showTaskSubjectPicker());
         selectTaskSubject(selectedTaskSubject);
         voiceTaskButton = new Button(this);
@@ -1658,7 +1659,7 @@ public class MainActivity extends Activity {
         selectedTaskSubject = subject;
         if (taskSubjectPickerButton != null) {
             int subjectColor = taskSubjectColor(subject);
-            taskSubjectPickerButton.setText(subject + "⌄");
+            taskSubjectPickerButton.setText(subject + "  ▾");
             taskSubjectPickerButton.setTextColor(Color.WHITE);
             taskSubjectPickerButton.setBackground(rounded(subjectColor, 10, subjectColor, 1));
         }

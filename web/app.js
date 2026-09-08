@@ -125,7 +125,8 @@
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryModal: $("#taskEntryModal"), taskEntryDialog: $("#taskEntryDialog"), taskEntryCloseButton: $("#taskEntryCloseButton"),
     taskEntry: $("#taskEntry"), subjectPicker: $("#subjectPicker"),
-    subjectPickerButton: $("#subjectPickerButton"), subjectTabs: $("#subjectTabs"),
+    subjectPickerButton: $("#subjectPickerButton"), subjectPickerLabel: $("#subjectPickerLabel"),
+    subjectTabs: $("#subjectTabs"),
     taskEntryComposer: $("#taskEntryComposer"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
@@ -2662,7 +2663,7 @@
       button.setAttribute("aria-checked", String(button.dataset.subject === subject));
     });
     elements.subjectPickerButton.dataset.subject = subject;
-    elements.subjectPickerButton.textContent = `${subject}⌄`;
+    elements.subjectPickerLabel.textContent = subject;
     const addLabel = `加入${subject}作业`;
     elements.addTasksButton.setAttribute("aria-label", addLabel);
     elements.addTasksButton.title = addLabel;
