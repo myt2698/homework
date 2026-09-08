@@ -1672,9 +1672,12 @@ public class MainActivity extends Activity {
         selectedTaskSubject = subject;
         for (int index = 0; index < subjectTabButtons.size(); index++) {
             Button button = subjectTabButtons.get(index);
-            boolean selected = TASK_SUBJECTS[index].equals(subject);
-            button.setTextColor(selected ? Color.WHITE : MUTED);
-            button.setBackground(rounded(selected ? GREEN : Color.WHITE, 10, selected ? GREEN : LINE, 1));
+            String tabSubject = TASK_SUBJECTS[index];
+            boolean selected = tabSubject.equals(subject);
+            int subjectColor = taskSubjectColor(tabSubject);
+            button.setTextColor(selected ? Color.WHITE : subjectColor);
+            button.setBackground(rounded(selected ? subjectColor : taskSubjectSoftColor(tabSubject),
+                    10, subjectColor, 1));
         }
         if (taskDraftInput != null) {
             taskDraftInput.setHint("例如：1. " + subject + "背诵第3课  2. 练习册第12页  3. 阅读课文");
