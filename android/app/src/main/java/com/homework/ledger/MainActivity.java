@@ -273,7 +273,6 @@ public class MainActivity extends Activity {
     private TextView taskEntryLauncherStatus;
     private TextView taskEntryDialogStatus;
     private LinearLayout taskEntryComposerPanel;
-    private Button taskEntryComposerToggleButton;
     private LinearLayout taskEntryPendingPanel;
     private TextView taskEntryPendingSummary;
     private LinearLayout taskEntryPendingList;
@@ -329,7 +328,6 @@ public class MainActivity extends Activity {
     private String selectedTaskSubject = "语文";
     private boolean taskListExpanded;
     private boolean completedTasksExpanded;
-    private boolean taskEntryComposerExpanded = true;
     private JSONObject lastDeletedTask;
     private String lastDeletedTaskDate;
 
@@ -365,6 +363,7 @@ public class MainActivity extends Activity {
 
     private AlertDialog taskFocusDialog;
     private AlertDialog taskEntryDialog;
+    private ScrollView taskEntryScrollView;
     private AlertDialog weekendTaskPlanDialog;
     private AlertDialog breakChoiceDialog;
     private AlertDialog breakTimerDialog;
@@ -1250,16 +1249,6 @@ public class MainActivity extends Activity {
         taskEntryPanel = vertical();
         taskEntryPanel.setPadding(dp(12), dp(12), dp(12), dp(12));
         taskEntryPanel.setBackground(rounded(PAGE, 14, PAGE, 0));
-        taskEntryComposerToggleButton = new Button(this);
-        taskEntryComposerToggleButton.setText("＋ 继续录入作业");
-        taskEntryComposerToggleButton.setTextSize(12);
-        taskEntryComposerToggleButton.setTextColor(GREEN);
-        taskEntryComposerToggleButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        taskEntryComposerToggleButton.setAllCaps(false);
-        taskEntryComposerToggleButton.setBackground(rounded(Color.rgb(245, 249, 255), 12,
-                Color.rgb(156, 188, 245), 1));
-        taskEntryComposerToggleButton.setOnClickListener(v -> setTaskEntryComposerExpanded(true, true));
-        taskEntryPanel.addView(taskEntryComposerToggleButton, matchFixed(dp(44)));
 
         taskEntryComposerPanel = vertical();
         LinearLayout subjectTabs = horizontal();
@@ -1340,7 +1329,6 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams entryActionParams = matchWrap();
         entryActionParams.topMargin = dp(9);
         taskEntryComposerPanel.addView(entryActions, entryActionParams);
-        taskEntryPanel.addView(taskEntryComposerPanel, matchWrap());
 
         taskEntryUndoDeleteButton = textButton("↶ 撤销刚才删除");
         taskEntryUndoDeleteButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1348,7 +1336,6 @@ public class MainActivity extends Activity {
         taskEntryUndoDeleteButton.setVisibility(View.GONE);
         LinearLayout.LayoutParams undoParams = matchFixed(dp(36));
         undoParams.topMargin = dp(7);
-        taskEntryPanel.addView(taskEntryUndoDeleteButton, undoParams);
 
         taskEntryPendingPanel = vertical();
         taskEntryPendingPanel.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -1371,8 +1358,11 @@ public class MainActivity extends Activity {
         pendingListParams.topMargin = dp(5);
         taskEntryPendingPanel.addView(taskEntryPendingList, pendingListParams);
         LinearLayout.LayoutParams pendingParams = matchWrap();
-        pendingParams.topMargin = dp(10);
         taskEntryPanel.addView(taskEntryPendingPanel, pendingParams);
+        taskEntryPanel.addView(taskEntryUndoDeleteButton, undoParams);
+        LinearLayout.LayoutParams composerParams = matchWrap();
+        composerParams.topMargin = dp(12);
+        taskEntryPanel.addView(taskEntryComposerPanel, composerParams);
 
         LinearLayout.LayoutParams entryParams = matchWrap();
         entryParams.topMargin = dp(13);
@@ -1503,7 +1493,6 @@ public class MainActivity extends Activity {
             ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
         }
         taskEntryPanel.setVisibility(View.VISIBLE);
-        taskEntryComposerExpanded = taskArray(false).length() == 0;
         setTaskDraftError(null);
 
         LinearLayout content = vertical();
@@ -1519,11 +1508,11 @@ public class MainActivity extends Activity {
         entryParams.topMargin = dp(14);
         content.addView(taskEntryPanel, entryParams);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.addView(content, matchWrap());
+        taskEntryScrollView = new ScrollView(this);
+        taskEntryScrollView.setFillViewport(true);
+        taskEntryScrollView.addView(content, matchWrap());
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(scroll)
+                .setView(taskEntryScrollView)
                 .setPositiveButton("都录好了，去排顺序", null)
                 .setNegativeButton("关闭", null)
                 .create();
@@ -1535,6 +1524,7 @@ public class MainActivity extends Activity {
                 ((ViewGroup) taskEntryPanel.getParent()).removeView(taskEntryPanel);
             }
             if (taskEntryDialog == dialog) taskEntryDialog = null;
+            taskEntryScrollView = null;
             taskEntryDialogStatus = null;
             taskEntryConfirmButton = null;
         });
@@ -1690,17 +1680,9 @@ public class MainActivity extends Activity {
         if (taskEntryAddButton != null) taskEntryAddButton.setText("加入" + subject + "作业");
     }
 
-    private void setTaskEntryComposerExpanded(boolean expanded, boolean focusInput) {
-        taskEntryComposerExpanded = expanded;
-        renderTasks();
-        if (focusInput && expanded && taskDraftInput != null) {
-            taskDraftInput.requestFocus();
-            taskDraftInput.setSelection(taskDraftInput.length());
-            if (taskEntryDialog != null && taskEntryDialog.getWindow() != null) {
-                taskEntryDialog.getWindow().setSoftInputMode(
-                        android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-            }
-        }
+    private void scrollTaskEntryToBottom() {
+        if (taskEntryScrollView == null) return;
+        taskEntryScrollView.post(() -> taskEntryScrollView.fullScroll(View.FOCUS_DOWN));
     }
 
     private void setTaskDraftError(String message) {
@@ -1851,9 +1833,9 @@ public class MainActivity extends Activity {
         owner.remove("orderSaved");
         owner.remove("orderSavedAt");
         taskDraftInput.setText("");
-        taskEntryComposerExpanded = false;
         saveTaskData();
         renderAll();
+        scrollTaskEntryToBottom();
         toast("我把 " + parsed.size() + " 项作业收进清单了");
     }
 
@@ -2870,9 +2852,12 @@ public class MainActivity extends Activity {
                     : "我选好科目，把作业说出来或写下来。");
         }
         if (!canEnterTasks) dismissTaskEntryDialog();
-        boolean composerVisible = tasks.length() == 0 || taskEntryComposerExpanded;
-        taskEntryComposerPanel.setVisibility(composerVisible ? View.VISIBLE : View.GONE);
-        taskEntryComposerToggleButton.setVisibility(canEnterTasks && !composerVisible ? View.VISIBLE : View.GONE);
+        taskEntryComposerPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
+        ViewGroup.LayoutParams composerLayout = taskEntryComposerPanel.getLayoutParams();
+        if (composerLayout instanceof LinearLayout.LayoutParams) {
+            ((LinearLayout.LayoutParams) composerLayout).topMargin = tasks.length() > 0 ? dp(12) : 0;
+            taskEntryComposerPanel.setLayoutParams(composerLayout);
+        }
         boolean canUndoDelete = lastDeletedTask != null && currentDate.equals(lastDeletedTaskDate)
                 && !confirmed && canEditList;
         taskEntryUndoDeleteButton.setVisibility(canUndoDelete ? View.VISIBLE : View.GONE);
@@ -3534,7 +3519,6 @@ public class MainActivity extends Activity {
         timerHandler.removeCallbacks(clearDeletedTaskUndo);
         lastDeletedTask = null;
         lastDeletedTaskDate = null;
-        taskEntryComposerExpanded = false;
         saveTaskData();
         renderAll();
         toast("刚才删除的作业回来了");
@@ -3965,7 +3949,6 @@ public class MainActivity extends Activity {
             cleanupWeekend();
             taskListExpanded = false;
             completedTasksExpanded = false;
-            if (tasks.length() == 0) taskEntryComposerExpanded = true;
             saveTaskData();
             renderAll();
             toast("已删除，可以在上方撤销");

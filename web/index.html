@@ -348,13 +348,25 @@
   </section>
 
   <div class="task-entry-modal" id="taskEntryModal" role="dialog" aria-modal="true" aria-labelledby="taskEntryModalTitle" hidden>
-    <div class="task-entry-dialog">
+    <div class="task-entry-dialog" id="taskEntryDialog">
       <button class="focus-close" id="taskEntryCloseButton" type="button" aria-label="关闭作业录入">×</button>
       <p class="section-kicker">我的作业清单</p>
       <h2 id="taskEntryModalTitle">把今天的作业收进清单</h2>
       <p class="task-entry-dialog-status" id="taskEntryModalStatus">我选好科目，把作业说出来或写下来。</p>
       <div class="task-entry" id="taskEntry">
-        <button class="task-entry-composer-toggle" id="taskEntryComposerToggle" type="button" hidden>＋ 继续录入作业</button>
+        <section class="task-entry-pending" id="taskEntryPendingSection" aria-labelledby="taskEntryPendingTitle" hidden>
+          <div class="task-entry-pending-heading">
+            <div>
+              <strong id="taskEntryPendingTitle">我录好的作业</strong>
+              <small>我按科目检查一下，看看有没有听错或漏掉</small>
+            </div>
+            <b id="taskEntryPendingSummary">0 项</b>
+          </div>
+          <div class="task-entry-pending-list" id="taskEntryPendingList"></div>
+        </section>
+        <div class="task-entry-feedback-row">
+          <button class="task-entry-undo" id="taskEntryUndoDeleteButton" type="button" hidden>↶ 撤销刚才删除</button>
+        </div>
         <div class="task-entry-composer" id="taskEntryComposer">
           <div class="subject-tabs" id="subjectTabs" role="radiogroup" aria-label="选择作业科目">
             <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
@@ -373,19 +385,6 @@
             <button class="text-button" id="clearTaskDraftButton" type="button">清空</button>
           </div>
         </div>
-        <div class="task-entry-feedback-row">
-          <button class="task-entry-undo" id="taskEntryUndoDeleteButton" type="button" hidden>↶ 撤销刚才删除</button>
-        </div>
-        <section class="task-entry-pending" id="taskEntryPendingSection" aria-labelledby="taskEntryPendingTitle" hidden>
-          <div class="task-entry-pending-heading">
-            <div>
-              <strong id="taskEntryPendingTitle">我录好的作业</strong>
-              <small>我按科目检查一下，看看有没有听错或漏掉</small>
-            </div>
-            <b id="taskEntryPendingSummary">0 项</b>
-          </div>
-          <div class="task-entry-pending-list" id="taskEntryPendingList"></div>
-        </section>
       </div>
       <div class="task-entry-sticky-footer" id="taskEntryStickyFooter" hidden>
         <span>清单里有 <strong id="taskEntryFooterCount">0 项</strong></span>

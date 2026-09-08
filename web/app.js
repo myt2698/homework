@@ -123,9 +123,9 @@
     englishReadingButton: $("#englishReadingButton"), englishReadingStatus: $("#englishReadingStatus"),
     ledgerButton: $("#ledgerButton"), ledgerTitle: $("#ledgerTitle"), ledgerStatus: $("#ledgerStatus"),
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
-    taskEntryModal: $("#taskEntryModal"), taskEntryCloseButton: $("#taskEntryCloseButton"),
+    taskEntryModal: $("#taskEntryModal"), taskEntryDialog: $("#taskEntryDialog"), taskEntryCloseButton: $("#taskEntryCloseButton"),
     taskEntryModalStatus: $("#taskEntryModalStatus"), taskEntry: $("#taskEntry"), subjectTabs: $("#subjectTabs"),
-    taskEntryComposer: $("#taskEntryComposer"), taskEntryComposerToggle: $("#taskEntryComposerToggle"),
+    taskEntryComposer: $("#taskEntryComposer"),
     taskEntryPendingSection: $("#taskEntryPendingSection"), taskEntryPendingList: $("#taskEntryPendingList"),
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
     taskEntryStickyFooter: $("#taskEntryStickyFooter"), taskEntryFooterCount: $("#taskEntryFooterCount"),
@@ -177,7 +177,6 @@
   let stepEditorTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
-  let taskEntryComposerExpanded = true;
   let editingPendingTaskId = null;
   let lastDeletedTask = null;
   let undoDeleteTimer = null;
@@ -1048,13 +1047,12 @@
 
   function openTaskEntryModal() {
     if (elements.taskEntryLauncher.hidden) return;
-    taskEntryComposerExpanded = tasksForDate().length === 0;
     editingPendingTaskId = null;
     setTaskDraftError();
     elements.taskEntryModal.hidden = false;
     document.body.classList.add("modal-open");
     renderTasks();
-    (taskEntryComposerExpanded ? elements.taskDraft : elements.taskEntryComposerToggle).focus();
+    (tasksForDate().length ? elements.taskEntryCloseButton : elements.taskDraft).focus();
   }
 
   function closeTaskEntryModal() {
@@ -1063,13 +1061,11 @@
     document.body.classList.remove("modal-open");
   }
 
-  function setTaskEntryComposer(expanded, focus = false) {
-    taskEntryComposerExpanded = Boolean(expanded);
-    renderTasks();
-    if (focus && taskEntryComposerExpanded) {
-      elements.taskDraft.focus();
-      elements.taskDraft.setSelectionRange(elements.taskDraft.value.length, elements.taskDraft.value.length);
-    }
+  function scrollTaskEntryToBottom() {
+    window.requestAnimationFrame(() => {
+      if (elements.taskEntryModal.hidden) return;
+      elements.taskEntryDialog.scrollTo({ top: elements.taskEntryDialog.scrollHeight, behavior: "smooth" });
+    });
   }
 
   function setTaskDraftError(message = "") {
@@ -1933,10 +1929,8 @@
     };
 
     const pendingTasks = pendingTaskOrder(tasks);
-    const composerVisible = pendingTasks.length === 0 || taskEntryComposerExpanded;
-    elements.taskEntryComposer.hidden = !composerVisible;
-    elements.taskEntryComposerToggle.hidden = composerVisible || !canEnterTasks;
-    elements.taskEntry.classList.toggle("composer-collapsed", !composerVisible);
+    elements.taskEntryComposer.hidden = !canEnterTasks;
+    elements.taskEntry.classList.toggle("has-pending", canEnterTasks && !confirmed && canEditList && pendingTasks.length > 0);
     elements.taskEntryPendingSection.hidden = !canEnterTasks || confirmed || !canEditList || pendingTasks.length === 0;
     elements.taskEntryPendingSummary.textContent = `${pendingTasks.length} 项`;
     elements.taskEntryPendingList.innerHTML = confirmed ? ""
@@ -2238,10 +2232,10 @@
     delete owner.orderSaved;
     delete owner.orderSavedAt;
     elements.taskDraft.value = "";
-    taskEntryComposerExpanded = false;
     editingPendingTaskId = null;
     persist();
     render();
+    scrollTaskEntryToBottom();
     showToast(`我把 ${parsed.length} 项作业收进清单了`);
   }
 
@@ -2488,7 +2482,6 @@
     owner.tasks = pendingTaskOrder([...(Array.isArray(owner.tasks) ? owner.tasks : []), restored]);
     clearTimeout(undoDeleteTimer);
     lastDeletedTask = null;
-    taskEntryComposerExpanded = false;
     persist();
     render();
     showToast("刚才删除的作业回来了");
@@ -2524,7 +2517,6 @@
       taskListExpanded = false;
       completedTasksExpanded = false;
       editingPendingTaskId = null;
-      if (!owner.tasks.length) taskEntryComposerExpanded = true;
       persist();
       render();
       return showToast("已删除，可以在上方撤销");
@@ -2901,7 +2893,6 @@
     if (button) selectTaskSubject(button.dataset.subject);
   });
   elements.addTasksButton.addEventListener("click", addTasksFromDraft);
-  elements.taskEntryComposerToggle.addEventListener("click", () => setTaskEntryComposer(true, true));
   elements.taskDraft.addEventListener("input", () => {
     if (elements.taskDraft.value.trim()) setTaskDraftError();
   });

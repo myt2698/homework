@@ -351,21 +351,7 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry-launcher-arrow { color: #6588c9; font-size: 1.65rem; line-height: 1; }
 .task-entry { margin-top: 16px; padding: 14px; border: 1px dashed #bfd3f6; border-radius: 17px; background: #f7faff; }
 .task-entry[hidden] { display: none; }
-.task-entry.composer-collapsed { padding: 0; border: 0; background: transparent; }
-.task-entry-composer[hidden], .task-entry-composer-toggle[hidden] { display: none; }
-.task-entry-composer-toggle {
-  width: 100%;
-  min-height: 44px;
-  padding: 9px 13px;
-  border: 1px dashed #9cbcf5;
-  border-radius: 13px;
-  color: #356bc7;
-  background: #f5f9ff;
-  font: inherit;
-  font-size: .78rem;
-  font-weight: 800;
-  cursor: pointer;
-}
+.task-entry.has-pending .task-entry-composer { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #bfd3f6; }
 .subject-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 11px; }
 .subject-tabs button { padding: 9px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; font-size: .78rem; font-weight: 750; cursor: pointer; }
 .subject-tabs button[aria-checked="true"] { border-color: var(--green); color: #fff; background: var(--green); box-shadow: 0 5px 14px rgba(75,130,239,.18); }
@@ -403,7 +389,7 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-entry-feedback-row { display: flex; justify-content: flex-end; min-height: 0; }
 .task-entry-undo { margin-top: 9px; padding: 7px 10px; border: 0; border-radius: 999px; color: #356bc7; background: #eaf2ff; font: inherit; font-size: .7rem; font-weight: 800; cursor: pointer; }
 .task-entry-undo[hidden] { display: none; }
-.task-entry-pending { margin-top: 12px; padding: 14px; border: 1px solid #c9daf7; border-radius: 15px; background: #fff; }
+.task-entry-pending { padding: 14px; border: 1px solid #c9daf7; border-radius: 15px; background: #fff; }
 .task-entry-pending[hidden] { display: none; }
 .task-entry-pending-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .task-entry-pending-heading > div { min-width: 0; }
