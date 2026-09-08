@@ -71,7 +71,6 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
 
     private static final String PREFS_NAME = "homework_ledger";
-    private static final String KEY_START_DATE = "start_date";
     private static final String KEY_RECORDS = "records";
     private static final String KEY_WEEKENDS = "weekends";
     private static final String KEY_DICTATION_CUSTOM = "dictation_custom";
@@ -160,7 +159,6 @@ public class MainActivity extends Activity {
     private JSONObject dictationCustomWords;
     private JSONObject taskKeywords;
     private JSONObject breakSession;
-    private String startDate;
     private String currentDate;
     private boolean loadingNote;
     private View mainPageView;
@@ -169,7 +167,6 @@ public class MainActivity extends Activity {
     private View settingsPageView;
     private TextView settingsCurrentDateView;
 
-    private TextView breakAlarmStatusView;
     private TextView breakAlarmHintView;
     private Button breakAlarmRecordButton;
     private Button breakAlarmPreviewButton;
@@ -533,8 +530,6 @@ public class MainActivity extends Activity {
         window.setNavigationBarColor(PAGE);
 
         preferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        startDate = preferences.getString(KEY_START_DATE, todayIso());
-        if (startDate.compareTo(todayIso()) > 0) startDate = todayIso();
         records = readRecords();
         weekends = readJson(KEY_WEEKENDS);
         dictationCustomWords = readJson(KEY_DICTATION_CUSTOM);
@@ -547,7 +542,7 @@ public class MainActivity extends Activity {
                 break;
             }
         }
-        currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
+        currentDate = todayIso();
 
         breakAlarmTts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS && breakAlarmTts != null) {
@@ -826,7 +821,7 @@ public class MainActivity extends Activity {
         historicalDateLabel = text("", 11, Color.rgb(118, 87, 33), true);
         row.addView(historicalDateLabel, weightedWrap(1));
         row.addView(text("回到今天", 10, GREEN, true));
-        row.setOnClickListener(v -> selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso()));
+        row.setOnClickListener(v -> selectDate(todayIso()));
         row.setVisibility(View.GONE);
         historicalDateNotice = row;
         return row;
@@ -839,7 +834,7 @@ public class MainActivity extends Activity {
         card.addView(text("我的成长能量 ⭐", 14, Color.argb(215, 255, 255, 255), true));
         balanceView = text("¥ 0.00", 44, Color.WHITE, true);
         card.addView(balanceView);
-        periodView = text("从今天开始", 12, Color.argb(170, 255, 255, 255), false);
+        periodView = text("全部成长记录", 12, Color.argb(170, 255, 255, 255), false);
         card.addView(periodView);
         card.addView(space(24));
 
@@ -2532,19 +2527,18 @@ public class MainActivity extends Activity {
         next.setPadding(dp(13), dp(11), dp(13), dp(11));
         next.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
         content.addView(next, matchWrap());
-        TextView help = text("我先决定休息多久，时间到就回来开始这一项。", 11, MUTED, false);
-        help.setPadding(0, dp(11), 0, dp(8));
-        content.addView(help);
-        Button toilet = smallButton("🚻 上厕所 · 5分钟");
-        content.addView(toilet, matchFixed(dp(44)));
-        Button shortBreak = smallButton("🥤 短休息 · 5分钟");
-        LinearLayout.LayoutParams shortParams = matchFixed(dp(44));
-        shortParams.topMargin = dp(6);
-        content.addView(shortBreak, shortParams);
-        Button longBreak = smallButton("🌿 多休息一会 · 10分钟");
-        LinearLayout.LayoutParams longParams = matchFixed(dp(44));
-        longParams.topMargin = dp(6);
-        content.addView(longBreak, longParams);
+        LinearLayout breakTimes = horizontal();
+        Button fiveMinutes = smallButton("5分钟");
+        breakTimes.addView(fiveMinutes, weightedFixed(1, dp(44)));
+        breakTimes.addView(spaceHorizontal(6));
+        Button tenMinutes = smallButton("10分钟");
+        breakTimes.addView(tenMinutes, weightedFixed(1, dp(44)));
+        breakTimes.addView(spaceHorizontal(6));
+        Button fifteenMinutes = smallButton("15分钟");
+        breakTimes.addView(fifteenMinutes, weightedFixed(1, dp(44)));
+        LinearLayout.LayoutParams breakTimesParams = matchFixed(dp(44));
+        breakTimesParams.topMargin = dp(10);
+        content.addView(breakTimes, breakTimesParams);
         Button meal = smallButton("🍚 去吃饭 · 选择回来时间");
         LinearLayout.LayoutParams mealParams = matchFixed(dp(46));
         mealParams.topMargin = dp(6);
@@ -2558,18 +2552,18 @@ public class MainActivity extends Activity {
         updateBreakChoiceTask(next);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(fromPause ? "我准备休息多久？" : "到达我的休息点")
+                .setTitle("休息多久？")
                 .setView(content)
                 .setNegativeButton("先关闭", null)
                 .setPositiveButton(fromPause ? "不休息，继续这项" : "不休息，开始下一项", null)
                 .create();
         breakChoiceDialog = dialog;
-        toilet.setOnClickListener(v -> startBreakSession(
-                breakChoiceTaskIndex, System.currentTimeMillis() + 5 * 60000L, "toilet"));
-        shortBreak.setOnClickListener(v -> startBreakSession(
-                breakChoiceTaskIndex, System.currentTimeMillis() + 5 * 60000L, "short"));
-        longBreak.setOnClickListener(v -> startBreakSession(
-                breakChoiceTaskIndex, System.currentTimeMillis() + 10 * 60000L, "long"));
+        fiveMinutes.setOnClickListener(v -> startBreakSession(
+                breakChoiceTaskIndex, System.currentTimeMillis() + 5 * 60000L, "break"));
+        tenMinutes.setOnClickListener(v -> startBreakSession(
+                breakChoiceTaskIndex, System.currentTimeMillis() + 10 * 60000L, "break"));
+        fifteenMinutes.setOnClickListener(v -> startBreakSession(
+                breakChoiceTaskIndex, System.currentTimeMillis() + 15 * 60000L, "break"));
         meal.setOnClickListener(v -> {
             Calendar suggested = Calendar.getInstance();
             suggested.add(Calendar.MINUTE, 30);
@@ -3017,15 +3011,15 @@ public class MainActivity extends Activity {
                 : progressDone + " / " + progressTotal + " 项完成");
         taskPanelTitleView.setText(!confirmed
                 ? ledgerReady ? "" : "先核对今天的作业"
-                : sortingMode ? "安排我的闯关顺序"
+                : sortingMode ? ""
                 : orderPendingWeekend ? "还差一步：确定顺序"
                 : "作业清单");
         taskPanelHelpView.setText(!confirmed
                 ? ledgerReady ? "" : "核对钉钉，并把新增作业补到成长记录册。"
-                : sortingMode ? "这是我的计划，我可以决定先做哪一项。"
+                : sortingMode ? ""
                 : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
                 : "");
-        taskPanelTitleView.setVisibility(questMode || (!confirmed && ledgerReady) ? View.GONE : View.VISIBLE);
+        taskPanelTitleView.setVisibility(questMode || sortingMode || (!confirmed && ledgerReady) ? View.GONE : View.VISIBLE);
         taskPanelHelpView.setVisibility(questMode || taskPanelHelpView.getText().length() == 0 ? View.GONE : View.VISIBLE);
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
         taskEntryLauncher.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
@@ -3530,6 +3524,138 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private void showTaskEditDialog(JSONObject task) {
+        if (task == null || !"pending".equals(task.optString("status", "pending")) || !taskOrderSaved()) {
+            toast("排好顺序后，才能从卡片修改作业");
+            return;
+        }
+        String taskId = task.optString("id");
+        EditText titleInput = new EditText(this);
+        titleInput.setText(task.optString("title"));
+        titleInput.setTextSize(14);
+        titleInput.setTextColor(INK);
+        titleInput.setGravity(Gravity.TOP | Gravity.START);
+        titleInput.setMinLines(2);
+        titleInput.setMaxLines(3);
+        titleInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});
+        titleInput.setPadding(dp(12), dp(9), dp(12), dp(9));
+        titleInput.setBackground(rounded(Color.WHITE, 11, LINE, 1));
+
+        int[] selectedEstimate = {estimatedMinutes(task)};
+        LinearLayout estimateOptions = horizontal();
+        Button[] estimateButtons = new Button[ESTIMATE_OPTIONS.length];
+        for (int index = 0; index < ESTIMATE_OPTIONS.length; index++) {
+            final int optionIndex = index;
+            Button option = smallButton(ESTIMATE_OPTIONS[index] + " 分");
+            option.setTextSize(10);
+            option.setOnClickListener(v -> {
+                selectedEstimate[0] = ESTIMATE_OPTIONS[optionIndex];
+                for (int buttonIndex = 0; buttonIndex < estimateButtons.length; buttonIndex++) {
+                    Button candidate = estimateButtons[buttonIndex];
+                    if (candidate == null) continue;
+                    boolean selected = ESTIMATE_OPTIONS[buttonIndex] == selectedEstimate[0];
+                    candidate.setTextColor(selected ? Color.WHITE : GREEN);
+                    candidate.setBackground(rounded(selected ? GREEN : SURFACE, 10,
+                            selected ? GREEN : LINE, selected ? 0 : 1));
+                }
+            });
+            boolean selected = ESTIMATE_OPTIONS[index] == selectedEstimate[0];
+            option.setTextColor(selected ? Color.WHITE : GREEN);
+            option.setBackground(rounded(selected ? GREEN : SURFACE, 10,
+                    selected ? GREEN : LINE, selected ? 0 : 1));
+            estimateButtons[index] = option;
+            if (index > 0) estimateOptions.addView(spaceHorizontal(6));
+            estimateOptions.addView(option, fixed(dp(58), dp(38)));
+        }
+        HorizontalScrollView estimateScroll = new HorizontalScrollView(this);
+        estimateScroll.setHorizontalScrollBarEnabled(false);
+        estimateScroll.addView(estimateOptions, matchWrap());
+
+        EditText stepsInput = new EditText(this);
+        stepsInput.setTextSize(14);
+        stepsInput.setTextColor(INK);
+        stepsInput.setGravity(Gravity.TOP | Gravity.START);
+        stepsInput.setMinLines(4);
+        stepsInput.setMaxLines(7);
+        stepsInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(500)});
+        stepsInput.setHint("用 1. 2. 3. 或换行分开");
+        StringBuilder existingSteps = new StringBuilder();
+        JSONArray oldSteps = taskSteps(task);
+        for (int index = 0; index < oldSteps.length(); index++) {
+            JSONObject step = oldSteps.optJSONObject(index);
+            if (step == null) continue;
+            if (existingSteps.length() > 0) existingSteps.append('\n');
+            existingSteps.append(index + 1).append(". ").append(step.optString("title"));
+        }
+        stepsInput.setText(existingSteps.toString());
+
+        LinearLayout content = vertical();
+        content.setPadding(dp(20), dp(4), dp(20), dp(4));
+        content.addView(text("作业内容", 10, INK, true));
+        LinearLayout.LayoutParams titleParams = matchWrap();
+        titleParams.topMargin = dp(6);
+        content.addView(titleInput, titleParams);
+        TextView estimateLabel = text("预计用时", 10, INK, true);
+        estimateLabel.setPadding(0, dp(14), 0, dp(6));
+        content.addView(estimateLabel);
+        content.addView(estimateScroll, matchFixed(dp(40)));
+        TextView stepsLabel = text("作业步骤", 10, INK, true);
+        stepsLabel.setPadding(0, dp(14), 0, dp(5));
+        content.addView(stepsLabel);
+        content.addView(stepsInput, matchWrap());
+        TextView stepsHint = text("步骤留空就是不拆分。", 9, MUTED, false);
+        stepsHint.setPadding(0, dp(4), 0, 0);
+        content.addView(stepsHint);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content, matchWrap());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("修改" + task.optString("subject", "") + "作业")
+                .setView(scroll)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存修改", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String title = titleInput.getText().toString().trim();
+                if (title.isEmpty()) {
+                    titleInput.setError("作业内容不能留空");
+                    titleInput.requestFocus();
+                    return;
+                }
+                int currentIndex = taskIndexById(taskId);
+                JSONObject currentTask = taskArray(false).optJSONObject(currentIndex);
+                if (currentTask == null || !"pending".equals(currentTask.optString("status", "pending"))) {
+                    dialog.dismiss();
+                    toast("这项作业已经不能修改");
+                    return;
+                }
+                put(currentTask, "title", title);
+                put(currentTask, "estimatedMinutes", selectedEstimate[0]);
+                List<String> stepTitles = parseStepTitles(stepsInput.getText().toString());
+                if (stepTitles.isEmpty()) {
+                    currentTask.remove("steps");
+                } else {
+                    JSONArray steps = new JSONArray();
+                    for (int index = 0; index < stepTitles.size(); index++) {
+                        JSONObject step = new JSONObject();
+                        put(step, "id", taskId + "-step-" + index);
+                        put(step, "title", stepTitles.get(index));
+                        put(step, "done", false);
+                        steps.put(step);
+                    }
+                    put(currentTask, "steps", steps);
+                }
+                saveTaskData();
+                renderAll();
+                dialog.dismiss();
+                toast("这项作业修改好了");
+            });
+            titleInput.requestFocus();
+        });
+        dialog.show();
+    }
+
     private Button orderArrowButton(String label, boolean enabled, Runnable action) {
         Button button = new Button(this);
         button.setText(label);
@@ -3724,6 +3850,7 @@ public class MainActivity extends Activity {
         if (task == null) return;
         final int taskIndex = index;
         String status = task.optString("status", "pending");
+        boolean editable = "pending".equals(status) && taskOrderSaved();
         String taskDay = plannedDayForTask(task);
         boolean canDoToday = !weekendMode || planSaved
                 && (isFriday ? "friday".equals(taskDay)
@@ -3751,6 +3878,7 @@ public class MainActivity extends Activity {
         TextView title = text(task.optString("title", "未命名作业") + planLabel, compact ? 12 : current ? 14 : 13, INK, true);
         if ("done".equals(status)) title.setAlpha(0.6f);
         titleRow.addView(title, weightedWrap(1));
+        if (editable) titleRow.addView(text("✎", 11, Color.rgb(111, 143, 200), true));
         taskCopy.addView(titleRow, matchWrap());
         String estimateLabel = "预计 " + estimatedMinutes(task) + " 分钟";
         String stepSummary = taskStepSummary(task);
@@ -3793,6 +3921,12 @@ public class MainActivity extends Activity {
         }
         item.addView(mainRow, matchWrap());
         if (current && taskSteps(task).length() > 0) addTaskStepsList(item, task);
+        if (editable) {
+            item.setClickable(true);
+            item.setFocusable(true);
+            item.setContentDescription("修改" + task.optString("title", "当前作业"));
+            item.setOnClickListener(v -> showTaskEditDialog(task));
+        }
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(current ? 7 : 8);
         target.addView(item, params);
@@ -5878,7 +6012,7 @@ public class MainActivity extends Activity {
                 ? String.format(Locale.CHINA, "− ¥ %.2f", Math.abs(total))
                 : String.format(Locale.CHINA, "¥ %.2f", total));
         balanceView.setTextColor(total < 0 ? Color.rgb(255, 213, 206) : Color.WHITE);
-        periodView.setText("从 " + formatShortDate(startDate) + " 开始记录成长");
+        periodView.setText("全部成长记录");
         completedDaysView.setText(String.valueOf(completed));
         rewardDaysView.setText(String.valueOf(rewarded));
         deductionView.setText(String.format(Locale.CHINA, "¥%.2f", deductions));
@@ -6269,59 +6403,32 @@ public class MainActivity extends Activity {
         header.addView(back, fixed(dp(64), dp(40)));
         header.addView(spaceHorizontal(13));
         LinearLayout headerCopy = vertical();
-        headerCopy.addView(text("⚙ 安静放在这里", 10, GREEN, true));
         headerCopy.addView(text("设置", 25, GREEN_DARK, true));
-        TextView description = text("日期、快捷词、提示音和数据管理集中在这里。", 10, MUTED, false);
-        description.setPadding(0, dp(3), 0, 0);
-        headerCopy.addView(description);
         header.addView(headerCopy, weightedWrap(1));
         content.addView(header, matchWrap());
-        content.addView(space(16));
+        content.addView(space(12));
 
-        LinearLayout dateCard = card();
-        dateCard.addView(text("日期", 10, GREEN, true));
-        dateCard.addView(text("查看与统计", 20, INK, true));
-        settingsCurrentDateView = text("", 11, Color.rgb(69, 107, 168), true);
-        settingsCurrentDateView.setPadding(0, dp(10), 0, dp(2));
-        dateCard.addView(settingsCurrentDateView);
-        LinearLayout dateActions = horizontal();
-        Button recordDate = smallButton("查看其他日期");
+        LinearLayout dateShortcut = horizontal();
+        dateShortcut.setGravity(Gravity.CENTER_VERTICAL);
+        dateShortcut.setPadding(dp(11), dp(5), dp(6), dp(5));
+        dateShortcut.setBackground(rounded(Color.argb(185, 255, 255, 255), 12, LINE, 1));
+        settingsCurrentDateView = text("", 10, MUTED, true);
+        dateShortcut.addView(settingsCurrentDateView, weightedWrap(1));
+        Button recordDate = smallButton("选择日期");
         recordDate.setOnClickListener(v -> showRecordDatePicker());
-        dateActions.addView(recordDate, weightedFixed(1, dp(46)));
-        dateActions.addView(spaceHorizontal(8));
-        Button today = smallButton("回到今天");
-        today.setOnClickListener(v -> selectDate(todayIso().compareTo(startDate) < 0 ? startDate : todayIso()));
-        dateActions.addView(today, weightedFixed(1, dp(46)));
-        LinearLayout.LayoutParams dateActionsParams = matchFixed(dp(46));
-        dateActionsParams.topMargin = dp(8);
-        dateCard.addView(dateActions, dateActionsParams);
-        Button start = smallButton("设置统计开始日期");
-        start.setOnClickListener(v -> showStartDatePicker());
-        LinearLayout.LayoutParams startParams = matchFixed(dp(46));
-        startParams.topMargin = dp(8);
-        dateCard.addView(start, startParams);
-        content.addView(dateCard, matchWrap());
+        dateShortcut.addView(recordDate, fixed(dp(86), dp(36)));
+        dateShortcut.addView(spaceHorizontal(6));
+        Button today = smallButton("今天");
+        today.setOnClickListener(v -> selectDate(todayIso()));
+        dateShortcut.addView(today, fixed(dp(62), dp(36)));
+        content.addView(dateShortcut, matchFixed(dp(46)));
         content.addView(space(14));
 
         content.addView(buildTaskKeywordSettingsCard(), matchWrap());
         content.addView(space(14));
 
         LinearLayout alarmCard = card();
-        LinearLayout alarmHeading = horizontal();
-        alarmHeading.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout alarmCopy = vertical();
-        alarmCopy.addView(text("休息结束提醒", 10, GREEN, true));
-        alarmCopy.addView(text("我的“回来写作业”提示音", 19, INK, true));
-        alarmHeading.addView(alarmCopy, weightedWrap(1));
-        breakAlarmStatusView = text("使用默认提示", 10, Color.rgb(69, 107, 168), true);
-        breakAlarmStatusView.setPadding(dp(10), dp(6), dp(10), dp(6));
-        breakAlarmStatusView.setBackground(rounded(GREEN_SOFT, 16, GREEN_SOFT, 0));
-        alarmHeading.addView(breakAlarmStatusView);
-        alarmCard.addView(alarmHeading, matchWrap());
-        TextView alarmDescription = text("我可以录下“作业时间到啦”等一句响亮的话。休息倒计时结束时会连续播放两遍；未录音时使用默认语音。", 11, MUTED, false);
-        alarmDescription.setPadding(0, dp(11), 0, 0);
-        alarmDescription.setLineSpacing(dp(3), 1f);
-        alarmCard.addView(alarmDescription);
+        alarmCard.addView(text("休息结束提醒", 19, INK, true));
         breakAlarmRecordButton = smallButton("🎙 开始录音");
         breakAlarmRecordButton.setOnClickListener(v -> toggleBreakAlarmRecording());
         LinearLayout.LayoutParams recordParams = matchFixed(dp(48));
@@ -6339,8 +6446,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams previewParams = matchFixed(dp(44));
         previewParams.topMargin = dp(8);
         alarmCard.addView(previewRow, previewParams);
-        breakAlarmHintView = text("建议录 2～5 秒，例如：“作业时间到啦，我要继续下一项！”", 10, MUTED, false);
+        breakAlarmHintView = text("", 10, MUTED, false);
         breakAlarmHintView.setPadding(0, dp(9), 0, 0);
+        breakAlarmHintView.setVisibility(View.GONE);
         alarmCard.addView(breakAlarmHintView);
         content.addView(alarmCard, matchWrap());
         content.addView(space(14));
@@ -6608,15 +6716,20 @@ public class MainActivity extends Activity {
 
     private void renderBreakAlarmSettings() {
         if (settingsCurrentDateView != null) {
-            settingsCurrentDateView.setText("当前查看：" + formatLongDate(currentDate) + " · " + recordViewModeLabel(currentDate));
+            settingsCurrentDateView.setText("查看日期 · " + formatShortDate(currentDate));
         }
         boolean custom = breakAlarmFile().isFile() && breakAlarmFile().length() > 0;
-        if (breakAlarmStatusView != null) breakAlarmStatusView.setText(custom ? "已使用我的录音" : "使用默认提示");
         if (breakAlarmPreviewButton != null) breakAlarmPreviewButton.setText(custom ? "🔊 试听我的录音" : "🔊 试听默认提示");
         if (breakAlarmResetButton != null) breakAlarmResetButton.setVisibility(custom ? View.VISIBLE : View.GONE);
         if (breakAlarmRecordButton != null && breakAlarmRecorder == null) {
             breakAlarmRecordButton.setText(custom ? "🎙 重新录音" : "🎙 开始录音");
         }
+    }
+
+    private void setBreakAlarmHint(String message) {
+        if (breakAlarmHintView == null) return;
+        breakAlarmHintView.setText(message == null ? "" : message);
+        breakAlarmHintView.setVisibility(message == null || message.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void toggleBreakAlarmRecording() {
@@ -6660,7 +6773,7 @@ public class MainActivity extends Activity {
             pendingBreakAlarmFile = output;
             breakAlarmRecordingStartedAt = System.currentTimeMillis();
             breakAlarmRecordButton.setText("■ 完成录音");
-            breakAlarmHintView.setText("正在录音……说完后点“完成录音”，最长 8 秒。");
+            setBreakAlarmHint("正在录音……说完后点“完成录音”，最长 8 秒。");
         } catch (Exception error) {
             recorder.reset();
             recorder.release();
@@ -6690,9 +6803,7 @@ public class MainActivity extends Activity {
             saved = temporary.renameTo(target);
         }
         if (!saved && temporary != null) temporary.delete();
-        if (breakAlarmHintView != null) {
-            breakAlarmHintView.setText(saved ? "录音已保存。试听一下，确认声音清楚、响亮。" : "录音太短或已取消，请重新录一遍。");
-        }
+        setBreakAlarmHint(saved ? "录音已保存。试听一下，确认声音清楚、响亮。" : "录音太短或已取消，请重新录一遍。");
         renderBreakAlarmSettings();
         if (notify) toast(saved ? "提示音录音已保存" : "录音太短，请重新录制");
     }
@@ -6706,7 +6817,7 @@ public class MainActivity extends Activity {
                     releaseBreakAlarmPlayer();
                     boolean deleted = !breakAlarmFile().exists() || breakAlarmFile().delete();
                     renderBreakAlarmSettings();
-                    if (breakAlarmHintView != null) breakAlarmHintView.setText("已恢复默认语音：“作业时间到啦”。");
+                    setBreakAlarmHint("已恢复默认语音：“作业时间到啦”。");
                     toast(deleted ? "已恢复默认提示" : "无法删除录音，请重试");
                 }).show();
     }
@@ -6764,13 +6875,6 @@ public class MainActivity extends Activity {
         if (breakAlarmTts != null) breakAlarmTts.stop();
     }
 
-    private String recordViewModeLabel(String date) {
-        String key = weekendKeyFor(date);
-        if (key == null) return "平日记录";
-        if (date.equals(key)) return "周五任务";
-        return date.equals(addDays(key, 1)) ? "周六按计划完成" : "周日按计划完成";
-    }
-
     private void launchBackupExport() {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -6788,7 +6892,6 @@ public class MainActivity extends Activity {
 
     private JSONObject backupPayload() {
         JSONObject state = new JSONObject();
-        put(state, "startDate", startDate);
         put(state, "records", records);
         put(state, "weekends", weekends);
         put(state, "dictationCustom", dictationCustomWords);
@@ -6839,17 +6942,13 @@ public class MainActivity extends Activity {
                 .setMessage("恢复会替换当前全部记录，确定继续吗？")
                 .setNegativeButton("取消", null)
                 .setPositiveButton("恢复", (dialog, which) -> {
-                    String restoredStart = source.optString("startDate", todayIso());
-                    if (!restoredStart.matches("\\d{4}-\\d{2}-\\d{2}")) restoredStart = todayIso();
-                    startDate = restoredStart.compareTo(todayIso()) > 0 ? todayIso() : restoredStart;
                     records = source.optJSONObject("records");
                     weekends = source.optJSONObject("weekends");
                     JSONObject restoredWords = source.optJSONObject("dictationCustom");
                     dictationCustomWords = restoredWords == null ? new JSONObject() : restoredWords;
                     taskKeywords = normalizeTaskKeywords(source.optJSONObject("taskKeywords"));
-                    currentDate = todayIso().compareTo(startDate) < 0 ? startDate : todayIso();
+                    currentDate = todayIso();
                     preferences.edit()
-                            .putString(KEY_START_DATE, startDate)
                             .putString(KEY_RECORDS, records.toString())
                             .putString(KEY_WEEKENDS, weekends.toString())
                             .putString(KEY_DICTATION_CUSTOM, dictationCustomWords.toString())
@@ -6863,27 +6962,11 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    private void showStartDatePicker() {
-        Calendar calendar = calendarFromIso(startDate);
-        DatePickerDialog dialog = new DatePickerDialog(this, (view, year, month, day) -> {
-            startDate = isoFromParts(year, month, day);
-            preferences.edit().putString(KEY_START_DATE, startDate).apply();
-            if (currentDate.compareTo(startDate) < 0) currentDate = startDate;
-            renderAll();
-            renderBreakAlarmSettings();
-            toast("开始日期已更新");
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH));
-        dialog.getDatePicker().setMaxDate(calendarFromIso(todayIso()).getTimeInMillis());
-        dialog.setTitle("设置统计开始日期");
-        dialog.show();
-    }
-
     private void showRecordDatePicker() {
         Calendar calendar = calendarFromIso(currentDate);
         DatePickerDialog dialog = new DatePickerDialog(this, (view, year, month, day) -> {
             selectDate(isoFromParts(year, month, day));
         }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH));
-        dialog.getDatePicker().setMinDate(calendarFromIso(startDate).getTimeInMillis());
         dialog.setTitle("选择记录日期");
         dialog.show();
     }
@@ -7110,7 +7193,7 @@ public class MainActivity extends Activity {
         Iterator<String> keys = records.keys();
         while (keys.hasNext()) {
             String date = keys.next();
-            if (date.compareTo(startDate) >= 0 && isMeaningful(records.optJSONObject(date))) dates.add(date);
+            if (isMeaningful(records.optJSONObject(date))) dates.add(date);
         }
         Collections.sort(dates, Collections.reverseOrder());
         return dates;
@@ -7121,7 +7204,7 @@ public class MainActivity extends Activity {
         Iterator<String> keys = weekends.keys();
         while (keys.hasNext()) {
             String key = keys.next();
-            if (addDays(key, 2).compareTo(startDate) >= 0 && isWeekendMeaningful(weekends.optJSONObject(key))) {
+            if (isWeekendMeaningful(weekends.optJSONObject(key))) {
                 keysList.add(key);
             }
         }

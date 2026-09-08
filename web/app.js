@@ -62,7 +62,6 @@
     return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   };
   const defaultState = () => ({
-    startDate: todayIso(),
     records: {},
     weekends: {},
     dictationCustom: {},
@@ -104,9 +103,7 @@
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (!parsed || typeof parsed !== "object") return defaultState();
-      const parsedStart = /^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate) ? parsed.startDate : todayIso();
       return {
-        startDate: parsedStart > todayIso() ? todayIso() : parsedStart,
         records: parsed.records && typeof parsed.records === "object" ? parsed.records : {},
         weekends: parsed.weekends && typeof parsed.weekends === "object" ? parsed.weekends : {},
         dictationCustom: parsed.dictationCustom && typeof parsed.dictationCustom === "object" ? parsed.dictationCustom : {},
@@ -138,12 +135,11 @@
     previousDictationLessonButton: $("#previousDictationLessonButton"),
     nextDictationLessonButton: $("#nextDictationLessonButton"),
     settingsButton: $("#settingsButton"), closeSettingsButton: $("#closeSettingsButton"),
-    startDate: $("#startDate"), saveSettingsButton: $("#saveSettingsButton"),
     keywordSettingsSubjects: $("#keywordSettingsSubjects"), keywordSettingsList: $("#keywordSettingsList"),
     keywordSettingsInput: $("#keywordSettingsInput"), addKeywordButton: $("#addKeywordButton"),
     exportDataButton: $("#exportDataButton"), importDataButton: $("#importDataButton"),
     importDataInput: $("#importDataInput"), historyManageButton: $("#historyManageButton"),
-    recordDate: $("#recordDate"), todayButton: $("#todayButton"), viewModeLabel: $("#viewModeLabel"),
+    recordDate: $("#recordDate"), todayButton: $("#todayButton"),
     historicalDateNotice: $("#historicalDateNotice"), historicalDateLabel: $("#historicalDateLabel"),
     recordHeading: $("#recordHeading"),
     weekendPlanEntry: $("#weekendPlanEntry"), weekendPlanEntryTitle: $("#weekendPlanEntryTitle"),
@@ -174,6 +170,10 @@
     taskEntryPendingSummary: $("#taskEntryPendingSummary"), taskEntryConfirmButton: $("#taskEntryConfirmButton"),
     taskEntryStickyFooter: $("#taskEntryStickyFooter"),
     taskEntryUndoDeleteButton: $("#taskEntryUndoDeleteButton"), taskDraftError: $("#taskDraftError"),
+    taskEditModal: $("#taskEditModal"), taskEditCloseButton: $("#taskEditCloseButton"),
+    taskEditTitle: $("#taskEditTitle"), taskEditInput: $("#taskEditInput"),
+    taskEditEstimate: $("#taskEditEstimate"), taskEditSteps: $("#taskEditSteps"),
+    taskEditCancelButton: $("#taskEditCancelButton"), taskEditSaveButton: $("#taskEditSaveButton"),
     stepEditorModal: $("#stepEditorModal"), stepEditorCloseButton: $("#stepEditorCloseButton"),
     stepEditorTaskTitle: $("#stepEditorTaskTitle"), stepEditorInput: $("#stepEditorInput"),
     stepEditorCancelButton: $("#stepEditorCancelButton"), stepEditorSaveButton: $("#stepEditorSaveButton"),
@@ -192,10 +192,10 @@
     focusModalElapsed: $("#focusModalElapsed"), focusModalEstimate: $("#focusModalEstimate"),
     focusModalComparison: $("#focusModalComparison"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
-    alarmSoundStatus: $("#alarmSoundStatus"), recordAlarmButton: $("#recordAlarmButton"),
+    recordAlarmButton: $("#recordAlarmButton"),
     previewAlarmButton: $("#previewAlarmButton"), resetAlarmButton: $("#resetAlarmButton"),
     alarmRecordHint: $("#alarmRecordHint"), breakChoiceModal: $("#breakChoiceModal"),
-    breakChoiceCloseButton: $("#breakChoiceCloseButton"), breakChoiceKicker: $("#breakChoiceKicker"),
+    breakChoiceCloseButton: $("#breakChoiceCloseButton"),
     breakChoiceTitle: $("#breakChoiceTitle"), breakChoiceNextTask: $("#breakChoiceNextTask"),
     changeBreakNextTaskButton: $("#changeBreakNextTaskButton"),
     breakReturnTime: $("#breakReturnTime"), startTimedBreakButton: $("#startTimedBreakButton"),
@@ -219,6 +219,7 @@
   let selectedTaskSubject = "语文";
   let selectedKeywordSettingsSubject = "语文";
   let focusModalTaskId = null;
+  let taskEditTaskId = null;
   let stepEditorTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
@@ -479,10 +480,13 @@
 
   function renderAlarmSettings() {
     const custom = Boolean(customAlarmAudio());
-    elements.alarmSoundStatus.textContent = custom ? "已使用我的录音" : "使用默认提示";
-    elements.alarmSoundStatus.classList.toggle("custom", custom);
     elements.resetAlarmButton.hidden = !custom;
     elements.previewAlarmButton.textContent = custom ? "🔊 试听我的录音" : "🔊 试听默认提示";
+  }
+
+  function setAlarmRecordHint(message) {
+    elements.alarmRecordHint.textContent = message;
+    elements.alarmRecordHint.hidden = !message;
   }
 
   function stopAlarmPlayback() {
@@ -538,7 +542,7 @@
   async function toggleAlarmRecording() {
     if (alarmRecorder && alarmRecorder.state !== "inactive") return finishAlarmRecording();
     if (!navigator.mediaDevices?.getUserMedia || !("MediaRecorder" in window)) {
-      elements.alarmRecordHint.textContent = "当前浏览器不能录音，可以继续使用默认提示。";
+      setAlarmRecordHint("当前浏览器不能录音。");
       return;
     }
     try {
@@ -558,7 +562,7 @@
         const duration = Date.now() - alarmRecordingStartedAt;
         const blob = new Blob(alarmChunks, { type: alarmRecorder?.mimeType || "audio/webm" });
         if (duration < 500 || !blob.size) {
-          elements.alarmRecordHint.textContent = "录音太短了，请重新录一遍。";
+          setAlarmRecordHint("录音太短了，请重新录一遍。");
           alarmRecorder = null;
           return;
         }
@@ -566,10 +570,10 @@
         reader.onload = () => {
           try {
             localStorage.setItem(BREAK_ALARM_KEY, String(reader.result));
-            elements.alarmRecordHint.textContent = "录音已保存。试听一下，确认声音清楚、响亮。";
+            setAlarmRecordHint("录音已保存。试听一下，确认声音清楚、响亮。");
             renderAlarmSettings();
           } catch (_) {
-            elements.alarmRecordHint.textContent = "录音太长，无法保存。请录一段更短的提示。";
+            setAlarmRecordHint("录音太长，无法保存。请录一段更短的提示。");
           }
         };
         reader.readAsDataURL(blob);
@@ -578,12 +582,12 @@
       alarmRecorder.start();
       elements.recordAlarmButton.classList.add("listening");
       elements.recordAlarmButton.textContent = "■ 完成录音";
-      elements.alarmRecordHint.textContent = "正在录音……说完后点“完成录音”，最长 8 秒。";
+      setAlarmRecordHint("正在录音……说完后点“完成录音”，最长 8 秒。");
       alarmRecordingTimer = window.setTimeout(finishAlarmRecording, 8000);
     } catch (_) {
       alarmStream?.getTracks().forEach((track) => track.stop());
       alarmStream = null;
-      elements.alarmRecordHint.textContent = "没有取得麦克风权限，可以在浏览器设置中允许后重试。";
+      setAlarmRecordHint("没有取得麦克风权限，可以在浏览器设置中允许后重试。");
     }
   }
 
@@ -592,6 +596,7 @@
     closeTaskEntryModal();
     closeWeekendPlanModal();
     closeTaskStepsEditor();
+    closeTaskEditor();
     closeFocusModal();
     elements.mainPage.hidden = true;
     elements.historyPage.hidden = true;
@@ -717,8 +722,7 @@
     breakChoiceSourceTaskId = sourceTaskId ? String(sourceTaskId) : null;
     breakChoiceMode = mode;
     breakChoiceChanged = false;
-    elements.breakChoiceKicker.textContent = mode === "pause" ? "我决定休息一下" : "到达我的休息点";
-    elements.breakChoiceTitle.textContent = mode === "pause" ? "我准备休息多久？" : "我准备什么时候回来？";
+    elements.breakChoiceTitle.textContent = "休息多久？";
     elements.startNextTaskNowButton.textContent = mode === "pause" ? "不休息，继续这项" : "不休息，开始下一项";
     updateBreakChoiceTask();
     const suggested = new Date(Date.now() + 30 * 60000);
@@ -932,7 +936,7 @@
   }
   function datedRecords() {
     return Object.entries(state.records)
-      .filter(([date, record]) => date >= state.startDate && isMeaningful(record))
+      .filter(([, record]) => isMeaningful(record))
       .sort(([a], [b]) => b.localeCompare(a));
   }
 
@@ -942,7 +946,7 @@
       .map(([, record]) => resultFor(record))
       .filter(Boolean);
     const activeWeekends = Object.entries(state.weekends)
-      .filter(([key, weekend]) => addDays(key, 2) >= state.startDate && isWeekendMeaningful(weekend));
+      .filter(([, weekend]) => isWeekendMeaningful(weekend));
     const weekendCompleted = activeWeekends
       .map(([key, weekend]) => weekendResultFor(key, weekend))
       .filter(Boolean);
@@ -953,7 +957,7 @@
       + activeWeekends.filter(([, weekend]) => weekend.penaltyConfirmed && !weekend.allDoneDate).length * 0.5;
     elements.balance.textContent = total < 0 ? `− ¥ ${Math.abs(total).toFixed(2)}` : `¥ ${total.toFixed(2)}`;
     elements.balance.style.color = total < 0 ? "#ffd5ce" : "#f9fff9";
-    elements.periodLabel.textContent = `从 ${formatDate(state.startDate)} 开始记录成长`;
+    elements.periodLabel.textContent = "全部成长记录";
     elements.recordDays.textContent = String(completed.length);
     elements.rewardDays.textContent = String(completed.filter((result) => result.amount > 0).length);
     elements.deductionTotal.textContent = `¥${deductions.toFixed(2)}`;
@@ -1030,7 +1034,7 @@
       .filter(([date, record]) => includeDailyInLedger(date, record))
       .map(([date, record]) => ({ type: "daily", date, record }));
     const weekendEntries = Object.entries(state.weekends)
-      .filter(([key, weekend]) => addDays(key, 2) >= state.startDate && isWeekendMeaningful(weekend))
+      .filter(([, weekend]) => isWeekendMeaningful(weekend))
       .map(([date, weekend]) => ({ type: "weekend", date, weekend }));
     const entries = [...dailyEntries, ...weekendEntries].sort((a, b) => b.date.localeCompare(a.date));
     elements.emptyState.hidden = entries.length > 0;
@@ -1161,11 +1165,37 @@
     document.body.classList.remove("modal-open");
   }
 
+  function openTaskEditor(id) {
+    const task = taskById(id);
+    if (!task || (task.status || "pending") !== "pending" || !taskOrderSaved()) {
+      return showToast("排好顺序后，才能从卡片修改作业");
+    }
+    taskEditTaskId = String(id);
+    elements.taskEditTitle.textContent = `修改${task.subject || ""}作业`;
+    elements.taskEditInput.value = task.title || "";
+    elements.taskEditEstimate.value = String(estimatedMinutes(task));
+    elements.taskEditSteps.value = taskSteps(task)
+      .map((step, index) => `${index + 1}. ${step.title}`)
+      .join("\n");
+    elements.taskEditModal.hidden = false;
+    document.body.classList.add("modal-open");
+    elements.taskEditInput.focus();
+    elements.taskEditInput.setSelectionRange(elements.taskEditInput.value.length, elements.taskEditInput.value.length);
+  }
+
+  function closeTaskEditor() {
+    if (elements.taskEditModal.hidden) return;
+    elements.taskEditModal.hidden = true;
+    taskEditTaskId = null;
+    document.body.classList.remove("modal-open");
+  }
+
   function openHistoryPage() {
     stopDictation(false, false);
     closeTaskEntryModal();
     closeWeekendPlanModal();
     closeTaskStepsEditor();
+    closeTaskEditor();
     closeFocusModal();
     historyManageMode = false;
     document.body.classList.remove("history-manage-mode");
@@ -1659,6 +1689,7 @@
   function openDictationPage() {
     closeTaskEntryModal();
     closeWeekendPlanModal();
+    closeTaskEditor();
     closeFocusModal();
     elements.historyPage.hidden = true;
     elements.settingsPage.hidden = true;
@@ -1683,8 +1714,6 @@
     const weekendMode = Boolean(key);
     elements.weekendPlanEntry.hidden = !weekendMode;
     elements.weekendTaskPlanner.hidden = !weekendMode;
-    elements.viewModeLabel.textContent = !weekendMode ? "平日记录"
-      : date === key ? "周五任务" : date === addDays(key, 1) ? "周六按计划完成" : "周日按计划完成";
     if (!weekendMode) {
       closeWeekendPlanModal();
       return;
@@ -1900,16 +1929,16 @@
     const progressDone = questMode ? questDone.length : doneCount;
     elements.taskPanelTitle.textContent = !confirmed
       ? ledgerReady ? "" : "先核对今天的作业"
-      : sortingMode ? "安排我的闯关顺序"
+      : sortingMode ? ""
       : orderPendingWeekend ? "还差一步：确定顺序"
         : "我选一项，轻松开始！";
     elements.taskPanelHelp.textContent = !confirmed
       ? ""
       : sortingMode
-      ? "这是我的计划，我可以决定先做哪一项。"
+      ? ""
       : orderPendingWeekend ? "请回到周五排好顺序，再开始周末作业。"
         : "我一次专心做一项，每完成一项都在前进！";
-    elements.taskPanelTitle.hidden = questMode || (!confirmed && ledgerReady);
+    elements.taskPanelTitle.hidden = questMode || sortingMode || (!confirmed && ledgerReady);
     elements.taskPanelHelp.hidden = questMode || !elements.taskPanelHelp.textContent;
     elements.taskSummary.textContent = !confirmed && tasks.length
       ? `已录 ${tasks.length} 项` : progressTotal ? questMode ? `${progressDone} / ${progressTotal}` : `${progressDone} / ${progressTotal} 项完成` : "0 项";
@@ -1930,6 +1959,7 @@
 
     const taskCard = (task, options = {}) => {
       const status = task.status || "pending";
+      const editable = questMode && status === "pending";
       let buttons = "";
       const canDoToday = canDoTaskToday(task);
       const allowActions = options.allowActions !== false;
@@ -1964,8 +1994,6 @@
       if (task.breakAfter && status !== "done") meta += " · ☕ 完成后休息";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && plannedDateForTask(key, task) === date;
-      const sortAttributes = options.sortable
-        ? ` sortable" data-sort-task-id="${escapeHtml(String(task.id))}` : "";
       const planningTools = options.sortable ? `<div class="task-planning-tools">
         <label>预计用时<select data-estimate-task-id="${escapeHtml(String(task.id))}" aria-label="${escapeHtml(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map((minutes) => `<option value="${minutes}"${estimatedMinutes(task) === minutes ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label>
         <button type="button" data-plan-action="steps" data-task-id="${escapeHtml(String(task.id))}">${steps.length ? "修改步骤" : "拆成步骤"}</button>
@@ -1977,11 +2005,14 @@
         ? `<div class="meal-divider"><span>🍚</span><strong>吃饭</strong><small>饭后从下一项继续</small></div>` : "";
       const breakDivider = options.sortable && task.breakAfter
         ? `<div class="break-divider"><span>☕</span><strong>我的休息点</strong><small>完成上面这项后，我安排一次休息</small></div>` : "";
-      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${sortAttributes}" data-subject="${escapeHtml(task.subject || "其他")}">
+      const editAttributes = editable
+        ? ` data-edit-task-id="${escapeHtml(String(task.id))}" tabindex="0" aria-label="修改${escapeAttribute(task.title || "当前作业")}"`
+        : "";
+      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${options.sortable ? " sortable" : ""}${editable ? " editable-task-card" : ""}" data-subject="${escapeHtml(task.subject || "其他")}"${options.sortable ? ` data-sort-task-id="${escapeHtml(String(task.id))}"` : ""}${editAttributes}>
         <div class="task-main-row">
           ${options.sortable ? `<button class="drag-handle" type="button" data-drag-handle aria-label="按住拖动作业排序" title="按住拖动">⠿</button><span class="order-number">${options.orderNumber}</span>` : ""}
           <div class="task-copy">
-            <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${planBadge}
+            <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${editable ? '<span class="task-edit-mark" aria-hidden="true">✎</span>' : ""}${planBadge}
             <small class="task-meta">${escapeHtml(meta)}</small>
           </div>
           <div class="task-buttons">${buttons}</div>
@@ -2111,8 +2142,6 @@
   }
 
   function render() {
-    elements.startDate.value = state.startDate;
-    elements.recordDate.min = state.startDate;
     const today = todayIso();
     const viewingToday = elements.recordDate.value === today;
     elements.historicalDateNotice.hidden = viewingToday;
@@ -2246,6 +2275,7 @@
   }
   function setRecordDate(date) {
     closeTaskEntryModal();
+    closeTaskEditor();
     closeFocusModal();
     taskListExpanded = false;
     completedTasksExpanded = false;
@@ -2395,6 +2425,35 @@
     return (numbered || value.split(/[\n；;]+/))
       .map((item) => item.trim().replace(/^[-•]\s*/, ""))
       .filter(Boolean);
+  }
+
+  function saveTaskEdit() {
+    const task = taskById(taskEditTaskId);
+    if (!task || (task.status || "pending") !== "pending") {
+      closeTaskEditor();
+      return showToast("这项作业已经不能修改");
+    }
+    const title = elements.taskEditInput.value.trim();
+    if (!title) {
+      elements.taskEditInput.focus();
+      return showToast("请填写作业内容");
+    }
+    task.title = title;
+    task.estimatedMinutes = estimatedMinutes({ estimatedMinutes: Number(elements.taskEditEstimate.value) });
+    const titles = parseStepTitles(elements.taskEditSteps.value);
+    if (titles.length) {
+      task.steps = titles.map((stepTitle, index) => ({
+        id: `${task.id}-step-${index}`,
+        title: stepTitle,
+        done: false
+      }));
+    } else {
+      delete task.steps;
+    }
+    persist();
+    closeTaskEditor();
+    renderTasks();
+    showToast("这项作业修改好了");
   }
 
   function saveTaskSteps() {
@@ -2817,9 +2876,7 @@
       const source = parsed?.format === "homework-ledger-backup" ? parsed.state : parsed;
       if (!source || typeof source !== "object" || !source.records || !source.weekends) throw new Error("invalid");
       if (!window.confirm("恢复备份会替换当前全部记录，确定继续吗？")) return;
-      const parsedStart = /^\d{4}-\d{2}-\d{2}$/.test(source.startDate) ? source.startDate : todayIso();
       state = {
-        startDate: parsedStart > todayIso() ? todayIso() : parsedStart,
         records: source.records && typeof source.records === "object" ? source.records : {},
         weekends: source.weekends && typeof source.weekends === "object" ? source.weekends : {},
         dictationCustom: source.dictationCustom && typeof source.dictationCustom === "object" ? source.dictationCustom : {},
@@ -2828,7 +2885,7 @@
       };
       selectedDictationLesson = state.dictationLesson;
       persist();
-      elements.recordDate.value = todayIso() < state.startDate ? state.startDate : todayIso();
+      elements.recordDate.value = todayIso();
       closeFocusModal();
       render();
       renderTaskKeywordSuggestions();
@@ -2953,24 +3010,15 @@
   elements.resetAlarmButton.addEventListener("click", () => {
     stopAlarmPlayback();
     localStorage.removeItem(BREAK_ALARM_KEY);
-    elements.alarmRecordHint.textContent = "已恢复默认语音：“作业时间到啦”。";
+    setAlarmRecordHint("已恢复默认语音：“作业时间到啦”。");
     renderAlarmSettings();
   });
   elements.exportDataButton.addEventListener("click", exportBackup);
   elements.importDataButton.addEventListener("click", () => elements.importDataInput.click());
   elements.importDataInput.addEventListener("change", () => importBackup(elements.importDataInput.files?.[0]));
-  elements.saveSettingsButton.addEventListener("click", () => {
-    if (!elements.startDate.value) return;
-    if (elements.startDate.value > todayIso()) return showToast("开始日期不能晚于今天");
-    state.startDate = elements.startDate.value;
-    persist();
-    if (elements.recordDate.value < state.startDate) setRecordDate(state.startDate);
-    render();
-    showToast("开始日期已更新");
-  });
   elements.recordDate.addEventListener("change", () => setRecordDate(elements.recordDate.value));
-  elements.todayButton.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
-  elements.historicalDateNotice.addEventListener("click", () => setRecordDate(todayIso() < state.startDate ? state.startDate : todayIso()));
+  elements.todayButton.addEventListener("click", () => setRecordDate(todayIso()));
+  elements.historicalDateNotice.addEventListener("click", () => setRecordDate(todayIso()));
   elements.openHistoryButton.addEventListener("click", openHistoryPage);
   elements.closeHistoryButton.addEventListener("click", closeHistoryPage);
   elements.historyManageButton.addEventListener("click", () => {
@@ -3017,6 +3065,12 @@
   elements.taskEntryModal.addEventListener("click", (event) => {
     if (event.target === elements.taskEntryModal) closeTaskEntryModal();
   });
+  elements.taskEditCloseButton.addEventListener("click", closeTaskEditor);
+  elements.taskEditCancelButton.addEventListener("click", closeTaskEditor);
+  elements.taskEditSaveButton.addEventListener("click", saveTaskEdit);
+  elements.taskEditModal.addEventListener("click", (event) => {
+    if (event.target === elements.taskEditModal) closeTaskEditor();
+  });
   elements.stepEditorCloseButton.addEventListener("click", closeTaskStepsEditor);
   elements.stepEditorCancelButton.addEventListener("click", closeTaskStepsEditor);
   elements.stepEditorSaveButton.addEventListener("click", saveTaskSteps);
@@ -3032,6 +3086,7 @@
     if (event.key !== "Escape") return;
     if (!elements.breakTimerModal.hidden) return;
     if (!elements.breakChoiceModal.hidden) closeBreakChoice();
+    else if (!elements.taskEditModal.hidden) closeTaskEditor();
     else if (!elements.stepEditorModal.hidden) closeTaskStepsEditor();
     else if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
@@ -3142,7 +3197,20 @@
       return;
     }
     const button = event.target.closest("button[data-task-action]");
-    if (button) performTaskAction(button.dataset.taskAction, button.dataset.taskId);
+    if (button) {
+      performTaskAction(button.dataset.taskAction, button.dataset.taskId);
+      return;
+    }
+    const card = event.target.closest("[data-edit-task-id]");
+    if (card) openTaskEditor(card.dataset.editTaskId);
+  });
+  elements.taskList.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.target.closest("button, select, input, textarea")) return;
+    const card = event.target.closest("[data-edit-task-id]");
+    if (!card) return;
+    event.preventDefault();
+    openTaskEditor(card.dataset.editTaskId);
   });
   elements.taskList.addEventListener("change", (event) => {
     const select = event.target.closest("select[data-estimate-task-id]");
@@ -3266,7 +3334,7 @@
     }
   });
 
-  elements.recordDate.value = todayIso() < state.startDate ? state.startDate : todayIso();
+  elements.recordDate.value = todayIso();
   elements.dictationLessonSelect.innerHTML = DICTATION_LESSONS
     .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);

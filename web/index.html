@@ -176,7 +176,7 @@
       <div class="summary-main">
         <p id="balanceLabel">我的成长能量 ⭐</p>
         <p class="balance" id="balance">¥ 0.00</p>
-        <p class="period" id="periodLabel">从今天开始</p>
+        <p class="period" id="periodLabel">全部成长记录</p>
       </div>
       <div class="summary-stats">
         <div>
@@ -292,33 +292,15 @@
     <header class="history-page-header">
       <button class="history-back-button" id="closeSettingsButton" type="button" aria-label="返回今日任务">‹</button>
       <div>
-        <p class="eyebrow">⚙ 安静放在这里</p>
         <h1 id="settingsPageTitle">设置</h1>
-        <p class="hero-cheer">日期、快捷词、提示音和数据管理集中在这里。</p>
       </div>
     </header>
 
-    <section class="card settings-card">
-      <div class="settings-section-heading">
-        <div><p class="section-kicker">日期</p><h2>查看与统计</h2></div>
-        <small>首页默认显示今天</small>
-      </div>
-      <div class="settings-page-fields">
-        <div class="settings-date-block">
-          <div class="settings-row">
-            <label for="recordDate">查看记录日期</label>
-            <input id="recordDate" type="date" aria-label="记录日期">
-            <button class="text-button bordered settings-today-button" id="todayButton" type="button">回到今天</button>
-          </div>
-          <small class="settings-date-mode">当前类型：<strong id="viewModeLabel">平日记录</strong></small>
-        </div>
-        <div class="settings-row">
-          <label for="startDate">统计开始日期</label>
-          <input id="startDate" type="date">
-          <button class="small-button" id="saveSettingsButton" type="button">保存</button>
-        </div>
-      </div>
-    </section>
+    <div class="settings-date-shortcut">
+      <label for="recordDate">查看日期</label>
+      <input id="recordDate" type="date" aria-label="记录日期">
+      <button class="text-button bordered settings-today-button" id="todayButton" type="button">今天</button>
+    </div>
 
     <section class="card settings-card keyword-settings-card">
       <div class="settings-section-heading">
@@ -341,16 +323,14 @@
 
     <section class="card settings-card alarm-settings-card">
       <div class="settings-section-heading">
-        <div><p class="section-kicker">休息结束提醒</p><h2>我的“回来写作业”提示音</h2></div>
-        <strong class="alarm-status-badge" id="alarmSoundStatus">使用默认提示</strong>
+        <div><h2>休息结束提醒</h2></div>
       </div>
-      <p class="settings-description">我可以录下“作业时间到啦”等一句响亮的话。休息倒计时结束时会连续播放两遍；未录音时使用默认语音。</p>
       <div class="alarm-record-actions">
         <button class="primary-button" id="recordAlarmButton" type="button">🎙 开始录音</button>
         <button class="secondary-button" id="previewAlarmButton" type="button">🔊 试听</button>
         <button class="text-button danger" id="resetAlarmButton" type="button" hidden>恢复默认</button>
       </div>
-      <small class="alarm-record-hint" id="alarmRecordHint">建议录 2～5 秒，例如：“作业时间到啦，我要继续下一项！”</small>
+      <small class="alarm-record-hint" id="alarmRecordHint" hidden></small>
     </section>
 
     <section class="card settings-card">
@@ -438,6 +418,37 @@
     </div>
   </div>
 
+  <div class="step-editor-modal" id="taskEditModal" role="dialog" aria-modal="true" aria-labelledby="taskEditTitle" aria-describedby="taskEditHelp" hidden>
+    <div class="task-edit-dialog">
+      <button class="focus-close" id="taskEditCloseButton" type="button" aria-label="关闭作业修改">×</button>
+      <p class="section-kicker">修改作业</p>
+      <h2 id="taskEditTitle">修改当前作业</h2>
+      <label class="task-edit-field">
+        <span>作业内容</span>
+        <textarea id="taskEditInput" rows="2" maxlength="120"></textarea>
+      </label>
+      <label class="task-edit-field">
+        <span>预计用时</span>
+        <select id="taskEditEstimate">
+          <option value="5">5 分钟</option>
+          <option value="10">10 分钟</option>
+          <option value="15">15 分钟</option>
+          <option value="20">20 分钟</option>
+          <option value="30">30 分钟</option>
+        </select>
+      </label>
+      <label class="task-edit-field">
+        <span>作业步骤</span>
+        <textarea id="taskEditSteps" rows="5" maxlength="500" placeholder="用 1. 2. 3. 或换行分开"></textarea>
+      </label>
+      <p class="step-editor-help" id="taskEditHelp">步骤留空就是不拆分。</p>
+      <div class="step-editor-actions">
+        <button class="secondary-button" id="taskEditCancelButton" type="button">取消</button>
+        <button class="primary-button" id="taskEditSaveButton" type="button">保存修改</button>
+      </div>
+    </div>
+  </div>
+
   <div class="step-editor-modal" id="stepEditorModal" role="dialog" aria-modal="true" aria-labelledby="stepEditorTitle" aria-describedby="stepEditorHelp" hidden>
     <div class="step-editor-dialog">
       <button class="focus-close" id="stepEditorCloseButton" type="button" aria-label="关闭步骤编辑">×</button>
@@ -481,14 +492,13 @@
   <div class="focus-modal" id="breakChoiceModal" role="dialog" aria-modal="true" aria-labelledby="breakChoiceTitle" hidden>
     <div class="focus-dialog break-choice-dialog">
       <button class="focus-close" id="breakChoiceCloseButton" type="button" aria-label="关闭休息安排">×</button>
-      <p class="section-kicker" id="breakChoiceKicker">到达我的休息点</p>
-      <h2 id="breakChoiceTitle">我准备什么时候回来？</h2>
+      <h2 id="breakChoiceTitle">休息多久？</h2>
       <div class="break-next-task"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
       <button class="text-button bordered break-change-task" id="changeBreakNextTaskButton" type="button">换一个下一项（仅一次）</button>
       <div class="break-quick-actions">
-        <button class="secondary-button" type="button" data-break-kind="toilet" data-break-minutes="5">🚻 上厕所 · 5分钟</button>
-        <button class="secondary-button" type="button" data-break-kind="short" data-break-minutes="5">🥤 短休息 · 5分钟</button>
-        <button class="secondary-button" type="button" data-break-kind="long" data-break-minutes="10">🌿 多休息一会 · 10分钟</button>
+        <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="5">5分钟</button>
+        <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="10">10分钟</button>
+        <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="15">15分钟</button>
       </div>
       <div class="break-return-row">
         <label for="breakReturnTime">吃饭后回来</label>
