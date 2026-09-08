@@ -1280,7 +1280,6 @@ public class MainActivity extends Activity {
         voiceTaskButton.setEnabled(false);
         voiceTaskButton.setBackground(rounded(GREEN_SOFT, 13, Color.rgb(156, 188, 245), 1));
         voiceTaskButton.setOnClickListener(v -> startVoiceTaskInput());
-        taskEntryComposerPanel.addView(voiceTaskButton, matchFixed(dp(46)));
         voiceTaskStatusView = text("正在本机加载中文识别模型", 10, MUTED, false);
         voiceTaskStatusView.setPadding(0, dp(7), 0, 0);
         taskEntryComposerPanel.addView(voiceTaskStatusView);
@@ -1322,6 +1321,10 @@ public class MainActivity extends Activity {
         taskEntryAddButton.setBackground(rounded(GREEN, 10, GREEN, 0));
         taskEntryAddButton.setOnClickListener(v -> generateTasksFromDraft());
         entryActions.addView(taskEntryAddButton, weightedFixed(1, dp(43)));
+        entryActions.addView(spaceHorizontal(6));
+        voiceTaskButton.setTextSize(11);
+        voiceTaskButton.setBackground(rounded(GREEN_SOFT, 10, Color.rgb(156, 188, 245), 1));
+        entryActions.addView(voiceTaskButton, weightedFixed(1, dp(43)));
         entryActions.addView(spaceHorizontal(6));
         Button clear = textButton("清空");
         clear.setOnClickListener(v -> clearTaskDraftAndStopVoice());

@@ -314,7 +314,6 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 }
 .task-panel[hidden] { display: none; }
 .task-panel-heading,
-.voice-entry-row,
 .task-list-footer,
 .task-main-row {
   display: flex;
@@ -355,15 +354,17 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .subject-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 11px; }
 .subject-tabs button { padding: 9px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; font-size: .78rem; font-weight: 750; cursor: pointer; }
 .subject-tabs button[aria-checked="true"] { border-color: var(--green); color: #fff; background: var(--green); box-shadow: 0 5px 14px rgba(75,130,239,.18); }
-.voice-entry-row small { color: #65738c; font-size: .74rem; line-height: 1.45; text-align: right; }
+.voice-entry-status { display: block; margin-top: 7px; color: #65738c; font-size: .7rem; line-height: 1.45; }
 .voice-button {
-  flex: 0 0 auto;
-  padding: 10px 14px;
+  min-width: 0;
+  padding: 9px 11px;
   border: 1px solid #9cbcf5;
   border-radius: 11px;
   color: var(--green);
   background: var(--green-soft);
+  font-size: .75rem;
   font-weight: 750;
+  white-space: nowrap;
   cursor: pointer;
 }
 .voice-button.listening { border-color: var(--red); color: var(--red); background: var(--red-soft); }
@@ -386,6 +387,7 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .task-draft-error { display: block; margin-top: 5px; color: #b83f3f; font-size: .72rem; font-weight: 700; }
 .task-draft-error[hidden] { display: none; }
 .task-entry-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.task-entry-actions .primary-button, .task-entry-actions .voice-button { min-width: 0; flex: 1 1 0; }
 .task-entry-feedback-row { display: flex; justify-content: flex-end; min-height: 0; }
 .task-entry-undo { margin-top: 9px; padding: 7px 10px; border: 0; border-radius: 999px; color: #356bc7; background: #eaf2ff; font: inherit; font-size: .7rem; font-weight: 800; cursor: pointer; }
 .task-entry-undo[hidden] { display: none; }
@@ -1064,9 +1066,8 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
   #ledgerButton[aria-pressed="true"] > span:nth-child(2) { min-width: 0; gap: 6px; }
   #ledgerButton[aria-pressed="true"] small { font-size: .66rem; }
   .task-panel { margin-top: 10px; padding-top: 11px; }
-  .voice-entry-row, .task-list-footer { align-items: stretch; flex-direction: column; }
-  .voice-entry-row small { text-align: left; }
-  .voice-button, .task-list-footer button { width: 100%; }
+  .task-list-footer { align-items: stretch; flex-direction: column; }
+  .task-list-footer button { width: 100%; }
   .task-entry-sticky-footer button { padding-inline: 12px; }
   .pending-task-row { align-items: flex-start; }
   .task-footer-actions { width: 100%; flex-direction: column; }
