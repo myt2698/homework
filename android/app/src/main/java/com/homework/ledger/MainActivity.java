@@ -298,7 +298,8 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryPendingPanel;
     private LinearLayout taskEntryPendingList;
     private Button taskEntryConfirmButton;
-    private Button taskEntryAddButton;
+    private FrameLayout taskEntryAddButton;
+    private TextView taskEntryAddLabel;
     private Button taskEntryUndoDeleteButton;
     private EditText taskDraftInput;
     private TextView taskDraftErrorView;
@@ -352,7 +353,8 @@ public class MainActivity extends Activity {
     private TextView weekendTaskResultLabel;
     private TextView weekendTaskResultAmount;
     private Button weekendTaskPenaltyButton;
-    private Button taskSubjectPickerButton;
+    private FrameLayout taskSubjectPickerButton;
+    private TextView taskSubjectPickerLabel;
     private String selectedTaskSubject = "语文";
     private String selectedTaskKeywordSettingsSubject = "语文";
     private LinearLayout taskKeywordSettingsSubjects;
@@ -1168,15 +1170,15 @@ public class MainActivity extends Activity {
         taskEntryPanel.addView(taskEntryDaysPanel, matchWrap());
 
         taskEntryComposerPanel = vertical();
-        taskSubjectPickerButton = new Button(this);
-        taskSubjectPickerButton.setTextSize(12);
-        taskSubjectPickerButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        taskSubjectPickerButton.setAllCaps(false);
-        taskSubjectPickerButton.setMinHeight(0);
-        taskSubjectPickerButton.setMinimumHeight(0);
-        taskSubjectPickerButton.setPadding(dp(6), 0, dp(6), 0);
-        taskSubjectPickerButton.setGravity(Gravity.CENTER);
+        taskSubjectPickerButton = new FrameLayout(this);
+        taskSubjectPickerButton.setClickable(true);
+        taskSubjectPickerButton.setFocusable(true);
         taskSubjectPickerButton.setOnClickListener(v -> showTaskSubjectPicker());
+        taskSubjectPickerLabel = text("", 12, Color.WHITE, true);
+        taskSubjectPickerLabel.setGravity(Gravity.CENTER);
+        taskSubjectPickerLabel.setPadding(dp(6), 0, dp(6), 0);
+        taskSubjectPickerButton.addView(taskSubjectPickerLabel, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         selectTaskSubject(selectedTaskSubject);
 
         taskDraftInput = new EditText(this);
@@ -1216,18 +1218,16 @@ public class MainActivity extends Activity {
             return true;
         });
 
-        taskEntryAddButton = new Button(this);
-        taskEntryAddButton.setText("＋");
+        taskEntryAddButton = new FrameLayout(this);
         taskEntryAddButton.setContentDescription("加入语文作业");
-        taskEntryAddButton.setTextSize(20);
-        taskEntryAddButton.setTextColor(Color.WHITE);
-        taskEntryAddButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        taskEntryAddButton.setAllCaps(false);
-        taskEntryAddButton.setMinHeight(0);
-        taskEntryAddButton.setMinimumHeight(0);
-        taskEntryAddButton.setPadding(0, 0, 0, 0);
+        taskEntryAddButton.setClickable(true);
+        taskEntryAddButton.setFocusable(true);
         taskEntryAddButton.setBackground(rounded(GREEN, 10, GREEN, 0));
         taskEntryAddButton.setOnClickListener(v -> addTasksFromDraft());
+        taskEntryAddLabel = text("＋", 20, Color.WHITE, true);
+        taskEntryAddLabel.setGravity(Gravity.CENTER);
+        taskEntryAddButton.addView(taskEntryAddLabel, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         taskEntryEstimateButton = smallButton("15 分钟");
         taskEntryEstimateButton.setTextSize(11);
@@ -1714,9 +1714,10 @@ public class MainActivity extends Activity {
         selectedTaskSubject = subject;
         if (taskSubjectPickerButton != null) {
             int subjectColor = taskSubjectColor(subject);
-            taskSubjectPickerButton.setText(subject + "  ▾");
-            taskSubjectPickerButton.setTextColor(Color.WHITE);
+            taskSubjectPickerLabel.setText(subject + "  ▾");
+            taskSubjectPickerLabel.setTextColor(Color.WHITE);
             taskSubjectPickerButton.setBackground(rounded(subjectColor, 10, subjectColor, 1));
+            taskSubjectPickerButton.setContentDescription("选择科目，当前" + subject);
         }
         if (taskDraftInput != null) taskDraftInput.setHint("请输入一项作业…");
         if (taskEntryAddButton != null) taskEntryAddButton.setContentDescription("加入" + subject + "作业");
@@ -3705,7 +3706,7 @@ public class MainActivity extends Activity {
     private void setTaskEntryEstimate(int minutes) {
         taskEntryEstimatedMinutes = estimatedMinutesWithFallback(minutes);
         if (taskEntryEstimateButton != null) {
-            taskEntryEstimateButton.setText(taskEntryEstimatedMinutes + " 分钟");
+            taskEntryEstimateButton.setText(taskEntryEstimatedMinutes + " 分钟  ▾");
             taskEntryEstimateButton.setContentDescription("这项作业预计用时 " + taskEntryEstimatedMinutes + " 分钟");
         }
     }
@@ -3953,7 +3954,7 @@ public class MainActivity extends Activity {
         actions.addView(schedule);
         if (editable) {
             LinearLayout editActions = horizontal();
-            addTaskActionButton(editActions, "修改", false, false, () -> showPendingTaskEditDialog(task));
+            addTaskActionButton(editActions, "修改", false, false, () -> showPendingTaskEditDialog(taskIndexById(id)));
             addTaskActionButton(editActions, "删除", false, true, () -> performTaskAction("delete", taskIndexById(id)));
             actions.addView(editActions, matchWrap());
         }
@@ -6980,17 +6981,22 @@ public class MainActivity extends Activity {
                     .show();
             return;
         }
-        if ("toggle".equals(action)) {
-            put(entry, "visible", !entry.optBoolean("visible", true));
-        } else if ("up".equals(action) && targetIndex > 0) {
-            Object previous = keywords.opt(targetIndex - 1);
-            keywords.put(targetIndex - 1, entry);
-            keywords.put(targetIndex, previous);
-        } else if ("down".equals(action) && targetIndex < keywords.length() - 1) {
-            Object next = keywords.opt(targetIndex + 1);
-            keywords.put(targetIndex + 1, entry);
-            keywords.put(targetIndex, next);
-        } else {
+        try {
+            if ("toggle".equals(action)) {
+                put(entry, "visible", !entry.optBoolean("visible", true));
+            } else if ("up".equals(action) && targetIndex > 0) {
+                Object previous = keywords.opt(targetIndex - 1);
+                keywords.put(targetIndex - 1, entry);
+                keywords.put(targetIndex, previous);
+            } else if ("down".equals(action) && targetIndex < keywords.length() - 1) {
+                Object next = keywords.opt(targetIndex + 1);
+                keywords.put(targetIndex + 1, entry);
+                keywords.put(targetIndex, next);
+            } else {
+                return;
+            }
+        } catch (JSONException exception) {
+            toast("关键词排序失败，请重试");
             return;
         }
         saveTaskKeywords();
