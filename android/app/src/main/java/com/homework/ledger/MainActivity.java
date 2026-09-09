@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
-import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -29,7 +28,6 @@ import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
-import android.view.DragEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -318,6 +316,17 @@ public class MainActivity extends Activity {
     private TextView emptyTaskView;
     private TextView taskConfirmHintView;
     private Button taskOrderButton;
+    private AlertDialog taskOrderDialog;
+    private LinearLayout orderDaysPanel;
+    private LinearLayout orderChoicesPanel;
+    private ScrollView orderChoicesScroll;
+    private TextView orderTitleView;
+    private TextView orderProgressView;
+    private Button orderUndoButton;
+    private Button orderResetButton;
+    private Button orderConfirmButton;
+    private String orderSelectionDay = "daily";
+    private boolean orderPreviewShowing = false;
     private Button taskConfirmButton;
     private LinearLayout taskSettlementPanel;
     private TextView taskSettlementLabel;
@@ -585,6 +594,7 @@ public class MainActivity extends Activity {
         timerHandler.removeCallbacks(startPlanTimerTick);
         if (taskFocusDialog != null) taskFocusDialog.dismiss();
         if (taskEntryDialog != null) taskEntryDialog.dismiss();
+        dismissTaskOrderDialog();
         if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
         if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
         if (breakTimerDialog != null) breakTimerDialog.dismiss();
@@ -1483,7 +1493,7 @@ public class MainActivity extends Activity {
         taskConfirmHintView.setPadding(0, dp(13), 0, dp(8));
         panel.addView(taskConfirmHintView);
         taskOrderButton = new Button(this);
-        taskOrderButton.setText("确定顺序，开始闯关");
+        taskOrderButton.setText("选择作业顺序");
         taskOrderButton.setTextSize(12);
         taskOrderButton.setTextColor(Color.WHITE);
         taskOrderButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -3091,6 +3101,7 @@ public class MainActivity extends Activity {
         saveTaskData();
         renderAll();
         if (confirmed) showTaskEntryDialog();
+        else if (weekendKeyFor(currentDate) == null) showTaskOrderDialog();
         toast(confirmed ? "我可以继续修改清单了"
                 : "清单收好了，接下来安排 " + tasks.length() + " 项作业的顺序");
     }
@@ -3118,76 +3129,305 @@ public class MainActivity extends Activity {
                 return;
             }
         }
-        if (taskBreakPointCount(tasks) > 2) {
-            toast("休息点最多两个，请先取消多余的休息点");
-            return;
-        }
         if (taskOrderSaved()) {
             clearStartPlanSession();
             put(owner, "orderSaved", false);
             owner.remove("orderSavedAt");
+            owner.remove("orderDraft");
             taskListExpanded = false;
             completedTasksExpanded = false;
             saveTaskData();
             renderAll();
-            toast("可以重新安排顺序了");
+            showTaskOrderDialog();
             return;
         }
+        showTaskOrderDialog();
+    }
+
+    private boolean canChooseTaskOrder() {
+        JSONArray tasks = taskArray(false);
+        String key = weekendKeyFor(currentDate);
+        if (!taskListConfirmed() || taskOrderSaved() || tasks.length() == 0
+                || (key != null && (!key.equals(currentDate) || !taskOwner(true).optBoolean("planSaved")))) return false;
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null || !"pending".equals(task.optString("status", "pending"))) return false;
+        }
+        return true;
+    }
+
+    private String orderDayForTask(JSONObject task) {
+        return weekendKeyFor(currentDate) == null ? "daily" : plannedDayForTask(task);
+    }
+
+    private String orderDayLabel(String day) {
+        return "friday".equals(day) ? "周五" : "saturday".equals(day) ? "周六"
+                : "sunday".equals(day) ? "周日" : "今天";
+    }
+
+    private List<JSONObject> orderTasksForDay(String day) {
+        List<JSONObject> result = new ArrayList<>();
+        JSONArray tasks = taskArray(false);
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && orderDayForTask(task).equals(day)) result.add(task);
+        }
+        return result;
+    }
+
+    private List<String> taskOrderDays() {
+        List<String> days = new ArrayList<>();
+        for (String day : new String[]{"daily", "friday", "saturday", "sunday"}) {
+            if (!orderTasksForDay(day).isEmpty()) days.add(day);
+        }
+        return days;
+    }
+
+    // Same draft format as the web app. Original tasks stay in place until confirmation.
+    private JSONObject taskOrderDraft() {
+        JSONObject owner = taskOwner(true);
+        JSONArray tasks = taskArray(false);
+        JSONArray ids = new JSONArray(), days = new JSONArray();
+        for (int index = 0; index < tasks.length(); index++) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null) { ids.put(task.optString("id")); days.put(orderDayForTask(task)); }
+        }
+        JSONObject draft = owner.optJSONObject("orderDraft");
+        if (draft == null || !ids.toString().equals(String.valueOf(draft.optJSONArray("taskIds")))
+                || !days.toString().equals(String.valueOf(draft.optJSONArray("days")))) {
+            draft = new JSONObject();
+            put(draft, "taskIds", ids);
+            put(draft, "days", days);
+            put(draft, "selectedIds", new JSONArray());
+            put(owner, "orderDraft", draft);
+        }
+        JSONArray selected = draft.optJSONArray("selectedIds");
+        List<String> seen = new ArrayList<>();
+        JSONArray cleaned = new JSONArray();
+        if (selected != null) for (int index = 0; index < selected.length(); index++) {
+            String id = selected.optString(index);
+            if (taskIndexById(id) >= 0 && !seen.contains(id)) { seen.add(id); cleaned.put(id); }
+        }
+        put(draft, "selectedIds", cleaned);
+        return draft;
+    }
+
+    private List<String> selectedOrderIds() {
+        JSONArray selected = taskOrderDraft().optJSONArray("selectedIds");
+        List<String> ids = new ArrayList<>();
+        for (int index = 0; index < selected.length(); index++) ids.add(selected.optString(index));
+        return ids;
+    }
+
+    private List<String> selectedOrderForDay(String day, List<String> ids) {
+        List<String> selected = new ArrayList<>();
+        for (String id : ids) {
+            JSONObject task = taskArray(false).optJSONObject(taskIndexById(id));
+            if (task != null && orderDayForTask(task).equals(day)) selected.add(id);
+        }
+        return selected;
+    }
+
+    private String nextOrderDay(List<String> ids) {
+        for (String day : taskOrderDays()) {
+            if (selectedOrderForDay(day, ids).size() < orderTasksForDay(day).size()) return day;
+        }
+        return null;
+    }
+
+    private void dismissTaskOrderDialog() {
+        if (taskOrderDialog != null) taskOrderDialog.dismiss();
+        taskOrderDialog = null;
+    }
+
+    private void showTaskOrderDialog() {
+        if (!canChooseTaskOrder()) return;
+        if (taskOrderDialog != null && taskOrderDialog.isShowing()) return;
+        List<String> ids = selectedOrderIds();
+        orderSelectionDay = nextOrderDay(ids);
+        if (orderSelectionDay == null) orderSelectionDay = taskOrderDays().get(0);
+        orderPreviewShowing = false;
+        dismissTaskEntryDialog();
+        if (weekendTaskPlanDialog != null) weekendTaskPlanDialog.dismiss();
+        LinearLayout content = vertical();
+        content.setPadding(dp(16), dp(14), dp(16), dp(14));
+        LinearLayout heading = horizontal();
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        orderTitleView = text("", 18, INK, true);
+        heading.addView(orderTitleView, weightedWrap(1));
+        Button close = smallButton("×");
+        close.setContentDescription("关闭排序");
+        close.setOnClickListener(v -> dismissTaskOrderDialog());
+        heading.addView(close, fixed(dp(44), dp(44)));
+        content.addView(heading, matchWrap());
+        orderProgressView = text("", 12, MUTED, false);
+        orderProgressView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        orderProgressView.setPadding(0, dp(4), 0, dp(12));
+        content.addView(orderProgressView, matchWrap());
+        orderDaysPanel = horizontal();
+        content.addView(orderDaysPanel, matchFixed(dp(48)));
+        orderChoicesScroll = new ScrollView(this);
+        orderChoicesPanel = vertical();
+        orderChoicesScroll.addView(orderChoicesPanel, matchWrap());
+        content.addView(orderChoicesScroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout secondary = horizontal();
+        secondary.setPadding(0, dp(8), 0, dp(8));
+        orderUndoButton = smallButton("撤销上一步");
+        orderUndoButton.setOnClickListener(v -> undoTaskOrderSelection(false));
+        orderResetButton = smallButton("重新选择");
+        orderResetButton.setTextColor(MUTED);
+        orderResetButton.setOnClickListener(v -> undoTaskOrderSelection(true));
+        secondary.addView(orderUndoButton, weightedFixed(1, dp(44)));
+        secondary.addView(spaceHorizontal(10));
+        secondary.addView(orderResetButton, weightedFixed(1, dp(44)));
+        content.addView(secondary, matchWrap());
+        orderConfirmButton = smallButton("就按这个顺序");
+        orderConfirmButton.setTextColor(Color.WHITE);
+        orderConfirmButton.setBackground(rounded(GREEN, 13, GREEN, 0));
+        orderConfirmButton.setOnClickListener(v -> confirmTaskOrderSelection());
+        content.addView(orderConfirmButton, matchFixed(dp(48)));
+        FrameLayout frame = new FrameLayout(this);
+        int available = getResources().getDisplayMetrics().heightPixels;
+        frame.addView(content, new FrameLayout.LayoutParams(-1, Math.min(dp(650), Math.round(available * 0.82f))));
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(frame).create();
+        taskOrderDialog = dialog;
+        dialog.setOnDismissListener(ignored -> { if (taskOrderDialog == dialog) taskOrderDialog = null; });
+        dialog.show();
+        dialog.setCanceledOnTouchOutside(false);
+        saveTaskData();
+        renderOrderSelection(true);
+    }
+
+    private void renderOrderSelection(boolean resetScroll) {
+        if (taskOrderDialog == null || !taskOrderDialog.isShowing()) return;
+        if (!canChooseTaskOrder()) { dismissTaskOrderDialog(); return; }
+        List<String> ids = selectedOrderIds();
+        List<String> days = taskOrderDays();
+        if (!days.contains(orderSelectionDay)) orderSelectionDay = days.get(0);
+        boolean preview = ids.size() == taskArray(false).length();
+        int count = selectedOrderForDay(orderSelectionDay, ids).size();
+        int total = orderTasksForDay(orderSelectionDay).size();
+        orderTitleView.setText(preview ? "我的顺序" : count == total ? orderDayLabel(orderSelectionDay) + "已选好"
+                : "第 " + (count + 1) + " 项，我选……");
+        orderProgressView.setText("已选 " + ids.size() + " / " + taskArray(false).length() + " 项");
+        orderDaysPanel.removeAllViews();
+        orderDaysPanel.setVisibility(!preview && days.size() > 1 ? View.VISIBLE : View.GONE);
+        for (String day : days) {
+            Button tab = smallButton(orderDayLabel(day) + " " + selectedOrderForDay(day, ids).size() + "/" + orderTasksForDay(day).size());
+            tab.setTextSize(11);
+            tab.setSelected(day.equals(orderSelectionDay));
+            tab.setBackground(rounded(day.equals(orderSelectionDay) ? GREEN_SOFT : SURFACE, 10,
+                    day.equals(orderSelectionDay) ? GREEN : LINE, 1));
+            tab.setOnClickListener(v -> { orderSelectionDay = day; renderOrderSelection(true); });
+            orderDaysPanel.addView(tab, weightedFixed(1, dp(44)));
+        }
+        int scrollY = resetScroll || preview != orderPreviewShowing ? 0 : orderChoicesScroll.getScrollY();
+        orderChoicesPanel.removeAllViews();
+        if (preview) {
+            for (String day : days) {
+                if (days.size() > 1) {
+                    TextView label = text(orderDayLabel(day), 13, INK, true);
+                    label.setPadding(0, dp(8), 0, dp(8));
+                    orderChoicesPanel.addView(label, matchWrap());
+                }
+                List<String> selected = selectedOrderForDay(day, ids);
+                for (int index = 0; index < selected.size(); index++) {
+                    addOrderChoiceCard(taskArray(false).optJSONObject(taskIndexById(selected.get(index))), index + 1, true);
+                }
+            }
+        } else {
+            List<String> selected = selectedOrderForDay(orderSelectionDay, ids);
+            for (JSONObject task : orderTasksForDay(orderSelectionDay)) {
+                addOrderChoiceCard(task, selected.indexOf(task.optString("id")) + 1, false);
+            }
+        }
+        orderPreviewShowing = preview;
+        orderChoicesScroll.post(() -> orderChoicesScroll.scrollTo(0, scrollY));
+        orderUndoButton.setEnabled(!ids.isEmpty());
+        orderResetButton.setEnabled(!ids.isEmpty());
+        orderConfirmButton.setVisibility(preview || count == total ? View.VISIBLE : View.INVISIBLE);
+        orderConfirmButton.setText(preview ? "就按这个顺序" : "选择" + orderDayLabel(nextOrderDay(ids)));
+    }
+
+    private void addOrderChoiceCard(JSONObject task, int number, boolean preview) {
+        String id = task.optString("id"), subject = task.optString("subject", "其他");
+        int color = taskSubjectColor(subject);
+        LinearLayout card = vertical();
+        card.setPadding(dp(10), dp(10), dp(10), dp(8));
+        card.setBackground(rounded(taskSubjectSoftColor(subject), 13, number > 0 ? color : LINE, number > 0 ? 2 : 1));
+        LinearLayout row = horizontal();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dp(52));
+        TextView badge = text(number > 0 ? String.valueOf(number) : "", 13, Color.WHITE, true);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(rounded(number > 0 ? color : SURFACE, 18, color, 1));
+        row.addView(badge, fixed(dp(30), dp(30)));
+        row.addView(spaceHorizontal(10));
+        TextView title = text(subject + " · " + task.optString("title"), 14, INK, true);
+        row.addView(title, weightedWrap(1));
+        if (!preview) {
+            row.setSelected(number > 0);
+            row.setFocusable(true);
+            row.setContentDescription((number > 0 ? "第 " + number + " 项：" : "选择：") + title.getText());
+            row.setOnClickListener(v -> chooseTaskOrder(id));
+        }
+        card.addView(row, matchWrap());
+        Button estimate = smallButton("预计用时 " + estimatedMinutes(task) + " 分钟");
+        estimate.setTextSize(11);
+        estimate.setOnClickListener(v -> showEstimatePicker(task));
+        card.addView(estimate, matchFixed(dp(44)));
+        LinearLayout.LayoutParams params = matchWrap();
+        params.bottomMargin = dp(10);
+        orderChoicesPanel.addView(card, params);
+    }
+
+    private void chooseTaskOrder(String id) {
+        if (!canChooseTaskOrder()) return;
+        JSONObject task = taskArray(false).optJSONObject(taskIndexById(id));
+        List<String> ids = selectedOrderIds();
+        if (task == null || ids.contains(id) || !orderDayForTask(task).equals(orderSelectionDay)) return;
+        ids.add(id);
+        put(taskOrderDraft(), "selectedIds", new JSONArray(ids));
+        saveTaskData();
+        renderTasks();
+        renderOrderSelection(false);
+    }
+
+    private void undoTaskOrderSelection(boolean reset) {
+        if (!canChooseTaskOrder()) return;
+        List<String> ids = selectedOrderIds();
+        if (reset) { ids.clear(); orderSelectionDay = taskOrderDays().get(0); }
+        else if (!ids.isEmpty()) {
+            String id = ids.remove(ids.size() - 1);
+            orderSelectionDay = orderDayForTask(taskArray(false).optJSONObject(taskIndexById(id)));
+        }
+        put(taskOrderDraft(), "selectedIds", new JSONArray(ids));
+        saveTaskData();
+        renderTasks();
+        renderOrderSelection(true);
+    }
+
+    private void confirmTaskOrderSelection() {
+        if (!canChooseTaskOrder()) return;
+        List<String> ids = selectedOrderIds();
+        String nextDay = nextOrderDay(ids);
+        if (nextDay != null) { orderSelectionDay = nextDay; renderOrderSelection(true); return; }
+        JSONArray ordered = new JSONArray();
+        for (String day : taskOrderDays()) for (String id : selectedOrderForDay(day, ids)) {
+            ordered.put(taskArray(false).optJSONObject(taskIndexById(id)));
+        }
+        JSONObject owner = taskOwner(true);
+        put(owner, "tasks", ordered);
         put(owner, "orderSaved", true);
         put(owner, "orderSavedAt", currentTime());
+        owner.remove("orderDraft");
+        dismissTaskOrderDialog();
         taskListExpanded = false;
         completedTasksExpanded = false;
         saveTaskData();
         renderAll();
-        toast(weekendKey == null ? "顺序已确定，我要开始第一关啦！" : "周末闯关顺序已确定！");
-        int firstTaskIndex = nextTaskIndexForToday();
-        if (firstTaskIndex >= 0) timerHandler.postDelayed(
-                () -> showTaskStartChoice(firstTaskIndex, false), 80L);
-    }
-
-    private void reorderTask(int fromIndex, int targetIndex) {
-        JSONArray tasks = taskArray(false);
-        if (fromIndex < 0 || targetIndex < 0 || fromIndex >= tasks.length()
-                || targetIndex >= tasks.length() || fromIndex == targetIndex) return;
-        JSONObject moving = tasks.optJSONObject(fromIndex);
-        JSONObject target = tasks.optJSONObject(targetIndex);
-        String weekendKey = weekendKeyFor(currentDate);
-        if (moving == null || target == null) return;
-        if (weekendKey != null && !plannedDayForTask(moving).equals(plannedDayForTask(target))) {
-            toast("三天的作业请分别排序");
-            return;
-        }
-        List<JSONObject> ordered = new ArrayList<>();
-        for (int index = 0; index < tasks.length(); index++) {
-            JSONObject task = tasks.optJSONObject(index);
-            if (task != null) ordered.add(task);
-        }
-        JSONObject moved = ordered.remove(fromIndex);
-        ordered.add(targetIndex, moved);
-        JSONArray reordered = new JSONArray();
-        for (JSONObject task : ordered) reordered.put(task);
-        JSONObject owner = taskOwner(true);
-        put(owner, "tasks", reordered);
-        put(owner, "orderSaved", false);
-        owner.remove("orderSavedAt");
-        saveTaskData();
-        renderAll();
-    }
-
-    private void moveTaskOneStep(int taskIndex, int direction) {
-        JSONArray tasks = taskArray(false);
-        JSONObject task = tasks.optJSONObject(taskIndex);
-        if (task == null) return;
-        String day = weekendKeyFor(currentDate) == null ? null : plannedDayForTask(task);
-        List<Integer> group = new ArrayList<>();
-        for (int index = 0; index < tasks.length(); index++) {
-            JSONObject candidate = tasks.optJSONObject(index);
-            if (candidate != null && (day == null || day.equals(plannedDayForTask(candidate)))) group.add(index);
-        }
-        int position = group.indexOf(taskIndex);
-        int nextPosition = position + direction;
-        if (position < 0 || nextPosition < 0 || nextPosition >= group.size()) return;
-        reorderTask(taskIndex, group.get(nextPosition));
+        int first = nextTaskIndexForToday();
+        if (first >= 0) showTaskStartChoice(first, false);
     }
 
     private void renderTasks() {
@@ -3313,13 +3553,12 @@ public class MainActivity extends Activity {
         taskConfirmButton.setVisibility(confirmed && canEditList && allPending ? View.VISIBLE : View.GONE);
         taskConfirmButton.setText("修改作业清单");
         taskOrderButton.setVisibility(canArrangeOrder ? View.VISIBLE : View.GONE);
-        taskOrderButton.setText(sortingMode ? "确定顺序，开始闯关" : "调整闯关顺序");
+        taskOrderButton.setText(sortingMode ? "选择作业顺序" : "重新选择顺序");
         taskOrderButton.setTextColor(sortingMode ? Color.WHITE : GREEN);
         taskOrderButton.setBackground(rounded(sortingMode ? GREEN : GREEN_SOFT, 13,
                 sortingMode ? GREEN : Color.rgb(156, 188, 245), sortingMode ? 0 : 1));
         String taskConfirmHint = sortingMode
-                ? weekendMode ? "分别排好周五、周六、周日的顺序，确定后就按计划闯关。"
-                    : "长按拖动作业，或使用箭头排好顺序，再确定开始。"
+                ? ""
                 : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
                 : weekendMode && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
                 : !canEditList
@@ -3356,29 +3595,8 @@ public class MainActivity extends Activity {
         if (questMode) {
             int progress = progressTotal == 0 ? 100 : Math.round(progressDone * 100f / progressTotal);
             taskQuestProgressBar.setProgress(progress);
-            JSONObject owner = taskOwner(false);
-            int currentTaskIndex = -1;
-            for (int taskIndex : questIndexes) {
-                JSONObject candidate = tasks.optJSONObject(taskIndex);
-                if (candidate != null && !"done".equals(candidate.optString("status"))) {
-                    currentTaskIndex = taskIndex;
-                    if ("active".equals(candidate.optString("status"))) break;
-                }
-            }
-            int mealBoundaryIndex = -1;
-            String mealAfterId = owner == null ? "" : owner.optString("mealAfterTaskId");
-            for (int taskIndex = 0; taskIndex < tasks.length(); taskIndex++) {
-                JSONObject candidate = tasks.optJSONObject(taskIndex);
-                if (candidate != null && candidate.optString("id").equals(mealAfterId)) {
-                    mealBoundaryIndex = taskIndex;
-                    break;
-                }
-            }
-            String phase = mealBoundaryIndex >= 0 && currentTaskIndex >= 0
-                    ? currentTaskIndex <= mealBoundaryIndex ? "饭前计划" : "饭后计划"
-                    : "今日计划";
             taskQuestTimeRow.setVisibility(progress == 100 ? View.GONE : View.VISIBLE);
-            taskQuestPhaseView.setText(phase);
+            taskQuestPhaseView.setText("今日计划");
             taskQuestMessageView.setText("预计还需 "
                     + remainingEstimatedMinutes(tasks, questIndexes) + " 分钟");
         }
@@ -3386,15 +3604,11 @@ public class MainActivity extends Activity {
         taskListContainer.removeAllViews();
         if (!confirmed) return;
         if (sortingMode) {
-            taskSummaryView.setText(tasks.length() + " 关待安排");
-            addOrderIntro(tasks, weekendMode);
-            if (weekendMode) {
-                addSortableTaskGroup(tasks, "friday", "周五闯关顺序", "放学后先完成这一部分");
-                addSortableTaskGroup(tasks, "saturday", "周六闯关顺序", "完成周六计划");
-                addSortableTaskGroup(tasks, "sunday", "周日闯关顺序", "周日按这个顺序完成");
-            } else {
-                addSortableTaskGroup(tasks, null, null, null);
-            }
+            int selected = selectedOrderIds().size();
+            taskSummaryView.setText("已选 " + selected + " / " + tasks.length() + " 项");
+            taskOrderButton.setText(selected == tasks.length() ? "查看顺序"
+                    : selected > 0 ? "继续选择顺序" : "选择作业顺序");
+            addOrderIntro(tasks);
             return;
         }
         if (!questMode) {
@@ -3468,15 +3682,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void addOrderIntro(JSONArray tasks, boolean weekendMode) {
+    private void addOrderIntro(JSONArray tasks) {
         int totalEstimate = 0;
         for (int index = 0; index < tasks.length(); index++) {
             totalEstimate += estimatedMinutes(tasks.optJSONObject(index));
         }
-        int breakPoints = taskBreakPointCount(tasks);
-        String detail = "预计净学习 " + totalEstimate + " 分钟。排好顺序，设置预计用时和最多两个休息点"
-                + (weekendMode ? "。" : "，也可以选择饭前完成到哪一项。")
-                + "  已设 " + breakPoints + " / 2 个休息点";
+        String detail = "预计净学习 " + totalEstimate + " 分钟";
         TextView intro = text(detail, 10,
                 Color.rgb(83, 115, 166), true);
         intro.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -3484,158 +3695,6 @@ public class MainActivity extends Activity {
         taskListContainer.addView(intro, matchWrap());
     }
 
-    private void addSortableTaskGroup(JSONArray tasks, String plannedDay, String label, String help) {
-        List<Integer> indexes = new ArrayList<>();
-        for (int index = 0; index < tasks.length(); index++) {
-            JSONObject task = tasks.optJSONObject(index);
-            if (task != null && (plannedDay == null || plannedDay.equals(plannedDayForTask(task)))) indexes.add(index);
-        }
-        if (indexes.isEmpty()) return;
-        if (label != null) {
-            LinearLayout heading = vertical();
-            heading.addView(text(label, 11, Color.rgb(52, 95, 186), true));
-            TextView hint = text(help, 9, MUTED, false);
-            hint.setPadding(0, dp(2), 0, 0);
-            heading.addView(hint);
-            LinearLayout.LayoutParams headingParams = matchWrap();
-            headingParams.topMargin = dp(10);
-            taskListContainer.addView(heading, headingParams);
-        }
-        for (int position = 0; position < indexes.size(); position++) {
-            addSortableTaskCard(tasks, indexes.get(position), position + 1,
-                    position > 0, position < indexes.size() - 1);
-        }
-    }
-
-    private void addSortableTaskCard(JSONArray tasks, int taskIndex, int orderNumber,
-                                     boolean canMoveUp, boolean canMoveDown) {
-        JSONObject task = tasks.optJSONObject(taskIndex);
-        if (task == null) return;
-        String subjectName = task.optString("subject", "其他");
-        int subjectColor = taskSubjectColor(subjectName);
-        LinearLayout wrapper = vertical();
-        LinearLayout item = horizontal();
-        item.setGravity(Gravity.CENTER_VERTICAL);
-        item.setPadding(dp(10), dp(10), dp(10), dp(10));
-        item.setBackground(rounded(taskSubjectSoftColor(subjectName), 13, subjectColor, 1));
-
-        TextView handle = text("⠿", 20, Color.rgb(120, 144, 185), true);
-        handle.setGravity(Gravity.CENTER);
-        item.addView(handle, fixed(dp(25), dp(34)));
-        TextView number = text(String.valueOf(orderNumber), 10, Color.WHITE, true);
-        number.setGravity(Gravity.CENTER);
-        number.setBackground(rounded(subjectColor, 20, subjectColor, 0));
-        item.addView(number, fixed(dp(27), dp(27)));
-        item.addView(spaceHorizontal(9));
-
-        LinearLayout copy = vertical();
-        String planLabel = weekendKeyFor(currentDate) == null ? "" : "  [" + plannedDayLabel(task) + "]";
-        copy.addView(text(subjectName + " · " + task.optString("title", "未命名作业") + planLabel,
-                12, INK, true));
-        TextView meta = text("预计 " + estimatedMinutes(task) + " 分钟", 9, MUTED, false);
-        meta.setPadding(0, dp(3), 0, 0);
-        copy.addView(meta);
-        item.addView(copy, weightedWrap(1));
-
-        LinearLayout arrows = horizontal();
-        arrows.addView(orderArrowButton("↑", canMoveUp, () -> moveTaskOneStep(taskIndex, -1)), fixed(dp(38), dp(34)));
-        arrows.addView(spaceHorizontal(4));
-        arrows.addView(orderArrowButton("↓", canMoveDown, () -> moveTaskOneStep(taskIndex, 1)), fixed(dp(38), dp(34)));
-        item.addView(spaceHorizontal(6));
-        item.addView(arrows, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-        item.setOnLongClickListener(v -> {
-            ClipData data = ClipData.newPlainText("homework-task-index", String.valueOf(taskIndex));
-            View.DragShadowBuilder shadow = new View.DragShadowBuilder(v);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) v.startDragAndDrop(data, shadow, null, 0);
-            else v.startDrag(data, shadow, null, 0);
-            return true;
-        });
-        item.setOnDragListener((v, event) -> {
-            if (event.getAction() == DragEvent.ACTION_DRAG_STARTED) return true;
-            if (event.getAction() == DragEvent.ACTION_DRAG_ENTERED) {
-                v.setAlpha(0.62f);
-                return true;
-            }
-            if (event.getAction() == DragEvent.ACTION_DRAG_EXITED) {
-                v.setAlpha(1f);
-                return true;
-            }
-            if (event.getAction() == DragEvent.ACTION_DROP) {
-                v.setAlpha(1f);
-                try {
-                    int fromIndex = Integer.parseInt(event.getClipData().getItemAt(0).getText().toString());
-                    reorderTask(fromIndex, taskIndex);
-                } catch (Exception ignored) { }
-                return true;
-            }
-            if (event.getAction() == DragEvent.ACTION_DRAG_ENDED) {
-                v.setAlpha(1f);
-                return true;
-            }
-            return true;
-        });
-        wrapper.addView(item, matchWrap());
-
-        LinearLayout tools = horizontal();
-        Button estimate = smallButton("预计 " + estimatedMinutes(task) + " 分钟");
-        estimate.setTextSize(10);
-        estimate.setOnClickListener(v -> showEstimatePicker(task));
-        tools.addView(estimate, weightedFixed(1, dp(38)));
-        if (weekendKeyFor(currentDate) == null) {
-            tools.addView(spaceHorizontal(6));
-            JSONObject owner = taskOwner(false);
-            boolean selected = owner != null && task.optString("id")
-                    .equals(owner.optString("mealAfterTaskId"));
-            Button meal = smallButton(selected ? "✓ 饭前到这里" : "饭前到这里");
-            meal.setTextSize(10);
-            meal.setTextColor(selected ? Color.rgb(139, 100, 27) : GREEN);
-            meal.setBackground(rounded(selected ? Color.rgb(255, 245, 216) : SURFACE,
-                    11, selected ? Color.rgb(223, 175, 76) : LINE, 1));
-            meal.setOnClickListener(v -> toggleMealAfterTask(task));
-            tools.addView(meal, weightedFixed(1, dp(38)));
-        }
-        LinearLayout.LayoutParams toolsParams = matchWrap();
-        toolsParams.topMargin = dp(7);
-        wrapper.addView(tools, toolsParams);
-
-        boolean breakSelected = task.optBoolean("breakAfter");
-        Button breakPoint = smallButton(breakSelected ? "✓ 完成这项后休息" : "☕ 设为休息点（最多2个）");
-        breakPoint.setTextSize(10);
-        breakPoint.setTextColor(breakSelected ? Color.rgb(69, 107, 168) : GREEN);
-        breakPoint.setBackground(rounded(breakSelected ? Color.rgb(238, 245, 255) : SURFACE,
-                11, breakSelected ? Color.rgb(116, 159, 235) : LINE, 1));
-        breakPoint.setOnClickListener(v -> toggleTaskBreakPoint(task));
-        LinearLayout.LayoutParams breakPointParams = matchFixed(dp(38));
-        breakPointParams.topMargin = dp(6);
-        wrapper.addView(breakPoint, breakPointParams);
-
-        LinearLayout.LayoutParams params = matchWrap();
-        params.topMargin = dp(8);
-        taskListContainer.addView(wrapper, params);
-        if (breakSelected) {
-            TextView breakDivider = text("☕  我的休息点    完成上面这项后安排休息", 10,
-                    Color.rgb(69, 107, 168), true);
-            breakDivider.setPadding(dp(11), dp(8), dp(11), dp(8));
-            breakDivider.setBackground(rounded(Color.rgb(244, 248, 255), 10,
-                    Color.rgb(156, 188, 245), 1));
-            LinearLayout.LayoutParams breakDividerParams = matchWrap();
-            breakDividerParams.topMargin = dp(5);
-            taskListContainer.addView(breakDivider, breakDividerParams);
-        }
-        JSONObject owner = taskOwner(false);
-        if (weekendKeyFor(currentDate) == null && owner != null
-                && task.optString("id").equals(owner.optString("mealAfterTaskId"))) {
-            TextView divider = text("🍚  吃饭    饭后从下一项继续", 10, Color.rgb(133, 99, 38), true);
-            divider.setPadding(dp(11), dp(8), dp(11), dp(8));
-            divider.setBackground(rounded(Color.rgb(255, 250, 240), 10,
-                    Color.rgb(224, 189, 112), 1));
-            LinearLayout.LayoutParams dividerParams = matchWrap();
-            dividerParams.topMargin = dp(5);
-            taskListContainer.addView(divider, dividerParams);
-        }
-    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -3663,47 +3722,10 @@ public class MainActivity extends Activity {
                     owner.remove("orderSavedAt");
                     saveTaskData();
                     renderTasks();
+                    renderOrderSelection(false);
                 })
                 .setNegativeButton("取消", null)
                 .show();
-    }
-
-    private void toggleMealAfterTask(JSONObject task) {
-        if (weekendKeyFor(currentDate) != null) return;
-        JSONObject owner = taskOwner(true);
-        String taskId = task.optString("id");
-        if (taskId.equals(owner.optString("mealAfterTaskId"))) owner.remove("mealAfterTaskId");
-        else put(owner, "mealAfterTaskId", taskId);
-        owner.remove("orderSaved");
-        owner.remove("orderSavedAt");
-        saveTaskData();
-        renderTasks();
-    }
-
-    private int taskBreakPointCount(JSONArray tasks) {
-        int count = 0;
-        if (tasks == null) return count;
-        for (int index = 0; index < tasks.length(); index++) {
-            JSONObject task = tasks.optJSONObject(index);
-            if (task != null && task.optBoolean("breakAfter")) count++;
-        }
-        return count;
-    }
-
-    private void toggleTaskBreakPoint(JSONObject task) {
-        JSONArray tasks = taskArray(false);
-        boolean selected = task.optBoolean("breakAfter");
-        if (!selected && taskBreakPointCount(tasks) >= 2) {
-            toast("最多设置两个休息点");
-            return;
-        }
-        put(task, "breakAfter", !selected);
-        JSONObject owner = taskOwner(true);
-        owner.remove("orderSaved");
-        owner.remove("orderSavedAt");
-        saveTaskData();
-        renderTasks();
-        toast(selected ? "已取消这个休息点" : "这里已设为休息点");
     }
 
     private void showTaskEditDialog(JSONObject task) {
@@ -3807,24 +3829,6 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    private Button orderArrowButton(String label, boolean enabled, Runnable action) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextSize(13);
-        button.setTextColor(Color.rgb(83, 115, 166));
-        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        button.setAllCaps(false);
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
-        button.setMinHeight(0);
-        button.setMinimumHeight(0);
-        button.setPadding(0, 0, 0, 0);
-        button.setEnabled(enabled);
-        button.setAlpha(enabled ? 1f : 0.28f);
-        button.setBackground(rounded(Color.WHITE, 16, LINE, 1));
-        button.setOnClickListener(v -> action.run());
-        return button;
-    }
 
     private void addQuestSection(String titleValue, String hintValue) {
         LinearLayout section = vertical();
@@ -4039,7 +4043,6 @@ public class MainActivity extends Activity {
                 + task.optString("completedAt", "已") + " 完成 · " + estimateLabel
                 + " · 实际 " + taskActualMinutes(task) + " 分钟";
         else if (weekendMode && planSaved && !canDoToday) meta = "计划" + plannedDayLabel(task) + "完成 · " + estimateLabel;
-        if (task.optBoolean("breakAfter") && !"done".equals(status)) meta += " · ☕ 完成后休息";
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
         metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
         taskCopy.addView(metaView);
@@ -4194,7 +4197,7 @@ public class MainActivity extends Activity {
         } else if (executionStarted && isFriday) {
             weekendTaskPlanHint.setText("三天计划已经开始执行，安排已锁定。");
         } else if (isFriday && !taskOrderSaved()) {
-            weekendTaskPlanHint.setText("日期已安排，关闭弹窗后排好三天的闯关顺序。");
+            weekendTaskPlanHint.setText("日期已安排，接下来分别选择三天的顺序。");
         } else if (isFriday) {
             weekendTaskPlanHint.setText("安排好啦，今天先完成周五的 " + fridayCount + " 项。");
         } else if (currentDate.equals(saturday)) {
@@ -4308,6 +4311,7 @@ public class MainActivity extends Activity {
         renderAll();
         if (weekendTaskPlanDialog != null && weekendTaskPlanDialog.isShowing()) weekendTaskPlanDialog.dismiss();
         toast("完成日期已保存，接下来排好三天顺序吧");
+        showTaskOrderDialog();
     }
 
     private void toggleWeekendTaskPenalty() {
@@ -4385,9 +4389,6 @@ public class MainActivity extends Activity {
                 weekend.remove("planSavedAt");
             }
             JSONObject owner = taskOwner(true);
-            if (task.optString("id").equals(owner.optString("mealAfterTaskId"))) {
-                owner.remove("mealAfterTaskId");
-            }
             owner.remove("orderSaved");
             owner.remove("orderSavedAt");
             cleanupCurrentRecord();
@@ -4473,9 +4474,6 @@ public class MainActivity extends Activity {
                 weekend.remove("penaltyConfirmed");
                 Result result = weekendResultFor(weekendKey, weekend);
                 toast("周末作业已全部完成，" + result.label + " " + amountText(result.amount));
-            } else if (weekendKey == null && task.optString("id")
-                    .equals(taskOwner(false).optString("mealAfterTaskId"))) {
-                toast("饭前计划完成，可以准备吃饭啦");
             } else {
                 int todayTotal = 0;
                 int todayDone = 0;
@@ -7063,6 +7061,7 @@ public class MainActivity extends Activity {
     }
 
     private void selectDate(String date) {
+        dismissTaskOrderDialog();
         dismissTaskEntryDialog();
         dismissTaskFocusDialog();
         taskListExpanded = false;

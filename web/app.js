@@ -194,6 +194,11 @@
     taskSummary: $("#taskSummary"),
     taskPanel: $("#taskPanel"), taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
     taskOrderButton: $("#taskOrderButton"),
+    taskOrderModal: $("#taskOrderModal"), taskOrderCloseButton: $("#taskOrderCloseButton"),
+    taskOrderTitle: $("#taskOrderTitle"), taskOrderProgress: $("#taskOrderProgress"),
+    taskOrderDays: $("#taskOrderDays"), taskOrderChoices: $("#taskOrderChoices"),
+    taskOrderUndoButton: $("#taskOrderUndoButton"), taskOrderResetButton: $("#taskOrderResetButton"),
+    taskOrderConfirmButton: $("#taskOrderConfirmButton"),
     activeTaskBanner: $("#activeTaskBanner"), activeTaskTitle: $("#activeTaskTitle"),
     activeTaskTime: $("#activeTaskTime"), taskList: $("#taskList"),
     emptyTaskList: $("#emptyTaskList"), taskListFooter: $("#taskListFooter"), taskConfirmHint: $("#taskConfirmHint"),
@@ -242,12 +247,13 @@
   let taskEditTaskId = null;
   let taskListExpanded = false;
   let completedTasksExpanded = false;
+  let orderSelectionDay = "daily";
+  let orderPreviewShowing = false;
   let editingPendingTaskId = null;
   let lastDeletedTask = null;
   let undoDeleteTimer = null;
   let dailyCheckinsExpanded = false;
   let historyManageMode = false;
-  let pointerTaskDrag = null;
   let selectedDictationLesson = state.dictationLesson;
   let dictationSession = null;
   let dictationAudioDbPromise = null;
@@ -1888,7 +1894,7 @@
       ? isFriday ? "先核对并确认上面的作业清单。" : "周五的作业清单还没有确认。"
       : !weekend.planSaved ? isFriday ? "选好每项作业的完成日，再保存安排。" : "周五还没有保存周末安排。"
         : executionStarted && isFriday ? "三天计划已经开始执行，安排已锁定。"
-          : isFriday && !orderSaved ? "日期已安排，关闭弹窗后排好三天的闯关顺序。"
+          : isFriday && !orderSaved ? "日期已安排，接下来分别选择三天的顺序。"
             : isFriday ? `安排好啦，今天先完成周五的 ${fridayTasks.length} 项。`
           : date === saturday ? `今天优先完成周六的 ${saturdayTasks.length} 项。`
             : date === sunday ? `今天完成周日的 ${sundayTasks.length} 项，并补齐未完成项。` : "安排保存后，三天会按计划显示。";
@@ -1974,7 +1980,6 @@
     const canEditList = !key || isFriday;
     const ledgerReady = key && !isFriday ? true : Boolean(recordFor(date)?.ledgerConfirmed);
     const tasks = tasksForDate(date);
-    const owner = taskOwnerForDate(date);
     const confirmed = taskListConfirmed(date);
     const doneCount = tasks.filter((task) => task.status === "done").length;
     const active = activeTaskForDate(date);
@@ -2000,12 +2005,12 @@
     elements.confirmTaskListButton.hidden = !confirmed || !canEditList || !allPending;
     elements.confirmTaskListButton.textContent = "修改作业清单";
     elements.taskOrderButton.hidden = !canArrangeOrder;
-    elements.taskOrderButton.textContent = sortingMode ? "确定顺序，开始闯关" : "调整闯关顺序";
+    elements.taskOrderButton.textContent = sortingMode ? "选择作业顺序" : "重新选择顺序";
     elements.taskOrderButton.className = sortingMode
       ? "primary-button compact-button" : "text-button bordered compact-order-button";
     const currentRecordData = recordFor(date) || {};
     const taskConfirmHint = sortingMode
-      ? key ? "分别排好周五、周六、周日的顺序，确定后就按计划闯关。" : "拖动作业，或使用箭头排好顺序，再确定开始。"
+      ? ""
       : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
       : key && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
       : !canEditList
@@ -2074,10 +2079,7 @@
       let buttons = "";
       const canDoToday = canDoTaskToday(task);
       const allowActions = options.allowActions !== false;
-      if (options.sortable) {
-        buttons = `<button class="order-arrow" type="button" data-order-action="up" data-task-id="${escapeHtml(String(task.id))}" aria-label="向前移动"${options.moveUp ? "" : " disabled"}>↑</button>
-          <button class="order-arrow" type="button" data-order-action="down" data-task-id="${escapeHtml(String(task.id))}" aria-label="向后移动"${options.moveDown ? "" : " disabled"}>↓</button>`;
-      } else if (confirmed && canDoToday && allowActions) {
+      if (confirmed && canDoToday && allowActions) {
         if (status === "active") {
           buttons = taskButton("休息一下", "pause", task.id) + taskButton("完成", "complete", task.id, "primary-task-action");
         } else if (status === "paused") {
@@ -2093,38 +2095,25 @@
         buttons = taskButton("删除", "delete", task.id, "danger-task-action");
       }
       const estimateText = `预计 ${estimatedMinutes(task)} 分钟`;
-      let meta = options.sortable ? "拖动或用箭头排序"
-        : status === "done"
+      const meta = status === "done"
         ? `${task.completedDate ? `${formatDate(task.completedDate)} ` : ""}${task.completedAt || "已"} 完成 · ${estimateText} · 实际 ${taskActualMinutes(task)} 分钟`
         : status === "active" ? `${estimateText} · 已用 ${taskDurationLabel(task)}`
           : status === "paused" ? `${estimateText} · 已用 ${taskDurationLabel(task)}`
             : key && weekend.planSaved && !canDoToday ? `计划${plannedDayLabel(task)}完成 · ${estimateText}` : estimateText;
-      if (task.breakAfter && status !== "done") meta += " · ☕ 完成后休息";
       const planBadge = key && weekend.planSaved ? `<span class="task-plan-badge">${plannedDayLabel(task)}</span>` : "";
       const plannedToday = key && plannedDateForTask(key, task) === date;
-      const planningTools = options.sortable ? `<div class="task-planning-tools">
-        <label>预计用时<select data-estimate-task-id="${escapeHtml(String(task.id))}" aria-label="${escapeHtml(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map((minutes) => `<option value="${minutes}"${estimatedMinutes(task) === minutes ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label>
-        <button type="button" data-break-after="${escapeHtml(String(task.id))}" class="${task.breakAfter ? "break-selected" : ""}">${task.breakAfter ? "✓ 休息点" : "设为休息点"}</button>
-        ${!key ? `<button type="button" data-meal-after="${escapeHtml(String(task.id))}" class="${String(owner?.mealAfterTaskId || "") === String(task.id) ? "selected" : ""}">${String(owner?.mealAfterTaskId || "") === String(task.id) ? "✓ 饭前到这里" : "饭前到这里"}</button>` : ""}
-      </div>` : "";
-      const mealDivider = options.sortable && !key && String(owner?.mealAfterTaskId || "") === String(task.id)
-        ? `<div class="meal-divider"><span>🍚</span><strong>吃饭</strong><small>饭后从下一项继续</small></div>` : "";
-      const breakDivider = options.sortable && task.breakAfter
-        ? `<div class="break-divider"><span>☕</span><strong>我的休息点</strong><small>完成上面这项后，我安排一次休息</small></div>` : "";
       const editAttributes = editable
         ? ` data-edit-task-id="${escapeHtml(String(task.id))}" tabindex="0" aria-label="修改${escapeAttribute(task.title || "当前作业")}"`
         : "";
-      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${options.sortable ? " sortable" : ""}${editable ? " editable-task-card" : ""}" data-subject="${escapeHtml(task.subject || "其他")}"${options.sortable ? ` data-sort-task-id="${escapeHtml(String(task.id))}"` : ""}${editAttributes}>
+      return `<article class="task-item ${status}${plannedToday ? " planned-today" : ""}${options.current ? " quest-current-card" : ""}${options.compact ? " quest-compact-card" : ""}${editable ? " editable-task-card" : ""}" data-subject="${escapeHtml(task.subject || "其他")}"${editAttributes}>
         <div class="task-main-row">
-          ${options.sortable ? `<button class="drag-handle" type="button" data-drag-handle aria-label="按住拖动作业排序" title="按住拖动">⠿</button><span class="order-number">${options.orderNumber}</span>` : ""}
           <div class="task-copy">
             <span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${editable ? '<span class="task-edit-mark" aria-hidden="true">✎</span>' : ""}${planBadge}
             <small class="task-meta">${escapeHtml(meta)}</small>
           </div>
           <div class="task-buttons">${buttons}</div>
         </div>
-        ${planningTools}
-      </article>${breakDivider}${mealDivider}`;
+      </article>`;
     };
 
     const pendingTasks = pendingTaskOrder(tasks);
@@ -2145,21 +2134,12 @@
     }
 
     if (sortingMode) {
-      const groupHtml = (label, groupTasks, help) => groupTasks.length ? `<section class="order-group">
-        ${label ? `<div class="order-group-title"><strong>${label}</strong><small>${help}</small></div>` : ""}
-        ${groupTasks.map((task, index) => taskCard(task, {
-          sortable: true, orderNumber: index + 1, moveUp: index > 0, moveDown: index < groupTasks.length - 1
-        })).join("")}</section>` : "";
-      const orderBody = key
-        ? groupHtml("周五闯关顺序", tasks.filter((task) => plannedDayForTask(task) === "friday"), "放学后先完成这一部分")
-          + groupHtml("周六闯关顺序", tasks.filter((task) => plannedDayForTask(task) === "saturday"), "完成周六计划")
-          + groupHtml("周日闯关顺序", tasks.filter((task) => plannedDayForTask(task) === "sunday"), "周日按这个顺序完成")
-        : groupHtml("", tasks, "");
-      elements.taskSummary.textContent = `${tasks.length} 关待安排`;
+      const selected = taskOrderDraft().selectedIds.length;
+      elements.taskSummary.textContent = `已选 ${selected} / ${tasks.length} 项`;
+      elements.taskOrderButton.textContent = selected === tasks.length ? "查看顺序" : selected ? "继续选择顺序" : "选择作业顺序";
       elements.activeTaskBanner.hidden = true;
       const totalEstimate = tasks.reduce((sum, task) => sum + estimatedMinutes(task), 0);
-      const breakPointCount = tasks.filter((task) => task.breakAfter).length;
-      elements.taskList.innerHTML = `<div class="order-intro">预计净学习 ${totalEstimate} 分钟。排好顺序，并设置最多两个休息点（已选 ${breakPointCount} 个）${key ? "。" : "；还可以选择饭前完成到哪一项。"}</div>${orderBody}`;
+      elements.taskList.innerHTML = `<div class="order-intro">预计净学习 ${totalEstimate} 分钟</div>`;
       return;
     }
 
@@ -2170,14 +2150,9 @@
 
     const progress = progressTotal ? Math.round(progressDone / progressTotal * 100) : 100;
     const remainingMinutes = remainingEstimatedMinutes(questRemaining);
-    const mealBoundary = !key && owner?.mealAfterTaskId
-      ? tasks.findIndex((task) => String(task.id) === String(owner.mealAfterTaskId)) : -1;
-    const currentIndex = questCurrent ? tasks.indexOf(questCurrent) : -1;
-    const mealPhase = mealBoundary >= 0 && currentIndex >= 0
-      ? currentIndex <= mealBoundary ? "饭前计划" : "饭后计划" : "今日计划";
     const progressHtml = `<div class="quest-progress${progress === 100 ? " complete" : ""}">
       <div class="quest-progress-track" role="progressbar" aria-label="今日作业进度：已完成 ${progressDone} 项，共 ${progressTotal} 项" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div>
-      ${progress < 100 ? `<div class="quest-time-summary"><span>${mealPhase}</span><strong>预计还需 ${remainingMinutes} 分钟</strong></div>` : ""}
+      ${progress < 100 ? `<div class="quest-time-summary"><span>今日计划</span><strong>预计还需 ${remainingMinutes} 分钟</strong></div>` : ""}
     </div>`;
 
     if (progress === 100) {
@@ -2380,6 +2355,7 @@
     saveAndRender("时间已调整");
   }
   function setRecordDate(date) {
+    closeTaskOrderModal();
     closeTaskEntryModal();
     closeTaskEditor();
     closeFocusModal();
@@ -2483,6 +2459,7 @@
     persist();
     render();
     if (confirmed) openTaskEntryModal();
+    else if (!key) openTaskOrderModal();
     showToast(confirmed ? "我可以继续修改清单了" : `清单收好了，接下来安排 ${tasks.length} 项作业的顺序`);
   }
 
@@ -2498,32 +2475,152 @@
     renderTasks();
   }
 
-  function toggleMealAfter(id) {
-    if (weekendKeyFor(elements.recordDate.value)) return showToast("周末作业已经按日期分段，不再设置饭前分界");
-    const task = taskById(id);
-    if (!task || task.status !== "pending") return;
-    const owner = taskOwnerForDate(elements.recordDate.value, true);
-    owner.mealAfterTaskId = String(owner.mealAfterTaskId || "") === String(id) ? "" : String(id);
-    owner.orderSaved = false;
-    delete owner.orderSavedAt;
-    persist();
-    renderTasks();
+  function canChooseTaskOrder() {
+    const key = weekendKeyFor(elements.recordDate.value);
+    const tasks = tasksForDate();
+    return taskListConfirmed() && !taskOrderSaved() && tasks.length > 0
+      && tasks.every((task) => (task.status || "pending") === "pending")
+      && (!key || (key === elements.recordDate.value && taskOwnerForDate()?.planSaved));
   }
 
-  function toggleTaskBreakPoint(id) {
-    const task = taskById(id);
-    if (!task || task.status !== "pending") return;
+  function orderDayForTask(task) {
+    return weekendKeyFor(elements.recordDate.value) ? plannedDayForTask(task) : "daily";
+  }
+
+  function taskOrderGroups() {
     const tasks = tasksForDate();
-    if (!task.breakAfter && tasks.filter((item) => item.breakAfter).length >= 2) {
-      return showToast("最多设置两个休息点，可以先取消一个再调整");
-    }
-    task.breakAfter = !task.breakAfter;
+    return (weekendKeyFor(elements.recordDate.value)
+      ? [["friday", "周五"], ["saturday", "周六"], ["sunday", "周日"]] : [["daily", "今天"]])
+      .map(([day, label]) => ({ day, label, tasks: tasks.filter((task) => orderDayForTask(task) === day) }))
+      .filter((group) => group.tasks.length);
+  }
+
+  // Keep a separate draft: choosing a card never moves the underlying task list.
+  // The task/day snapshot also invalidates stale drafts after editing or importing a list.
+  function taskOrderDraft() {
     const owner = taskOwnerForDate(elements.recordDate.value, true);
-    owner.orderSaved = false;
-    delete owner.orderSavedAt;
+    const taskIds = tasksForDate().map((task) => String(task.id));
+    const days = tasksForDate().map(orderDayForTask);
+    let draft = owner.orderDraft;
+    if (!draft || JSON.stringify(draft.taskIds) !== JSON.stringify(taskIds)
+        || JSON.stringify(draft.days) !== JSON.stringify(days)) {
+      draft = owner.orderDraft = { taskIds, days, selectedIds: [] };
+    }
+    draft.selectedIds = [...new Set(Array.isArray(draft.selectedIds) ? draft.selectedIds.map(String) : [])]
+      .filter((id) => taskIds.includes(id));
+    return draft;
+  }
+
+  function closeTaskOrderModal() {
+    if (elements.taskOrderModal.hidden) return;
+    elements.taskOrderModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    elements.taskOrderButton.focus({ preventScroll: true });
+  }
+
+  function openTaskOrderModal() {
+    if (!canChooseTaskOrder()) return;
+    const draft = taskOrderDraft();
+    const groups = taskOrderGroups();
+    orderSelectionDay = (groups.find((group) => group.tasks.some((task) => !draft.selectedIds.includes(String(task.id)))) || groups[0]).day;
+    orderPreviewShowing = false;
+    closeTaskEntryModal();
+    closeWeekendPlanModal();
+    elements.taskOrderModal.hidden = false;
+    document.body.classList.add("modal-open");
+    persist();
+    renderOrderSelection(true);
+    elements.taskOrderCloseButton.focus({ preventScroll: true });
+  }
+
+  function renderOrderSelection(resetScroll = false) {
+    if (elements.taskOrderModal.hidden) return;
+    if (!canChooseTaskOrder()) return closeTaskOrderModal();
+    const draft = taskOrderDraft();
+    const groups = taskOrderGroups();
+    const preview = draft.selectedIds.length === draft.taskIds.length;
+    const group = groups.find((item) => item.day === orderSelectionDay) || groups[0];
+    orderSelectionDay = group.day;
+    const selectedFor = (item) => draft.selectedIds.filter((id) => item.tasks.some((task) => String(task.id) === id));
+    const selected = selectedFor(group);
+    const title = preview ? "我的顺序" : selected.length === group.tasks.length
+      ? `${group.label}已选好` : `第 ${selected.length + 1} 项，我选……`;
+    elements.taskOrderTitle.textContent = title;
+    elements.taskOrderProgress.textContent = `已选 ${draft.selectedIds.length} / ${draft.taskIds.length} 项`;
+    elements.taskOrderDays.hidden = preview || groups.length === 1;
+    elements.taskOrderDays.innerHTML = groups.map((item) => `<button type="button" data-order-day="${item.day}" aria-pressed="${item.day === group.day}">${item.label} ${selectedFor(item).length}/${item.tasks.length}</button>`).join("");
+    const card = (task, number) => `<article class="task-item order-choice-row${number ? " is-picked" : ""}" data-subject="${escapeHtml(task.subject || "其他")}">
+      ${preview ? '<div class="order-pick-card">' : `<button class="order-pick-card" type="button" data-order-pick="${escapeAttribute(String(task.id))}" aria-pressed="${number > 0}" aria-label="${escapeAttribute(`${number ? `第 ${number} 项：` : "选择："}${task.subject || "其他"}，${task.title}`)}">`}
+        <span class="order-number" aria-hidden="true">${number || ""}</span>
+        <span class="task-copy"><span class="subject-badge">${escapeHtml(task.subject || "其他")}</span><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong></span>
+      ${preview ? "</div>" : "</button>"}
+      <div class="task-planning-tools"><label>预计用时<select data-order-estimate="${escapeAttribute(String(task.id))}" aria-label="${escapeAttribute(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map((minutes) => `<option value="${minutes}"${estimatedMinutes(task) === minutes ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label></div>
+    </article>`;
+    const scrollTop = resetScroll || preview !== orderPreviewShowing ? 0 : elements.taskOrderChoices.scrollTop;
+    const focusedId = document.activeElement?.dataset?.orderPick;
+    elements.taskOrderChoices.innerHTML = preview ? groups.map((item) => `${groups.length > 1 ? `<h3 class="order-preview-heading">${item.label}</h3>` : ""}${selectedFor(item).map((id, index) => card(item.tasks.find((task) => String(task.id) === id), index + 1)).join("")}`).join("")
+      : group.tasks.map((task) => card(task, selected.indexOf(String(task.id)) + 1)).join("");
+    if (focusedId && !preview) [...elements.taskOrderChoices.querySelectorAll("button[data-order-pick]")]
+      .find((button) => button.dataset.orderPick === focusedId)?.focus({ preventScroll: true });
+    elements.taskOrderChoices.scrollTop = scrollTop;
+    orderPreviewShowing = preview;
+    elements.taskOrderUndoButton.disabled = !draft.selectedIds.length;
+    elements.taskOrderResetButton.disabled = !draft.selectedIds.length;
+    const nextGroup = groups.find((item) => selectedFor(item).length < item.tasks.length);
+    elements.taskOrderConfirmButton.hidden = !preview && selected.length < group.tasks.length;
+    elements.taskOrderConfirmButton.textContent = preview ? "就按这个顺序" : `选择${nextGroup?.label || "下一天"}`;
+  }
+
+  function chooseTaskOrder(id) {
+    if (!canChooseTaskOrder()) return;
+    const task = taskById(id);
+    const draft = taskOrderDraft();
+    if (!task || orderDayForTask(task) !== orderSelectionDay || draft.selectedIds.includes(String(id))) return;
+    draft.selectedIds.push(String(id));
     persist();
     renderTasks();
-    showToast(task.breakAfter ? "这里已设为休息点" : "已取消这个休息点");
+    renderOrderSelection();
+  }
+
+  function undoTaskOrderSelection(reset = false) {
+    if (!canChooseTaskOrder()) return;
+    const draft = taskOrderDraft();
+    const lastTask = taskById(draft.selectedIds[draft.selectedIds.length - 1]);
+    if (reset) {
+      draft.selectedIds = [];
+      orderSelectionDay = taskOrderGroups()[0].day;
+    } else {
+      draft.selectedIds.pop();
+      if (lastTask) orderSelectionDay = orderDayForTask(lastTask);
+    }
+    persist();
+    renderTasks();
+    renderOrderSelection(true);
+  }
+
+  function confirmTaskOrderSelection() {
+    if (!canChooseTaskOrder()) return;
+    const draft = taskOrderDraft();
+    const groups = taskOrderGroups();
+    const nextGroup = groups.find((group) => group.tasks.some((task) => !draft.selectedIds.includes(String(task.id))));
+    if (nextGroup) {
+      orderSelectionDay = nextGroup.day;
+      renderOrderSelection(true);
+      return;
+    }
+    const owner = taskOwnerForDate();
+    owner.tasks = groups.flatMap((group) => draft.selectedIds
+      .map((id) => group.tasks.find((task) => String(task.id) === id)).filter(Boolean));
+    owner.orderSaved = true;
+    owner.orderSavedAt = currentTime();
+    delete owner.orderDraft;
+    closeTaskOrderModal();
+    taskListExpanded = false;
+    completedTasksExpanded = false;
+    persist();
+    render();
+    const firstTask = nextTaskForToday();
+    if (firstTask) openStartPlanChoice(firstTask.id);
   }
 
   function saveTaskEdit() {
@@ -2556,76 +2653,19 @@
     if (key && !owner.planSaved) return showToast("请先安排每项作业在周五、周六还是周日完成");
     if (tasks.some((task) => (task.status || "pending") !== "pending"))
       return showToast("已经开始闯关，顺序不能再调整");
-    if (tasks.filter((task) => task.breakAfter).length > 2)
-      return showToast("休息点最多两个，请先取消多余的休息点");
     if (taskOrderSaved(date)) {
       if (startPlanSession?.date === date) clearStartPlanSession();
       owner.orderSaved = false;
       delete owner.orderSavedAt;
+      delete owner.orderDraft;
       taskListExpanded = false;
       completedTasksExpanded = false;
       persist();
       render();
-      showToast("可以重新安排顺序了");
+      openTaskOrderModal();
       return;
     }
-    owner.orderSaved = true;
-    owner.orderSavedAt = currentTime();
-    taskListExpanded = false;
-    completedTasksExpanded = false;
-    persist();
-    render();
-    showToast(key ? "周末闯关顺序已确定！" : "顺序已确定，我要开始第一关啦！");
-    const firstTask = nextTaskForToday(date);
-    if (firstTask) window.setTimeout(() => openStartPlanChoice(firstTask.id, date), 80);
-  }
-
-  function reorderTask(sourceId, targetId) {
-    if (String(sourceId) === String(targetId)) return;
-    const date = elements.recordDate.value;
-    const key = weekendKeyFor(date);
-    const tasks = tasksForDate(date);
-    const fromIndex = tasks.findIndex((task) => String(task.id) === String(sourceId));
-    const targetIndex = tasks.findIndex((task) => String(task.id) === String(targetId));
-    if (fromIndex < 0 || targetIndex < 0) return;
-    if (key && plannedDayForTask(tasks[fromIndex]) !== plannedDayForTask(tasks[targetIndex]))
-      return showToast("三天的作业请分别排序");
-    const [moved] = tasks.splice(fromIndex, 1);
-    tasks.splice(targetIndex, 0, moved);
-    const owner = taskOwnerForDate(date, true);
-    owner.tasks = tasks;
-    owner.orderSaved = false;
-    delete owner.orderSavedAt;
-    persist();
-    render();
-  }
-
-  function moveTaskOneStep(id, direction) {
-    const date = elements.recordDate.value;
-    const key = weekendKeyFor(date);
-    const tasks = tasksForDate(date);
-    const task = tasks.find((item) => String(item.id) === String(id));
-    if (!task) return;
-    const group = key ? tasks.filter((item) => plannedDayForTask(item) === plannedDayForTask(task)) : tasks;
-    const position = group.indexOf(task);
-    const target = group[position + direction];
-    if (target) reorderTask(task.id, target.id);
-  }
-
-  function saveTaskOrderFromDom() {
-    const orderedIds = [...elements.taskList.querySelectorAll("[data-sort-task-id]")]
-      .map((card) => card.dataset.sortTaskId);
-    const tasks = tasksForDate();
-    if (orderedIds.length !== tasks.length) return renderTasks();
-    const byId = new Map(tasks.map((task) => [String(task.id), task]));
-    const orderedTasks = orderedIds.map((id) => byId.get(String(id))).filter(Boolean);
-    if (orderedTasks.length !== tasks.length) return renderTasks();
-    const owner = taskOwnerForDate(elements.recordDate.value, true);
-    owner.tasks = orderedTasks;
-    owner.orderSaved = false;
-    delete owner.orderSavedAt;
-    persist();
-    render();
+    openTaskOrderModal();
   }
 
   function beginPendingTaskEdit(id) {
@@ -2697,7 +2737,6 @@
       const owner = taskOwnerForDate(elements.recordDate.value, true);
       rememberDeletedTask(task, date);
       owner.tasks = tasks.filter((item) => String(item.id) !== String(id));
-      if (String(owner.mealAfterTaskId || "") === String(id)) delete owner.mealAfterTaskId;
       if (key) {
         delete owner.planSaved;
         delete owner.planSavedAt;
@@ -2764,8 +2803,6 @@
         delete weekend.penaltyConfirmed;
         const result = weekendResultFor(key, weekend);
         showToast(`周末作业已全部完成，${result.label} ${amountText(result.amount, false)}`);
-      } else if (!key && String(taskOwnerForDate(date)?.mealAfterTaskId || "") === String(task.id)) {
-        showToast("饭前计划完成，可以准备吃饭啦");
       } else {
         const todayTasks = !key ? tasks : date === key
           ? tasks.filter((item) => plannedDayForTask(item) === "friday")
@@ -3023,6 +3060,7 @@
     persist();
     render();
     closeWeekendPlanModal();
+    openTaskOrderModal();
     showToast("完成日期已保存，接下来排好三天顺序吧");
   }
 
@@ -3134,6 +3172,7 @@
     if (!elements.startPlanModal.hidden) closeStartPlanModal();
     else if (!elements.breakChoiceModal.hidden) closeBreakChoice();
     else if (!elements.taskEditModal.hidden) closeTaskEditor();
+    else if (!elements.taskOrderModal.hidden) closeTaskOrderModal();
     else if (!elements.taskEntryModal.hidden) closeTaskEntryModal();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
     else if (!elements.dictationPage.hidden) closeDictationPage();
@@ -3214,22 +3253,34 @@
   });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
+  elements.taskOrderCloseButton.addEventListener("click", closeTaskOrderModal);
+  elements.taskOrderUndoButton.addEventListener("click", () => undoTaskOrderSelection());
+  elements.taskOrderResetButton.addEventListener("click", () => undoTaskOrderSelection(true));
+  elements.taskOrderConfirmButton.addEventListener("click", confirmTaskOrderSelection);
+  elements.taskOrderChoices.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-order-pick]");
+    if (button) chooseTaskOrder(button.dataset.orderPick);
+  });
+  elements.taskOrderChoices.addEventListener("change", (event) => {
+    const select = event.target.closest("select[data-order-estimate]");
+    if (select && canChooseTaskOrder()) {
+      setTaskEstimate(select.dataset.orderEstimate, select.value);
+      // Do not recreate the focused select or select a task while changing its estimate.
+    }
+  });
+  elements.taskOrderDays.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-order-day]");
+    if (button) { orderSelectionDay = button.dataset.orderDay; renderOrderSelection(true); }
+  });
+  elements.taskOrderModal.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const controls = [...elements.taskOrderModal.querySelectorAll("button:not([disabled]), select")]
+      .filter((control) => control.getClientRects().length);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  });
   elements.taskList.addEventListener("click", (event) => {
-    const mealButton = event.target.closest("button[data-meal-after]");
-    if (mealButton) {
-      toggleMealAfter(mealButton.dataset.mealAfter);
-      return;
-    }
-    const breakPointButton = event.target.closest("button[data-break-after]");
-    if (breakPointButton) {
-      toggleTaskBreakPoint(breakPointButton.dataset.breakAfter);
-      return;
-    }
-    const orderButton = event.target.closest("button[data-order-action]");
-    if (orderButton) {
-      moveTaskOneStep(orderButton.dataset.taskId, orderButton.dataset.orderAction === "up" ? -1 : 1);
-      return;
-    }
     const toggle = event.target.closest("button[data-list-toggle]");
     if (toggle) {
       if (toggle.dataset.listToggle === "later") taskListExpanded = !taskListExpanded;
@@ -3252,50 +3303,6 @@
     if (!card) return;
     event.preventDefault();
     openTaskEditor(card.dataset.editTaskId);
-  });
-  elements.taskList.addEventListener("change", (event) => {
-    const select = event.target.closest("select[data-estimate-task-id]");
-    if (select) setTaskEstimate(select.dataset.estimateTaskId, select.value);
-  });
-  elements.taskList.addEventListener("pointerdown", (event) => {
-    const handle = event.target.closest("[data-drag-handle]");
-    const card = handle?.closest("[data-sort-task-id]");
-    if (!handle || !card || event.button !== 0) return;
-    event.preventDefault();
-    pointerTaskDrag = {
-      pointerId: event.pointerId,
-      handle,
-      card,
-      group: card.closest(".order-group"),
-      moved: false
-    };
-    card.classList.add("dragging");
-    try { handle.setPointerCapture(event.pointerId); } catch (_) { /* 浏览器可能不支持捕获，窗口监听仍可工作 */ }
-  });
-  window.addEventListener("pointermove", (event) => {
-    if (!pointerTaskDrag || event.pointerId !== pointerTaskDrag.pointerId) return;
-    event.preventDefault();
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-sort-task-id]");
-    if (!target || target === pointerTaskDrag.card || target.closest(".order-group") !== pointerTaskDrag.group) return;
-    const rect = target.getBoundingClientRect();
-    if (event.clientY < rect.top + rect.height / 2) target.before(pointerTaskDrag.card);
-    else target.after(pointerTaskDrag.card);
-    pointerTaskDrag.moved = true;
-    [...pointerTaskDrag.group.querySelectorAll(".order-number")]
-      .forEach((number, index) => { number.textContent = String(index + 1); });
-  }, { passive: false });
-  window.addEventListener("pointerup", (event) => {
-    if (!pointerTaskDrag || event.pointerId !== pointerTaskDrag.pointerId) return;
-    const drag = pointerTaskDrag;
-    pointerTaskDrag = null;
-    try { drag.handle.releasePointerCapture(event.pointerId); } catch (_) { /* 已自动释放 */ }
-    drag.card.classList.remove("dragging");
-    if (drag.moved) saveTaskOrderFromDom();
-  });
-  window.addEventListener("pointercancel", (event) => {
-    if (!pointerTaskDrag || event.pointerId !== pointerTaskDrag.pointerId) return;
-    pointerTaskDrag = null;
-    renderTasks();
   });
   elements.focusCloseButton.addEventListener("click", closeFocusModal);
   elements.focusPauseButton.addEventListener("click", () => {
