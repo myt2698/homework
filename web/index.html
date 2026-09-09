@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f8ff">
-  <title>作业小账本</title>
+  <title>作业小计划</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
         <span class="brand-mascot" aria-hidden="true">🌟</span>
         <div>
           <p class="eyebrow">每天进步一点点</p>
-          <h1>作业小账本</h1>
+          <h1>作业小计划</h1>
         </div>
       </div>
       <div class="topbar-actions">
@@ -57,8 +57,44 @@
         </button>
       </div>
 
+      <section class="daily-checkins" aria-labelledby="dailyCheckinsTitle">
+        <div class="daily-checkins-heading">
+          <h2 id="dailyCheckinsTitle">习惯打卡</h2>
+          <small id="dailyCheckinsSummary">已完成 0 / 4</small>
+        </div>
+        <div class="daily-checkins-grid">
+          <button class="daily-required-card" id="sportCard" type="button" aria-expanded="false" aria-controls="sportOptions">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span class="daily-required-copy"><strong>运动打卡</strong><small id="sportStatus">待完成</small></span>
+            <span class="sport-options-arrow" aria-hidden="true">⌄</span>
+          </button>
+          <button class="daily-required-card" id="readingButton" type="button" aria-pressed="false">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span class="daily-required-copy"><strong>中文阅读</strong><small id="readingStatus">待完成</small></span>
+          </button>
+          <button class="daily-required-card" id="mathThinkingButton" type="button" aria-pressed="false">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span class="daily-required-copy"><strong>数学思维</strong><small id="mathThinkingStatus">待完成</small></span>
+          </button>
+          <button class="daily-required-card" id="englishReadingButton" type="button" aria-pressed="false">
+            <span class="check-mark" aria-hidden="true">✓</span>
+            <span class="daily-required-copy"><strong>英文阅读</strong><small id="englishReadingStatus">待完成</small></span>
+          </button>
+        </div>
+        <div class="sport-options" id="sportOptions" role="group" aria-label="选择已完成的运动" hidden>
+          <small>选择已完成的运动</small>
+          <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
+          <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
+          <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
+          <button type="button" data-sport="50米" aria-pressed="false">50米</button>
+          <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
+        </div>
+      </section>
+
+      <button class="card settings-page-entry holiday-home-entry" id="holidayPlanEntry" type="button" hidden></button>
+      <details class="holiday-overdue" id="holidayOverdue" hidden><summary id="holidayOverdueSummary">之前未完成</summary><div id="holidayOverdueList"></div></details>
       <div class="task-panel" id="taskPanel" hidden>
-        <div class="task-panel-heading">
+        <div class="task-panel-heading" id="taskPanelHeading">
           <div>
             <p class="section-kicker">📚 作业清单</p>
             <h3 id="taskPanelTitle">我选一项，轻松开始！</h3>
@@ -71,7 +107,7 @@
           <span class="task-entry-launcher-icon" aria-hidden="true">✍️</span>
           <span class="task-entry-launcher-copy">
             <strong>录入作业</strong>
-            <small id="taskEntryLauncherStatus">选择科目，语音或文字录入</small>
+            <small id="taskEntryLauncherStatus">选择科目，输入作业</small>
           </span>
           <span class="task-entry-launcher-arrow" aria-hidden="true">›</span>
         </button>
@@ -88,7 +124,7 @@
           <span id="taskConfirmHint">录入后先核对，避免漏掉作业。</span>
           <div class="task-footer-actions">
             <button class="primary-button compact-button" id="taskOrderButton" type="button" hidden>选择作业顺序</button>
-            <button class="secondary-button" id="confirmTaskListButton" type="button" hidden>确认作业清单</button>
+            <button class="secondary-button" id="confirmTaskListButton" type="button" hidden>修改计划</button>
           </div>
         </div>
 
@@ -104,56 +140,11 @@
       <button class="weekend-plan-entry" id="weekendPlanEntry" type="button" hidden>
         <span class="weekend-plan-entry-icon" aria-hidden="true">🗓️</span>
         <span class="weekend-plan-entry-copy">
-          <strong id="weekendPlanEntryTitle">周五安排与闯关</strong>
+          <strong id="weekendPlanEntryTitle">查看三天作业计划</strong>
           <small id="weekendPlanEntryStatus">给作业选择周五、周六或周日</small>
         </span>
         <span class="weekend-plan-entry-arrow" aria-hidden="true">›</span>
       </button>
-
-      <section class="daily-checkins" aria-labelledby="dailyCheckinsTitle">
-        <button class="daily-checkins-toggle" id="dailyCheckinsToggle" type="button" aria-expanded="false" aria-controls="dailyCheckinsBody">
-          <span class="daily-checkins-icon" aria-hidden="true">🌱</span>
-          <span class="daily-checkins-toggle-copy">
-            <strong id="dailyCheckinsTitle">今日习惯</strong>
-            <small id="dailyCheckinsSummary">0 / 4 已完成 · 我做完作业再来打卡</small>
-          </span>
-          <span class="daily-checkins-arrow" id="dailyCheckinsArrow" aria-hidden="true">⌄</span>
-        </button>
-        <div class="daily-checkins-body" id="dailyCheckinsBody" hidden>
-          <p class="daily-checkins-help">运动、中文阅读、数学思维和英文阅读分别完成、分别打卡。</p>
-          <div class="prep-grid sport-section">
-            <div class="prep-check sport-check" id="sportCard">
-              <span class="check-mark" aria-hidden="true">✓</span>
-              <span class="sport-copy">
-                <strong>运动打卡</strong>
-                <small id="sportStatus">选择今天完成的运动</small>
-              </span>
-              <div class="sport-options" id="sportOptions" aria-label="运动项目">
-                <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
-                <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
-                <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
-                <button type="button" data-sport="50米" aria-pressed="false">50米</button>
-                <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
-              </div>
-            </div>
-            <button class="prep-check habit-check" id="readingButton" type="button" aria-pressed="false">
-              <span class="check-mark" aria-hidden="true">✓</span>
-              <span><strong>中文阅读</strong><small id="readingStatus">完成中文阅读后打卡</small></span>
-              <span class="habit-action">打卡</span>
-            </button>
-            <button class="prep-check habit-check" id="mathThinkingButton" type="button" aria-pressed="false">
-              <span class="check-mark" aria-hidden="true">✓</span>
-              <span><strong>数学思维</strong><small id="mathThinkingStatus">完成数学思维练习后打卡</small></span>
-              <span class="habit-action">打卡</span>
-            </button>
-            <button class="prep-check habit-check" id="englishReadingButton" type="button" aria-pressed="false">
-              <span class="check-mark" aria-hidden="true">✓</span>
-              <span><strong>英文阅读</strong><small id="englishReadingStatus">完成英文阅读后打卡</small></span>
-              <span class="habit-action">打卡</span>
-            </button>
-          </div>
-        </div>
-      </section>
 
       <div class="record-actions daily-extras" hidden>
         <button class="text-button danger" id="resetDayButton" type="button">清除当天记录</button>
@@ -302,24 +293,10 @@
       <button class="text-button bordered settings-today-button" id="todayButton" type="button">今天</button>
     </div>
 
-    <section class="card settings-card keyword-settings-card">
-      <div class="settings-section-heading">
-        <div><p class="section-kicker">快捷录入</p><h2>作业关键词</h2></div>
-        <small>决定录作业时显示哪些词</small>
-      </div>
-      <div class="keyword-settings-subjects" id="keywordSettingsSubjects" role="tablist" aria-label="选择关键词科目">
-        <button type="button" data-keyword-settings-subject="语文" role="tab" aria-selected="true">语文</button>
-        <button type="button" data-keyword-settings-subject="数学" role="tab" aria-selected="false">数学</button>
-        <button type="button" data-keyword-settings-subject="英语" role="tab" aria-selected="false">英语</button>
-        <button type="button" data-keyword-settings-subject="科学" role="tab" aria-selected="false">科学</button>
-      </div>
-      <div class="keyword-settings-list" id="keywordSettingsList"></div>
-      <div class="keyword-settings-add">
-        <input id="keywordSettingsInput" type="text" maxlength="12" placeholder="添加一个关键词" aria-label="添加作业关键词">
-        <button class="primary-button compact-button" id="addKeywordButton" type="button">添加</button>
-      </div>
-      <p class="settings-description">隐藏后不会出现在录入页；删除内置词后，也可以随时重新添加。</p>
-    </section>
+    <button class="card settings-page-entry" id="openKeywordSettingsButton" type="button">
+      <span>作业关键词</span><span class="settings-entry-arrow" aria-hidden="true">›</span>
+    </button>
+    <button class="card settings-page-entry" id="openHolidaySettingsButton" type="button"><span>假期设置</span><span class="settings-entry-arrow" aria-hidden="true">›</span></button>
 
     <section class="card settings-card alarm-settings-card">
       <div class="settings-section-heading">
@@ -346,45 +323,87 @@
     </section>
   </section>
 
-  <div class="task-entry-modal" id="taskOrderModal" role="dialog" aria-modal="true" aria-labelledby="taskOrderTitle" hidden>
-    <div class="task-entry-dialog order-dialog">
-      <button class="focus-close" id="taskOrderCloseButton" type="button" aria-label="关闭排序">×</button>
-      <header class="order-dialog-heading">
-        <h2 id="taskOrderTitle" tabindex="-1">第 1 项，我选……</h2>
-        <span id="taskOrderProgress" role="status" aria-live="polite"></span>
-      </header>
-      <div class="order-day-tabs" id="taskOrderDays" aria-label="选择日期"></div>
-      <div class="order-choice-list" id="taskOrderChoices"></div>
-      <footer class="order-dialog-footer">
-        <div class="order-secondary-actions">
-          <button class="text-button bordered" id="taskOrderUndoButton" type="button">撤销上一步</button>
-          <button class="text-button" id="taskOrderResetButton" type="button">重新选择</button>
-        </div>
-        <button class="primary-button" id="taskOrderConfirmButton" type="button" hidden>就按这个顺序</button>
-      </footer>
-    </div>
-  </div>
+  <section class="app-shell settings-page" id="keywordSettingsPage" aria-labelledby="keywordSettingsPageTitle" hidden>
+    <header class="history-page-header">
+      <button class="history-back-button" id="closeKeywordSettingsButton" type="button" aria-label="返回设置">‹</button>
+      <h1 id="keywordSettingsPageTitle">作业关键词</h1>
+    </header>
+    <section class="card settings-card keyword-settings-card" aria-label="管理作业关键词">
+      <div class="keyword-settings-subjects" id="keywordSettingsSubjects" role="tablist" aria-label="选择关键词科目">
+        <button type="button" data-keyword-settings-subject="语文" role="tab" aria-selected="true">语文</button>
+        <button type="button" data-keyword-settings-subject="数学" role="tab" aria-selected="false">数学</button>
+        <button type="button" data-keyword-settings-subject="英语" role="tab" aria-selected="false">英语</button>
+        <button type="button" data-keyword-settings-subject="科学" role="tab" aria-selected="false">科学</button>
+      </div>
+      <div class="keyword-settings-list" id="keywordSettingsList"></div>
+      <div class="keyword-settings-add">
+        <input id="keywordSettingsInput" type="text" maxlength="12" placeholder="添加一个关键词" aria-label="添加作业关键词">
+        <button class="primary-button compact-button" id="addKeywordButton" type="button">添加</button>
+      </div>
+      <p class="settings-description">隐藏后不会出现在录入页；删除内置词后，也可以随时重新添加。</p>
+    </section>
+  </section>
 
-  <div class="task-entry-modal" id="taskEntryModal" role="dialog" aria-modal="true" aria-label="录入作业" hidden>
-    <div class="task-entry-dialog" id="taskEntryDialog">
-      <button class="focus-close" id="taskEntryCloseButton" type="button" aria-label="关闭作业录入">×</button>
+  <section class="app-shell settings-page" id="holidaySettingsPage" aria-labelledby="holidaySettingsTitle" hidden>
+    <header class="history-page-header"><button class="history-back-button" id="holidaySettingsBack" type="button" aria-label="返回设置">‹</button><h1 id="holidaySettingsTitle">假期设置</h1></header>
+    <div id="holidaySettingsList"></div>
+    <form class="card settings-card holiday-config-form" id="holidayConfigForm">
+      <h2 id="holidayConfigTitle">添加假期</h2>
+      <label>假期名称<input id="holidayName" maxlength="30" required placeholder="例如：寒假"></label>
+      <label>开始日期<input id="holidayStart" type="date" required></label>
+      <label>结束日期<input id="holidayEnd" type="date" required></label>
+      <label>安排日期<input id="holidayPlanDate" type="date" required></label>
+      <small>安排日期默认为前一天；已有作业后保留假期日期，具体任务仍可改期。</small>
+      <div class="holiday-actions"><button class="primary-button compact-button" type="submit">保存</button><button class="text-button" id="holidayConfigCancel" type="button" hidden>取消修改</button></div>
+    </form>
+  </section>
+  <section class="task-entry-page" id="holidayPlanPage" aria-labelledby="holidayPlanTitle" hidden>
+    <div class="task-entry-layout">
+      <header class="holiday-plan-header"><button class="history-back-button" id="holidayPlanBack" type="button" aria-label="返回">‹</button><h1 id="holidayPlanTitle">假期计划</h1><button class="primary-button compact-button" id="holidayConfirm" type="button">确定</button></header>
+      <div class="holiday-day-toolbar"><label>查看日期<input id="holidayViewDate" type="date"></label><span id="holidayDaySummary"></span><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
+      <div class="holiday-short-days" id="holidayShortDays" hidden></div>
+      <div class="holiday-ledger-hint" id="holidayLedgerHint" hidden><span id="holidayLedgerText"></span><button class="text-button bordered" id="holidayCheckLedger" type="button">去核对</button></div>
+      <div class="holiday-task-list" id="holidayTaskList"></div>
+      <form class="holiday-composer" id="holidayTaskForm">
+        <div class="holiday-entry-options"><label>作业类型<select id="holidayRepeat"><option value="once">只做一次</option><option value="daily">每天都做</option></select></label><details id="holidayRepeatDates" hidden><summary>选择重复日期</summary><div id="holidayRepeatDateList"></div></details></div>
+        <div class="task-keyword-suggestions" id="holidayKeywordSuggestions" aria-label="作业关键词" hidden></div>
+        <div class="holiday-input-row"><select id="holidaySubject" aria-label="作业科目"><option>语文</option><option>数学</option><option>英语</option><option>科学</option></select><input id="holidayTaskTitle" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required><select id="holidayTaskMinutes" aria-label="每天这项作业预计用时"></select><button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button></div>
+      </form>
+    </div>
+  </section>
+  <div class="task-edit-modal" id="holidayTaskEdit" role="dialog" aria-modal="true" aria-labelledby="holidayEditTitle" hidden>
+    <form class="task-edit-dialog settings-card" id="holidayTaskEditForm"><h2 id="holidayEditTitle">修改作业</h2><input id="holidayEditContent" maxlength="120" aria-label="作业内容" required><label>预计用时<select id="holidayEditMinutes"></select></label><label id="holidayEditSeriesLabel"><input id="holidayEditSeries" type="checkbox" checked>同时修改之后未开始的同类作业</label><div class="holiday-actions"><button class="primary-button compact-button" type="submit">保存</button><button class="text-button" id="holidayEditCancel" type="button">取消</button></div></form>
+  </div>
+  <section class="task-entry-page" id="taskEntryPage" aria-label="录入作业" hidden>
+    <div class="task-entry-layout" id="taskEntryLayout">
+      <div class="task-entry-actionbar">
+        <button class="task-entry-close" id="taskEntryCloseButton" type="button" aria-label="返回今日任务">‹</button>
+        <button class="text-button" id="taskEntryOrderButton" type="button">调整顺序</button>
+        <button class="primary-button compact-button task-entry-confirm" id="taskEntryConfirmButton" type="button" disabled>确定</button>
+      </div>
       <div class="task-entry" id="taskEntry">
+        <div class="task-plan-days" id="taskEntryDays" aria-label="查看日期" hidden></div>
         <div class="task-entry-empty" id="taskEntryEmpty" hidden>
           <img src="assets/homework-entry-empty.png" alt="小朋友坐在书桌前写作业">
           <strong>开始录入作业吧</strong>
         </div>
-        <section class="task-entry-pending" id="taskEntryPendingSection" aria-labelledby="taskEntryPendingTitle" hidden>
-          <div class="task-entry-pending-heading">
-            <div>
-              <strong id="taskEntryPendingTitle">我录好的作业</strong>
-            </div>
-            <b id="taskEntryPendingSummary">0 项</b>
-          </div>
+        <section class="task-entry-pending" id="taskEntryPendingSection" aria-label="作业清单" hidden>
           <div class="task-entry-pending-list" id="taskEntryPendingList"></div>
         </section>
         <div class="task-entry-feedback-row">
           <button class="task-entry-undo" id="taskEntryUndoDeleteButton" type="button" hidden>↶ 撤销刚才删除</button>
         </div>
+        <section class="task-order-panel" id="taskOrderModal" aria-label="调整作业顺序" hidden>
+          <h2 id="taskOrderTitle" tabindex="-1" aria-live="polite">第 1 项，我选……</h2>
+          <div class="order-day-tabs" id="taskOrderDays" aria-label="选择日期"></div>
+          <div class="order-choice-list" id="taskOrderChoices"></div>
+          <div class="order-secondary-actions">
+            <button class="text-button" id="taskOrderCloseButton" type="button">返回录入</button>
+            <button class="text-button bordered" id="taskOrderUndoButton" type="button">撤销上一步</button>
+            <button class="text-button" id="taskOrderResetButton" type="button">清空重选</button>
+          </div>
+          <button class="text-button bordered" id="taskOrderConfirmButton" type="button" hidden>选择下一天</button>
+        </section>
         <div class="task-entry-composer" id="taskEntryComposer">
           <div class="task-keyword-suggestions" id="taskKeywordSuggestions" aria-label="当前科目的快捷关键词" hidden></div>
           <div class="task-entry-input-row">
@@ -397,19 +416,15 @@
                 <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
               </div>
             </div>
-            <textarea class="task-draft-input" id="taskDraft" rows="1" maxlength="500" aria-describedby="voiceStatus taskDraftError" aria-invalid="false" placeholder="请输入一项作业…"></textarea>
+            <textarea class="task-draft-input" id="taskDraft" rows="1" maxlength="500" aria-label="作业内容" aria-describedby="taskDraftError" aria-invalid="false" placeholder="请输入一项作业…"></textarea>
+            <select class="task-entry-estimate" id="taskEntryEstimate" aria-label="这项作业预计用时" title="预计用时"></select>
             <button class="add-task-icon-button" id="addTasksButton" type="button" aria-label="加入语文作业" title="加入语文作业">＋</button>
-            <button class="voice-button" id="voiceTaskButton" type="button" aria-label="开始报作业" title="开始报作业">🎙</button>
           </div>
-          <small class="task-draft-error" id="taskDraftError" role="alert" hidden>先说出或输入作业内容</small>
-          <small class="voice-entry-status" id="voiceStatus" hidden></small>
+          <small class="task-draft-error" id="taskDraftError" role="alert" hidden>请先输入作业内容</small>
         </div>
       </div>
-      <div class="task-entry-sticky-footer" id="taskEntryStickyFooter" hidden>
-        <button class="primary-button compact-button" id="taskEntryConfirmButton" type="button">都录好了，去排顺序</button>
-      </div>
     </div>
-  </div>
+  </section>
 
   <div class="weekend-plan-modal" id="weekendPlanModal" role="dialog" aria-modal="true" aria-labelledby="weekendPlannerTitle" hidden>
     <div class="weekend-plan-dialog">
@@ -470,22 +485,29 @@
 
   <div class="focus-modal" id="focusModal" role="dialog" aria-modal="true" aria-labelledby="focusModalTitle" hidden>
     <div class="focus-dialog">
-      <button class="focus-close" id="focusCloseButton" type="button" aria-label="暂时收起专注卡">×</button>
-      <p class="section-kicker">专注计时中</p>
+      <div class="focus-header">
+        <p class="section-kicker">专注计时中</p>
+        <div class="focus-overall-progress" role="group" aria-label="今日作业整体进度">
+          <div class="focus-overall-counts">
+            <span>已完成 <b id="focusOverallDone">0</b> 项</span>
+            <span>剩余 <b id="focusOverallRemaining">0</b> 项</span>
+          </div>
+          <div>预计还需 <strong id="focusOverallTime">0 分钟</strong></div>
+        </div>
+      </div>
       <span class="focus-subject" id="focusModalSubject">语文</span>
-      <h2 id="focusModalTitle">当前作业</h2>
-      <span class="focus-clock-label">已用时间</span>
+      <h2 id="focusModalTitle" tabindex="-1">当前作业</h2>
       <div class="focus-clock" id="focusModalElapsed">00 : 00</div>
       <div class="focus-estimate-card">
         <span>预计用时 <strong id="focusModalEstimate">15 分钟</strong></span>
         <b id="focusModalComparison">距估时约 15 分钟</b>
       </div>
       <div class="focus-start-row"><span>开始时间</span><strong id="focusModalStartedAt">--:--</strong></div>
-      <p class="focus-reminder">我先做好这一项，完成后再去下一关！</p>
       <div class="focus-dialog-actions">
         <button class="secondary-button" id="focusPauseButton" type="button">休息一下</button>
         <button class="primary-button" id="focusCompleteButton" type="button">完成这项</button>
       </div>
+      <button class="focus-skip-button" id="focusSkipButton" type="button">跳过，开始下一项</button>
     </div>
   </div>
 
@@ -493,21 +515,19 @@
     <div class="focus-dialog start-plan-dialog">
       <button class="focus-close" id="startPlanCloseButton" type="button" aria-label="关闭开始安排">×</button>
       <h2 id="startPlanTitle">我准备什么时候开始？</h2>
-      <div class="scheduled-task" id="startPlanTaskCard" data-subject="语文">
+      <div class="start-plan-task">
         <span id="startPlanTaskLabel">第一项作业</span>
         <strong id="startPlanTask"></strong>
       </div>
       <div id="startPlanOptions">
-        <div class="start-plan-quick-actions">
-          <button type="button" data-start-delay="0">现在开始</button>
-          <button type="button" data-start-delay="5">5分钟后</button>
-          <button type="button" data-start-delay="10">10分钟后</button>
-          <button type="button" data-start-delay="15">15分钟后</button>
+        <div class="start-plan-shortcuts" role="group" aria-label="快捷选择开始时间">
+          <button id="startPlanFiveMinutesButton" type="button" aria-pressed="false">5分钟后</button>
+          <button id="startPlanTenMinutesButton" type="button" aria-pressed="false">10分钟后</button>
         </div>
         <div class="start-plan-time-row">
-          <label for="startPlanTime">我准备</label>
+          <label for="startPlanTime">开始时间</label>
           <input id="startPlanTime" type="time">
-          <button id="saveStartPlanButton" type="button">定好时间</button>
+          <button id="saveStartPlanButton" type="button">确定</button>
         </div>
       </div>
       <div class="start-plan-countdown" id="startPlanCountdownPanel" hidden>
@@ -519,6 +539,7 @@
           <button class="primary-button" id="startPlannedTaskButton" type="button">我准备好了，开始第一项</button>
         </div>
       </div>
+      <button class="focus-skip-button" id="skipPausedTaskButton" type="button" hidden>跳过，开始下一项</button>
     </div>
   </div>
 
@@ -526,18 +547,18 @@
     <div class="focus-dialog break-choice-dialog">
       <button class="focus-close" id="breakChoiceCloseButton" type="button" aria-label="关闭休息安排">×</button>
       <h2 id="breakChoiceTitle">休息多久？</h2>
-      <div class="break-next-task scheduled-task" id="breakChoiceTaskCard" data-subject="语文"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
+      <div class="break-choice-task"><span>回来后做</span><strong id="breakChoiceNextTask"></strong></div>
       <div class="break-quick-actions">
         <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="5">5分钟</button>
         <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="10">10分钟</button>
         <button class="secondary-button" type="button" data-break-kind="break" data-break-minutes="15">15分钟</button>
       </div>
       <div class="break-return-row">
-        <label for="breakReturnTime">吃饭后回来</label>
+        <label for="breakReturnTime">回来时间</label>
         <input id="breakReturnTime" type="time">
-        <button class="secondary-button" id="startTimedBreakButton" type="button">开始倒计时</button>
+        <button class="secondary-button" id="startTimedBreakButton" type="button" aria-label="确定回来时间，开始休息倒计时">确定</button>
       </div>
-      <button class="primary-button break-start-now" id="startNextTaskNowButton" type="button">不休息，开始下一项</button>
+      <button class="text-button break-start-now" id="startNextTaskNowButton" type="button">不休息，开始下一项</button>
     </div>
   </div>
 
@@ -551,13 +572,15 @@
       <div class="break-next-task scheduled-task" id="breakTimerTaskCard" data-subject="语文"><span>回来后做</span><strong id="breakTimerNextTask"></strong></div>
       <div class="focus-dialog-actions break-timer-actions">
         <button class="secondary-button" id="extendBreakButton" type="button">再休息 3 分钟</button>
-        <button class="primary-button" id="startNextTaskButton" type="button">我回来了，开始下一项</button>
+        <button class="primary-button" id="startNextTaskButton" type="button">现在开始</button>
       </div>
       <button class="text-button break-cancel-button" id="cancelBreakButton" type="button">取消这次提醒</button>
     </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="holiday-plans.js"></script>
+  <script src="holiday-ui.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

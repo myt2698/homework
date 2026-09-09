@@ -12,10 +12,6 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
-        ndk {
-            abiFilters "arm64-v8a", "armeabi-v7a"
-        }
     }
 
     compileOptions {
@@ -23,17 +19,9 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    packaging {
-        jniLibs {
-            excludes += [
-                    "**/libsherpa-onnx-c-api.so",
-                    "**/libsherpa-onnx-cxx-api.so"
-            ]
-        }
+    sourceSets {
+        // This directory contains only the retired speech-recognition models.
+        // Keep the historical files in the repository, but do not package them.
+        main.assets.setSrcDirs([])
     }
-}
-
-dependencies {
-    implementation files("libs/sherpa-onnx-1.13.7.aar")
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
 }
