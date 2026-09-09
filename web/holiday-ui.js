@@ -13,6 +13,9 @@
     e.holidayTaskMinutes.innerHTML = minutesOptions; e.holidayEditMinutes.innerHTML = minutesOptions;
     e.holidayTaskMinutes.value = "15";
     const keywordSuggestions = $("#holidayKeywordSuggestions");
+    const subjectPicker = $("#holidaySubjectPicker"), subjectOptions = $("#holidaySubjectOptions"), subjectLabel = $("#holidaySubjectLabel");
+    function subjectMenu(open) { subjectOptions.hidden = !open; e.holidaySubject.setAttribute("aria-expanded", String(open)); }
+    function resizeDraft() { e.holidayTaskTitle.style.height = "48px"; e.holidayTaskTitle.style.height = `${Math.max(48, Math.min(e.holidayTaskTitle.scrollHeight, 72))}px`; }
     function renderKeywords() {
       const subject = e.holidaySubject.value, keywords = host.keywords(subject).filter(k => k.visible !== false);
       keywordSuggestions.dataset.subject = subject; keywordSuggestions.hidden = !keywords.length;
@@ -41,7 +44,7 @@
       e.holidayViewDate.min = h.planDate; e.holidayViewDate.max = h.end;
       e.holidayViewDate.value = host.date() >= h.planDate && host.date() <= h.end ? host.date() : h.planDate;
       e.holidayRepeat.value = "once"; e.holidayRepeatDates.hidden = true; e.holidayTaskTitle.value = ""; repeatDates();
-      host.open(e.holidayPlanPage); renderPlan(); renderKeywords(); resize();
+      host.open(e.holidayPlanPage); renderPlan(); renderKeywords(); resize(); resizeDraft();
     }
     function row(ref, overdue = false) {
       const t = { ...ref.task, estimatedMinutes: Number(ref.task.estimatedMinutes) || 15 }, canEdit = H.pending(t), movable = !["done", "active"].includes(t.status);
@@ -72,6 +75,7 @@
       e.holidayOverdueList.innerHTML = overdue.map(ref => row(ref, true)).join("");
     }
     function back() {
+      if (!subjectOptions.hidden) { subjectMenu(false); e.holidaySubject.focus(); return true; }
       if (!e.holidayTaskEdit.hidden) { closeEdit(); return true; }
       if (!e.holidayPlanPage.hidden) { e.holidayPlanPage.hidden = true; sortIds = null; if (fromSettings) { settings(); host.open(e.holidaySettingsPage); } else host.back(false); return true; }
       if (!e.holidaySettingsPage.hidden) { e.holidaySettingsPage.hidden = true; host.back(true); return true; }
@@ -118,11 +122,30 @@
     e.holidayViewDate.addEventListener("change", () => { const h = currentHoliday(), d = e.holidayViewDate.value; if (!H.iso(d) || d < h.planDate || d > h.end) e.holidayViewDate.value = h.planDate; sortIds = null; renderPlan(); });
     e.holidayShortDays.addEventListener("click", event => { const b = event.target.closest("[data-holiday-view]"); if (b) { e.holidayViewDate.value = b.dataset.holidayView; sortIds = null; renderPlan(); } });
     e.holidayRepeat.addEventListener("change", () => { e.holidayRepeatDates.hidden = e.holidayRepeat.value !== "daily"; });
-    e.holidaySubject.addEventListener("change", renderKeywords);
+    e.holidaySubject.addEventListener("click", () => subjectMenu(subjectOptions.hidden));
+    subjectOptions.addEventListener("click", event => {
+      const button = event.target.closest("button[data-subject]"); if (!button) return;
+      e.holidaySubject.value = button.dataset.subject; e.holidaySubject.dataset.subject = button.dataset.subject; subjectLabel.textContent = button.dataset.subject;
+      subjectOptions.querySelectorAll("button").forEach(b => b.setAttribute("aria-checked", String(b === button)));
+      subjectMenu(false); renderKeywords(); e.holidayTaskTitle.focus({ preventScroll: true });
+    });
+    document.addEventListener("click", event => { if (!subjectPicker.contains(event.target)) subjectMenu(false); });
+    subjectOptions.addEventListener("keydown", event => {
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      const buttons = [...subjectOptions.querySelectorAll("button")], i = buttons.indexOf(document.activeElement);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (i + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+      event.preventDefault(); buttons[next].focus();
+    });
+    e.holidayTaskTitle.addEventListener("input", resizeDraft);
+    e.holidayTaskTitle.addEventListener("keydown", event => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault(); e.holidayTaskForm.requestSubmit();
+    });
     keywordSuggestions.addEventListener("click", event => {
       const button = event.target.closest("[data-holiday-keyword]"); if (!button) return;
       const current = e.holidayTaskTitle.value.trim();
       e.holidayTaskTitle.value = (current ? current + " " : "") + button.dataset.holidayKeyword;
+      resizeDraft();
       e.holidayTaskTitle.focus({ preventScroll: true }); e.holidayTaskTitle.setSelectionRange(e.holidayTaskTitle.value.length, e.holidayTaskTitle.value.length);
     });
     e.holidayTaskForm.addEventListener("pointerdown", event => {
@@ -133,7 +156,7 @@
       const repeat = e.holidayRepeat.value === "daily";
       const dates = repeat ? [...e.holidayRepeatDateList.querySelectorAll("input:checked")].map(i => i.dataset.holidayRepeatDate) : [e.holidayViewDate.value];
       H.add(state(), currentHoliday(), { subject: e.holidaySubject.value, title: e.holidayTaskTitle.value, minutes: Number(e.holidayTaskMinutes.value), repeat }, dates);
-      e.holidayTaskTitle.value = ""; save(); renderPlan(); e.holidayTaskList.scrollTop = e.holidayTaskList.scrollHeight; e.holidayTaskTitle.focus(); host.toast(`已安排 ${dates.length} 天`);
+      e.holidayTaskTitle.value = ""; resizeDraft(); e.holidayTaskMinutes.value = "15"; save(); renderPlan(); e.holidayTaskList.scrollTop = e.holidayTaskList.scrollHeight; e.holidayTaskTitle.focus({ preventScroll: true }); host.toast(`已安排 ${dates.length} 天`);
     }); });
     e.holidaySort.addEventListener("click", () => attempt(() => { if (sortIds) { H.order(state(), e.holidayViewDate.value, sortIds); sortIds = null; save(); } else sortIds = []; renderPlan(); }));
     e.holidaySortReset.addEventListener("click", () => { sortIds = []; renderPlan(); });
@@ -149,6 +172,6 @@
     e.holidayTaskList.addEventListener("click", taskAction); e.holidayOverdueList.addEventListener("click", taskAction);
     $("#holidayEditCancel").addEventListener("click", closeEdit);
     $("#holidayTaskEditForm").addEventListener("submit", event => { event.preventDefault(); attempt(() => { if (!editRef) return; H.edit(state(), editRef, e.holidayEditContent.value, Number(e.holidayEditMinutes.value), !e.holidayEditSeriesLabel.hidden && e.holidayEditSeries.checked, host.today()); closeEdit(); save(); renderPlan(); }); });
-    return { renderHome, back, openPlan, resize, hide() { if (!e.holidayPlanPage.hidden) document.body.classList.remove("task-entry-page-open"); e.holidaySettingsPage.hidden = true; e.holidayPlanPage.hidden = true; closeEdit(); }, isOpen: () => !e.holidayPlanPage.hidden || !e.holidaySettingsPage.hidden };
+    return { renderHome, back, openPlan, resize, hide() { subjectMenu(false); if (!e.holidayPlanPage.hidden) document.body.classList.remove("task-entry-page-open"); e.holidaySettingsPage.hidden = true; e.holidayPlanPage.hidden = true; closeEdit(); }, isOpen: () => !e.holidayPlanPage.hidden || !e.holidaySettingsPage.hidden };
   };
 })(globalThis);

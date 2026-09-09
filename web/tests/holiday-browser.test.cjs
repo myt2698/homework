@@ -23,7 +23,7 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   const composerAfter=await page.locator('.holiday-input-row').boundingBox();assert.equal(composerBefore.y,composerAfter.y,'adding a task keeps the composer fixed');
   assert.equal(await page.locator('#holidayTaskTitle').evaluate(e=>e===document.activeElement),true);
   await page.locator('#holidayRepeat').selectOption('daily');await page.locator('#holidayTaskTitle').fill('练字');await page.locator('#holidayTaskMinutes').selectOption('10');await page.locator('#holidayTaskForm button[type=submit]').click();
-  await page.locator('#holidaySubject').selectOption('数学');await page.locator('#holidayTaskTitle').fill('口算');
+  await page.locator('#holidaySubject').click();await page.locator('#holidaySubjectOptions [data-subject="数学"]').click();await page.locator('#holidayTaskTitle').fill('口算');await page.locator('#holidayTaskMinutes').selectOption('10');
   await page.locator('#holidayRepeatDates summary').click();await page.locator('[data-holiday-repeat-date="2026-09-11"]').uncheck();await page.locator('#holidayRepeatDates summary').click();await page.locator('#holidayTaskForm button[type=submit]').click();
   await page.locator('#holidayViewDate').fill('2026-09-10');
   assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*20 分钟/);

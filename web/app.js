@@ -152,6 +152,9 @@
     previousDictationLessonButton: $("#previousDictationLessonButton"),
     nextDictationLessonButton: $("#nextDictationLessonButton"),
     settingsButton: $("#settingsButton"), closeSettingsButton: $("#closeSettingsButton"),
+    alarmSettingsPage: $("#alarmSettingsPage"), backupSettingsPage: $("#backupSettingsPage"),
+    openAlarmSettingsButton: $("#openAlarmSettingsButton"), closeAlarmSettingsButton: $("#closeAlarmSettingsButton"),
+    openBackupSettingsButton: $("#openBackupSettingsButton"), closeBackupSettingsButton: $("#closeBackupSettingsButton"),
     keywordSettingsPage: $("#keywordSettingsPage"),
     openKeywordSettingsButton: $("#openKeywordSettingsButton"), closeKeywordSettingsButton: $("#closeKeywordSettingsButton"),
     keywordSettingsSubjects: $("#keywordSettingsSubjects"), keywordSettingsList: $("#keywordSettingsList"),
@@ -286,6 +289,8 @@
   let startPlanTimer = null;
   let startPlanSession = loadStartPlanSession();
   let alarmRecorder = null;
+  let alarmRecordingRequestId = 0;
+  let alarmPermissionPending = false;
   let alarmStream = null;
   let alarmChunks = [];
   let alarmRecordingStartedAt = 0;
@@ -478,6 +483,7 @@
     if (!task || task.status !== "active") return closeFocusModal();
     elements.focusModalSubject.textContent = task.subject || "其他";
     elements.focusModalTitle.textContent = task.title || "当前作业";
+    elements.focusModal.dataset.subject = task.subject || "其他";
     elements.focusModalElapsed.textContent = taskClockLabel(task);
     elements.focusModalEstimate.textContent = `${estimatedMinutes(task)} 分钟`;
     elements.focusModalComparison.textContent = taskEstimateComparisonLabel(task);
@@ -785,18 +791,28 @@
   }
 
   function finishAlarmRecording() {
+    alarmRecordingRequestId += 1;
+    alarmPermissionPending = false;
     if (!alarmRecorder || alarmRecorder.state === "inactive") return;
     alarmRecorder.stop();
   }
 
   async function toggleAlarmRecording() {
     if (alarmRecorder && alarmRecorder.state !== "inactive") return finishAlarmRecording();
+    if (alarmRecorder || alarmPermissionPending || elements.alarmSettingsPage.hidden) return;
     if (!navigator.mediaDevices?.getUserMedia || !("MediaRecorder" in window)) {
       setAlarmRecordHint("当前浏览器不能录音。");
       return;
     }
+    const requestId = ++alarmRecordingRequestId;
+    alarmPermissionPending = true;
     try {
-      alarmStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (requestId !== alarmRecordingRequestId || elements.alarmSettingsPage.hidden) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      alarmStream = stream;
       alarmChunks = [];
       const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
         .find((type) => MediaRecorder.isTypeSupported?.(type));
@@ -835,13 +851,45 @@
       setAlarmRecordHint("正在录音……说完后点“完成录音”，最长 8 秒。");
       alarmRecordingTimer = window.setTimeout(finishAlarmRecording, 8000);
     } catch (_) {
+      if (requestId !== alarmRecordingRequestId) return;
       alarmStream?.getTracks().forEach((track) => track.stop());
       alarmStream = null;
       setAlarmRecordHint("没有取得麦克风权限，可以在浏览器设置中允许后重试。");
+    } finally {
+      if (requestId === alarmRecordingRequestId) alarmPermissionPending = false;
     }
   }
 
+  let settingsDetailReturnScroll = 0;
+
+  function hideSettingsDetailPages() {
+    if (!elements.alarmSettingsPage.hidden) { finishAlarmRecording(); stopAlarmPlayback(); }
+    elements.alarmSettingsPage.hidden = true;
+    elements.backupSettingsPage.hidden = true;
+  }
+
+  function openSettingsDetailPage(kind) {
+    settingsDetailReturnScroll = window.scrollY || 0;
+    hideSettingsDetailPages();
+    elements.settingsPage.hidden = true;
+    elements.keywordSettingsPage.hidden = true;
+    const alarm = kind === "alarm";
+    (alarm ? elements.alarmSettingsPage : elements.backupSettingsPage).hidden = false;
+    if (alarm) renderAlarmSettings();
+    window.scrollTo({ top: 0, behavior: "instant" });
+    (alarm ? elements.closeAlarmSettingsButton : elements.closeBackupSettingsButton).focus({ preventScroll: true });
+  }
+
+  function closeSettingsDetailPage() {
+    const alarm = !elements.alarmSettingsPage.hidden;
+    hideSettingsDetailPages();
+    elements.settingsPage.hidden = false;
+    window.scrollTo({ top: settingsDetailReturnScroll, behavior: "instant" });
+    (alarm ? elements.openAlarmSettingsButton : elements.openBackupSettingsButton).focus({ preventScroll: true });
+  }
+
   function openSettingsPage() {
+    hideSettingsDetailPages();
     holidayUI?.hide();
     stopDictation(false, false);
     closeTaskEntryPage();
@@ -860,6 +908,7 @@
   let keywordSettingsReturnScroll = 0;
 
   function openKeywordSettingsPage() {
+    hideSettingsDetailPages();
     finishAlarmRecording();
     stopAlarmPlayback();
     keywordSettingsReturnScroll = window.scrollY;
@@ -879,6 +928,7 @@
   }
 
   function closeSettingsPage() {
+    hideSettingsDetailPages();
     finishAlarmRecording();
     stopAlarmPlayback();
     elements.settingsPage.hidden = true;
@@ -1399,6 +1449,7 @@
   }
 
   function openTaskEntryPage() {
+    hideSettingsDetailPages();
     const holiday = HolidayPlans.find(state, elements.recordDate.value);
     if (holiday) { holidayUI?.openPlan(holiday.id); return; }
     if (!canEditTaskPlan() && !weekendKeyFor(elements.recordDate.value)) return;
@@ -1494,6 +1545,7 @@
   }
 
   function openHistoryPage() {
+    hideSettingsDetailPages();
     holidayUI?.hide();
     stopDictation(false, false);
     closeTaskEntryPage();
@@ -1991,6 +2043,7 @@
   }
 
   function openDictationPage() {
+    hideSettingsDetailPages();
     holidayUI?.hide();
     closeTaskEntryPage();
     closeWeekendPlanModal();
@@ -2274,7 +2327,7 @@
         ${taskSubjectBadgeHtml(task.subject)}
         <div class="task-main-row">
           <div class="task-copy">
-            <strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${editable ? '<span class="task-edit-mark" aria-hidden="true">✎</span>' : ""}${planBadge}
+            <span class="task-title-row"><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong>${editable ? '<span class="task-edit-mark" aria-hidden="true">✎</span>' : ""}${planBadge}</span>
             ${meta ? `<small class="task-meta">${escapeHtml(meta)}</small>` : ""}
           </div>
           <div class="task-card-aside">${taskEstimateHtml(task)}${buttons ? `<div class="task-buttons">${buttons}</div>` : ""}</div>
@@ -3147,6 +3200,7 @@
     estimates: ESTIMATE_OPTIONS, keywords: taskKeywordItems, persist, render, toast: showToast, goDate: setRecordDate,
     confirmed() { const first = nextTaskForToday(); if (first && !activeTaskForDate() && !startPlanSession && !breakSession) openStartPlanChoice(first.id); },
     open(page) {
+      hideSettingsDetailPages();
       stopDictation(false, false); finishAlarmRecording(); stopAlarmPlayback(); closeTaskEntryPage();
       holidayUI?.hide(); closeTaskEditor(); closeWeekendPlanModal();
       [elements.mainPage, elements.settingsPage, elements.historyPage, elements.dictationPage, elements.keywordSettingsPage].forEach(p => { p.hidden = true; });
@@ -3158,6 +3212,10 @@
     back(settings) { document.body.classList.remove("task-entry-page-open"); if (settings) openSettingsPage(); else { closeSettingsPage(); render(); } }
   });
   elements.settingsButton.addEventListener("click", openSettingsPage);
+  elements.openAlarmSettingsButton.addEventListener("click", () => openSettingsDetailPage("alarm"));
+  elements.openBackupSettingsButton.addEventListener("click", () => openSettingsDetailPage("backup"));
+  elements.closeAlarmSettingsButton.addEventListener("click", closeSettingsDetailPage);
+  elements.closeBackupSettingsButton.addEventListener("click", closeSettingsDetailPage);
   elements.closeSettingsButton.addEventListener("click", closeSettingsPage);
   elements.openKeywordSettingsButton.addEventListener("click", openKeywordSettingsPage);
   elements.closeKeywordSettingsButton.addEventListener("click", closeKeywordSettingsPage);
@@ -3268,11 +3326,13 @@
     else if (!elements.breakChoiceModal.hidden) closeBreakChoice();
     else if (!elements.taskEditModal.hidden) closeTaskEditor();
     else if (!elements.taskOrderModal.hidden) returnToTaskEntry();
+    else if (!elements.subjectTabs.hidden) { setSubjectPickerOpen(false); elements.subjectPickerButton.focus(); }
     else if (!elements.taskEntryPage.hidden) closeTaskEntryPage();
     else if (!elements.weekendPlanModal.hidden) closeWeekendPlanModal();
     else if (holidayUI?.back()) { /* One level back within holiday settings or planning. */ }
     else if (!elements.dictationPage.hidden) closeDictationPage();
     else if (!elements.historyPage.hidden) closeHistoryPage();
+    else if (!elements.alarmSettingsPage.hidden || !elements.backupSettingsPage.hidden) closeSettingsDetailPage();
     else if (!elements.keywordSettingsPage.hidden) closeKeywordSettingsPage();
     else if (!elements.settingsPage.hidden) closeSettingsPage();
   });
@@ -3296,6 +3356,12 @@
   elements.englishReadingButton.addEventListener("click", () => togglePrep("englishReadingDone", "englishReadingAt", "英文阅读状态已更新"));
   elements.subjectPickerButton.addEventListener("click", () => {
     setSubjectPickerOpen(elements.subjectTabs.hidden);
+  });
+  elements.subjectTabs.addEventListener("keydown", event => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const buttons = [...elements.subjectTabs.querySelectorAll("button")], i = buttons.indexOf(document.activeElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (i + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+    event.preventDefault(); buttons[next].focus();
   });
   elements.subjectTabs.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-subject]");

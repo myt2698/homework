@@ -37,7 +37,8 @@ final class HolidayScreen {
     private static final int[] MINUTES = {5,10,15,20,25,30,35,40,45,50,60};
     private final Activity activity; private final Host host;
     private LinearLayout home, taskList, composer, shortDays; private Button sortButton, resetButton, dayButton; private TextView summary;
-    private EditText taskInput; private Spinner subject, estimate, repeat;
+    private EditText taskInput; private Spinner repeat;
+    private Button subject, estimate; private String selectedSubject = "语文"; private int entryMinutes = 15;
     private LinearLayout keywordRow; private HorizontalScrollView keywordScroll;
     private String planId, viewDate; private boolean fromSettings, settingsOpen, overdueExpanded;
     private List<String> orderIds, repeatDates;
@@ -109,25 +110,32 @@ final class HolidayScreen {
         if(!ready()){page.addView(text("先在 "+h.optString("planDate")+" 核对钉钉，补全成长记录册。",13,MUTED));page.addView(button("去核对",()->{host.back(false);host.goDate(h.optString("planDate"));}));}
         ScrollView listScroll=new ScrollView(activity);taskList=col();listScroll.addView(taskList,wrap());page.addView(listScroll,new LinearLayout.LayoutParams(-1,0,1));
         composer=col();LinearLayout options=row();repeat=spinner(new String[]{"只做一次","每天都做"});options.addView(repeat,weight());Button dateOptions=button("选择重复日期",()->{List<String> dates=HolidayPlans.days(h.optString("start"),h.optString("end"));boolean[] selected=new boolean[dates.size()];for(int i=0;i<dates.size();i++)selected[i]=repeatDates.contains(dates.get(i));new AlertDialog.Builder(activity).setTitle("选择重复日期").setMultiChoiceItems(dates.toArray(new String[0]),selected,(d,i,checked)->selected[i]=checked).setNegativeButton("取消",null).setPositiveButton("确定",(d,w)->{repeatDates=new ArrayList<>();for(int i=0;i<dates.size();i++)if(selected[i])repeatDates.add(dates.get(i));}).show();});dateOptions.setVisibility(View.GONE);options.addView(dateOptions,weight());repeat.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long itemId){dateOptions.setVisibility(position==1?View.VISIBLE:View.GONE);}});composer.addView(options);
-        keywordRow=row();keywordScroll=new HorizontalScrollView(activity);keywordScroll.setHorizontalScrollBarEnabled(false);keywordScroll.addView(keywordRow);composer.addView(keywordScroll,wrap());
-        LinearLayout entry=row();subject=spinner(new String[]{"语文","数学","英语","科学"});entry.addView(subject,new LinearLayout.LayoutParams(dp(84),dp(48)));taskInput=input("请输入一项作业…",120);entry.addView(taskInput,weight());composer.addView(entry,wrap());
-        subject.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long itemId){renderKeywords();}});
-        LinearLayout actions=row();estimate=minutes(15);Button add=button("＋",()->addTask(listScroll));add.setTextSize(22);add.setTextColor(Color.WHITE);add.setBackground(bg(BLUE));
-        if(activity.getResources().getConfiguration().screenWidthDp>=600){entry.addView(estimate,new LinearLayout.LayoutParams(dp(104),dp(48)));entry.addView(add,new LinearLayout.LayoutParams(dp(112),dp(48)));}
-        else{actions.addView(estimate,weight());actions.addView(add,new LinearLayout.LayoutParams(dp(112),dp(48)));composer.addView(actions,wrap());}
-        taskInput.setOnEditorActionListener((v,action,event)->{if(action!=android.view.inputmethod.EditorInfo.IME_ACTION_DONE)return false;attempt(()->addTask(listScroll));return true;});page.addView(composer,wrap());host.show(page);renderPlan();
+        keywordRow=row();keywordScroll=new HorizontalScrollView(activity);keywordScroll.setHorizontalScrollBarEnabled(false);keywordScroll.addView(keywordRow);
+        LinearLayout.LayoutParams keywordParams=new LinearLayout.LayoutParams(-1,dp(36));keywordParams.bottomMargin=dp(7);composer.addView(keywordScroll,keywordParams);
+        LinearLayout entry=row();entry.setGravity(Gravity.BOTTOM);
+        subject=button(selectedSubject+"  ▾",()->TaskSubjectPicker.show(activity,selectedSubject,name->{selectedSubject=name;renderSubject();renderKeywords();taskInput.requestFocus();taskInput.setSelection(taskInput.length());}));
+        subject.setTypeface(Typeface.DEFAULT,Typeface.BOLD);subject.setPadding(dp(6),0,dp(6),0);entry.addView(subject,new LinearLayout.LayoutParams(dp(76),dp(48)));renderSubject();
+        View subjectGap=new View(activity);entry.addView(subjectGap,new LinearLayout.LayoutParams(dp(6),1));
+        taskInput=input("请输入一项作业…",120);taskInput.setSingleLine(false);taskInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);taskInput.setHorizontallyScrolling(false);taskInput.setMinLines(1);taskInput.setMaxLines(2);taskInput.setMinHeight(dp(48));taskInput.setMaxHeight(dp(78));taskInput.setPadding(dp(11),dp(9),dp(11),dp(9));taskInput.setGravity(Gravity.TOP|Gravity.START);entry.addView(taskInput,weight());composer.addView(entry,wrap());
+        entryMinutes=15;estimate=button("15 分钟",()->{int[] values={5,10,15,20,30,35,40,45,50,60};String[] labels=new String[values.length];for(int i=0;i<values.length;i++)labels[i]=values[i]+" 分钟";new AlertDialog.Builder(activity).setTitle("预计用时").setItems(labels,(d,i)->{entryMinutes=values[i];estimate.setText(labels[i]);}).setNegativeButton("取消",null).show();});estimate.setTextSize(11);estimate.setPadding(dp(5),0,dp(5),0);estimate.setSingleLine(true);estimate.setMinWidth(0);estimate.setMinimumWidth(0);
+        Button add=button("＋",()->addTask(listScroll));add.setContentDescription("添加假期作业");add.setTextSize(20);add.setTypeface(Typeface.DEFAULT,Typeface.BOLD);add.setPadding(0,0,0,0);add.setTextColor(Color.WHITE);add.setBackground(bg(BLUE));
+        boolean compact=activity.getResources().getConfiguration().screenWidthDp<=420;LinearLayout actions=compact?row():entry;actions.setGravity(Gravity.BOTTOM|Gravity.END);
+        if(!compact){View gap=new View(activity);actions.addView(gap,new LinearLayout.LayoutParams(dp(6),1));}actions.addView(estimate,new LinearLayout.LayoutParams(dp(80),dp(48)));View gap=new View(activity);actions.addView(gap,new LinearLayout.LayoutParams(dp(6),1));actions.addView(add,new LinearLayout.LayoutParams(dp(compact?80:112),dp(48)));
+        if(compact){LinearLayout.LayoutParams params=wrap();params.topMargin=dp(8);composer.addView(actions,params);}
+        taskInput.setOnEditorActionListener((v,action,event)->{boolean enter=event!=null&&event.getKeyCode()==android.view.KeyEvent.KEYCODE_ENTER&&event.getAction()==android.view.KeyEvent.ACTION_DOWN&&!event.isShiftPressed();if(action!=android.view.inputmethod.EditorInfo.IME_ACTION_DONE&&!enter)return false;attempt(()->addTask(listScroll));return true;});page.addView(composer,wrap());renderKeywords();host.show(page);renderPlan();
     }
     private void addTask(ScrollView scroll) {
         if(!ready())throw new IllegalArgumentException("请先核对假期作业");boolean daily=repeat.getSelectedItemPosition()==1;
-        HolidayPlans.add(host.state(),holiday(),subject.getSelectedItem().toString(),taskInput.getText().toString(),MINUTES[estimate.getSelectedItemPosition()],daily,daily?repeatDates:Arrays.asList(viewDate));taskInput.setText("");persist();renderPlan();scroll.post(()->{scroll.fullScroll(View.FOCUS_DOWN);taskInput.requestFocus();});toast("作业已安排");
+        HolidayPlans.add(host.state(),holiday(),selectedSubject,taskInput.getText().toString(),entryMinutes,daily,daily?repeatDates:Arrays.asList(viewDate));taskInput.setText("");entryMinutes=15;estimate.setText("15 分钟");persist();renderPlan();scroll.post(()->{scroll.fullScroll(View.FOCUS_DOWN);taskInput.requestFocus();});toast("作业已安排");
     }
+    private void renderSubject() { subject.setText(selectedSubject+"  ▾");subject.setTextColor(Color.WHITE);subject.setBackground(bg(host.subjectColor(selectedSubject)));subject.setContentDescription("选择作业科目，当前"+selectedSubject); }
     private void renderKeywords() {
-        String name=subject.getSelectedItem().toString();JSONArray list=host.keywords(name);keywordRow.removeAllViews();
+        String name=selectedSubject;JSONArray list=host.keywords(name);keywordRow.removeAllViews();
         for(int i=0;i<list.length();i++){
             JSONObject item=list.optJSONObject(i);if(item==null||!item.optBoolean("visible",true))continue;String label=item.optString("label").trim();if(label.isEmpty())continue;
             Button chip=button(label,()->{String current=taskInput.getText().toString().trim();taskInput.setText((current.isEmpty()?"":current+" ")+label);taskInput.requestFocus();taskInput.setSelection(taskInput.length());});
             chip.setTextColor(host.subjectColor(name));chip.setBackground(bg(host.subjectSoftColor(name)));chip.setMinWidth(0);chip.setMinimumWidth(0);
-            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,dp(34));params.rightMargin=dp(6);params.bottomMargin=dp(6);keywordRow.addView(chip,params);
+            chip.setTextSize(11);chip.setTypeface(Typeface.DEFAULT,Typeface.BOLD);chip.setPadding(dp(10),0,dp(10),0);LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,dp(32));params.rightMargin=dp(6);keywordRow.addView(chip,params);
         }
         keywordScroll.setVisibility(keywordRow.getChildCount()==0?View.GONE:View.VISIBLE);
     }

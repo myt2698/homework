@@ -297,11 +297,16 @@
       <span>作业关键词</span><span class="settings-entry-arrow" aria-hidden="true">›</span>
     </button>
     <button class="card settings-page-entry" id="openHolidaySettingsButton" type="button"><span>假期设置</span><span class="settings-entry-arrow" aria-hidden="true">›</span></button>
+    <button class="card settings-page-entry" id="openAlarmSettingsButton" type="button" aria-controls="alarmSettingsPage"><span>休息结束提醒</span><span class="settings-entry-arrow" aria-hidden="true">›</span></button>
+    <button class="card settings-page-entry" id="openBackupSettingsButton" type="button" aria-controls="backupSettingsPage"><span>数据备份</span><span class="settings-entry-arrow" aria-hidden="true">›</span></button>
+  </section>
 
-    <section class="card settings-card alarm-settings-card">
-      <div class="settings-section-heading">
-        <div><h2>休息结束提醒</h2></div>
-      </div>
+  <section class="app-shell settings-page" id="alarmSettingsPage" aria-labelledby="alarmSettingsPageTitle" hidden>
+    <header class="history-page-header">
+      <button class="history-back-button" id="closeAlarmSettingsButton" type="button" aria-label="返回设置">‹</button>
+      <h1 id="alarmSettingsPageTitle">休息结束提醒</h1>
+    </header>
+    <section class="card settings-card alarm-settings-card" aria-label="提示音设置">
       <div class="alarm-record-actions">
         <button class="primary-button" id="recordAlarmButton" type="button">🎙 开始录音</button>
         <button class="secondary-button" id="previewAlarmButton" type="button">🔊 试听</button>
@@ -309,11 +314,14 @@
       </div>
       <small class="alarm-record-hint" id="alarmRecordHint" hidden></small>
     </section>
+  </section>
 
-    <section class="card settings-card">
-      <div class="settings-section-heading">
-        <div><p class="section-kicker">本地数据</p><h2>备份与恢复</h2></div>
-      </div>
+  <section class="app-shell settings-page" id="backupSettingsPage" aria-labelledby="backupSettingsPageTitle" hidden>
+    <header class="history-page-header">
+      <button class="history-back-button" id="closeBackupSettingsButton" type="button" aria-label="返回设置">‹</button>
+      <h1 id="backupSettingsPageTitle">数据备份</h1>
+    </header>
+    <section class="card settings-card" aria-label="备份与恢复">
       <div class="backup-actions">
         <button class="secondary-button" id="exportDataButton" type="button">导出备份</button>
         <button class="secondary-button" id="importDataButton" type="button">恢复备份</button>
@@ -364,10 +372,23 @@
       <div class="holiday-short-days" id="holidayShortDays" hidden></div>
       <div class="holiday-ledger-hint" id="holidayLedgerHint" hidden><span id="holidayLedgerText"></span><button class="text-button bordered" id="holidayCheckLedger" type="button">去核对</button></div>
       <div class="holiday-task-list" id="holidayTaskList"></div>
-      <form class="holiday-composer" id="holidayTaskForm">
+      <form class="task-entry-composer holiday-composer" id="holidayTaskForm">
         <div class="holiday-entry-options"><label>作业类型<select id="holidayRepeat"><option value="once">只做一次</option><option value="daily">每天都做</option></select></label><details id="holidayRepeatDates" hidden><summary>选择重复日期</summary><div id="holidayRepeatDateList"></div></details></div>
         <div class="task-keyword-suggestions" id="holidayKeywordSuggestions" aria-label="作业关键词" hidden></div>
-        <div class="holiday-input-row"><select id="holidaySubject" aria-label="作业科目"><option>语文</option><option>数学</option><option>英语</option><option>科学</option></select><input id="holidayTaskTitle" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required><select id="holidayTaskMinutes" aria-label="每天这项作业预计用时"></select><button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button></div>
+        <div class="task-entry-input-row holiday-input-row">
+          <div class="subject-picker" id="holidaySubjectPicker">
+            <button class="subject-picker-button" id="holidaySubject" type="button" value="语文" data-subject="语文" aria-label="选择作业科目" aria-haspopup="true" aria-expanded="false" aria-controls="holidaySubjectOptions"><span id="holidaySubjectLabel">语文</span><span class="subject-picker-arrow" aria-hidden="true">▾</span></button>
+            <div class="subject-tabs" id="holidaySubjectOptions" role="radiogroup" aria-label="选择作业科目" hidden>
+              <button type="button" data-subject="语文" role="radio" aria-checked="true">语文</button>
+              <button type="button" data-subject="数学" role="radio" aria-checked="false">数学</button>
+              <button type="button" data-subject="英语" role="radio" aria-checked="false">英语</button>
+              <button type="button" data-subject="科学" role="radio" aria-checked="false">科学</button>
+            </div>
+          </div>
+          <textarea class="task-draft-input" id="holidayTaskTitle" rows="1" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required></textarea>
+          <select class="task-entry-estimate" id="holidayTaskMinutes" aria-label="这项作业预计用时" title="预计用时"></select>
+          <button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button>
+        </div>
       </form>
     </div>
   </section>

@@ -175,6 +175,10 @@ public class MainActivity extends Activity {
     private View historyPageView;
     private View dictationPageView;
     private View settingsPageView;
+    private FrameLayout settingsDetailPageView;
+    private View alarmSettingsEntryView;
+    private View backupSettingsEntryView;
+    private boolean settingsDetailIsAlarm;
     private View taskKeywordSettingsPageView;
     private View taskKeywordSettingsEntryView;
     private TextView settingsCurrentDateView;
@@ -563,6 +567,10 @@ public class MainActivity extends Activity {
             closeTaskKeywordSettingsPage();
             return;
         }
+        if (settingsDetailPageView != null && settingsDetailPageView.getVisibility() == View.VISIBLE) {
+            closeSettingsDetailPage();
+            return;
+        }
         if (settingsPageView != null && settingsPageView.getVisibility() == View.VISIBLE) {
             showMainPage();
             return;
@@ -602,7 +610,8 @@ public class MainActivity extends Activity {
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             boolean shouldStart = startBreakAlarmRecordingAfterPermission;
             startBreakAlarmRecordingAfterPermission = false;
-            if (granted && shouldStart) beginBreakAlarmRecording();
+            if (granted && shouldStart && settingsDetailIsAlarm && settingsDetailPageView != null
+                    && settingsDetailPageView.getVisibility() == View.VISIBLE) beginBreakAlarmRecording();
             else if (!granted) toast("需要麦克风权限才能录制休息提示音");
             return;
         }
@@ -641,6 +650,7 @@ public class MainActivity extends Activity {
             public void goDate(String date) { selectDate(date); }
             public void back(boolean settings) { hideHolidayPage(); if (settings) showSettingsPage(); else showMainPage(); }
             public void show(View page) {
+                hideSettingsDetailPage();
                 closeTaskEntryPage(); stopDictation(false, false); stopBreakAlarmRecording(true, false); releaseBreakAlarmPlayer();
                 if (holidayPageView.getVisibility() != View.VISIBLE) holidayPreviousSoftInputMode = getWindow().getAttributes().softInputMode;
                 getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
@@ -683,6 +693,10 @@ public class MainActivity extends Activity {
         root.addView(settingsPageView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(taskKeywordSettingsPageView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        settingsDetailPageView = new FrameLayout(this);
+        settingsDetailPageView.setVisibility(View.GONE);
+        root.addView(settingsDetailPageView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         taskEntryPageView = new FrameLayout(this);
         taskEntryPageView.setBackgroundColor(Color.WHITE);
@@ -1410,6 +1424,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTaskEntryPage() {
+        hideSettingsDetailPage();
         JSONObject holiday = HolidayPlans.find(holidayState(), currentDate);
         if (holiday != null) { holidayScreen.openPlan(holiday.optString("id"), false); return; }
         if (taskEntryPanel == null || (!canEditTaskPlan() && weekendKeyFor(currentDate) == null)) return;
@@ -1709,42 +1724,13 @@ public class MainActivity extends Activity {
     }
 
     private void showTaskSubjectPicker() {
-        LinearLayout options = vertical();
-        options.setPadding(dp(12), dp(4), dp(12), dp(8));
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("选择科目")
-                .setView(options)
-                .setNegativeButton("取消", null)
-                .create();
-        LinearLayout[] rows = {horizontal(), horizontal()};
-        for (int index = 0; index < TASK_SUBJECTS.length; index++) {
-            String subject = TASK_SUBJECTS[index];
-            Button option = new Button(this);
-            option.setText(subject);
-            option.setTextSize(13);
-            option.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            option.setAllCaps(false);
-            option.setTextColor(subject.equals(selectedTaskSubject) ? Color.WHITE : taskSubjectColor(subject));
-            option.setBackground(rounded(subject.equals(selectedTaskSubject)
-                    ? taskSubjectColor(subject) : taskSubjectSoftColor(subject),
-                    10, taskSubjectColor(subject), 1));
-            option.setOnClickListener(v -> {
-                selectTaskSubject(subject);
-                dialog.dismiss();
-                if (taskDraftInput != null) {
-                    taskDraftInput.requestFocus();
-                    taskDraftInput.setSelection(taskDraftInput.length());
-                }
-            });
-            LinearLayout.LayoutParams optionParams = weightedFixed(1, dp(44));
-            if (index % 2 == 1) optionParams.leftMargin = dp(7);
-            rows[index / 2].addView(option, optionParams);
-        }
-        options.addView(rows[0], matchFixed(dp(44)));
-        LinearLayout.LayoutParams secondRowParams = matchFixed(dp(44));
-        secondRowParams.topMargin = dp(7);
-        options.addView(rows[1], secondRowParams);
-        dialog.show();
+        TaskSubjectPicker.show(this, selectedTaskSubject, subject -> {
+            selectTaskSubject(subject);
+            if (taskDraftInput != null) {
+                taskDraftInput.requestFocus();
+                taskDraftInput.setSelection(taskDraftInput.length());
+            }
+        });
     }
 
     private void scrollTaskEntryToBottom() {
@@ -2074,10 +2060,14 @@ public class MainActivity extends Activity {
     }
 
     private SpannableString remainingTimeLabel(int minutes) {
+        return remainingTimeLabel(minutes, Color.rgb(52,95,158));
+    }
+
+    private SpannableString remainingTimeLabel(int minutes, int color) {
         String prefix = "预计还需 ";
         SpannableString label = new SpannableString(prefix + minutes + " 分钟");
         int start = prefix.length(), end = label.length();
-        label.setSpan(new ForegroundColorSpan(Color.rgb(52, 95, 158)), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        label.setSpan(new ForegroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         label.setSpan(new StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         label.setSpan(new RelativeSizeSpan(1.45f), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         return label;
@@ -2097,7 +2087,7 @@ public class MainActivity extends Activity {
             if (task != null && "done".equals(task.optString("status"))) done++;
         }
         taskFocusCountsView.setText("已完成 " + done + " 项   剩余 " + (indexes.size() - done) + " 项");
-        taskFocusRemainingTimeView.setText(remainingTimeLabel(remainingEstimatedMinutes(tasks, indexes)));
+        taskFocusRemainingTimeView.setText(remainingTimeLabel(remainingEstimatedMinutes(tasks, indexes), Color.rgb(75,85,99)));
     }
 
     private String taskClockLabel(JSONObject task) {
@@ -2127,47 +2117,53 @@ public class MainActivity extends Activity {
         taskFocusTask = task;
         LinearLayout content = vertical();
         content.setPadding(dp(24), dp(22), dp(24), dp(18));
+        content.setBackgroundColor(Color.WHITE);
         LinearLayout header = horizontal();
         header.setGravity(Gravity.TOP);
-        TextView kicker = text("专注计时中", 11, GREEN, true);
+        TextView kicker = text("专注计时中", 11, Color.rgb(102, 112, 125), true);
         kicker.setPadding(0, dp(2), dp(10), 0);
         header.addView(kicker, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout progress = vertical();
         progress.setGravity(Gravity.END);
-        taskFocusCountsView = text("", 11, MUTED, false);
+        taskFocusCountsView = text("", 11, Color.rgb(102,112,125), false);
         taskFocusCountsView.setGravity(Gravity.END);
         progress.addView(taskFocusCountsView, matchWrap());
-        taskFocusRemainingTimeView = text("", 11, MUTED, false);
+        taskFocusRemainingTimeView = text("", 11, Color.rgb(102,112,125), false);
         taskFocusRemainingTimeView.setGravity(Gravity.END);
         taskFocusRemainingTimeView.setPadding(0, dp(3), 0, 0);
         progress.addView(taskFocusRemainingTimeView, matchWrap());
         header.addView(progress, weightedWrap(1));
         content.addView(header, matchWrap());
         updateTaskFocusProgress();
-        TextView subject = text(task.optString("subject", "其他"), 12, GREEN, true);
+        String focusSubject = task.optString("subject", "其他");
+        int focusSubjectColor = "语文".equals(focusSubject) ? Color.rgb(145,75,43)
+                : "数学".equals(focusSubject) ? Color.rgb(48,95,148)
+                : "英语".equals(focusSubject) ? Color.rgb(104,71,148)
+                : "科学".equals(focusSubject) ? Color.rgb(40,107,87) : Color.rgb(101,91,78);
+        TextView subject = text(focusSubject, 12, focusSubjectColor, true);
         subject.setGravity(Gravity.CENTER);
         subject.setPadding(0, dp(12), 0, 0);
         content.addView(subject);
-        TextView title = text(task.optString("title", "当前作业"), 19, INK, true);
+        TextView title = text(task.optString("title", "当前作业"), 21, focusSubjectColor, true);
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, dp(8), 0, 0);
         content.addView(title);
-        taskFocusElapsedView = text(taskClockLabel(task), 48, GREEN, true);
+        taskFocusElapsedView = text(taskClockLabel(task), 48, Color.rgb(196,93,20), true);
         taskFocusElapsedView.setGravity(Gravity.CENTER);
         taskFocusElapsedView.setPadding(0, dp(12), 0, dp(8));
         content.addView(taskFocusElapsedView);
         LinearLayout estimateCard = horizontal();
         estimateCard.setGravity(Gravity.CENTER_VERTICAL);
         estimateCard.setPadding(dp(12), dp(10), dp(12), dp(10));
-        estimateCard.setBackground(rounded(GREEN_SOFT, 13, GREEN_SOFT, 0));
-        TextView estimate = text("预计用时  " + estimatedMinutes(task) + " 分钟", 11, MUTED, true);
+        estimateCard.setBackground(rounded(Color.rgb(244,245,247), 13, Color.rgb(244,245,247), 0));
+        TextView estimate = text("预计用时  " + estimatedMinutes(task) + " 分钟", 11, Color.rgb(91,101,115), true);
         estimateCard.addView(estimate, weightedWrap(1));
-        taskFocusComparisonView = text(taskEstimateComparisonLabel(task), 11, Color.rgb(69, 107, 168), true);
+        taskFocusComparisonView = text(taskEstimateComparisonLabel(task), 11, Color.rgb(91,101,115), true);
         taskFocusComparisonView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         estimateCard.addView(taskFocusComparisonView, weightedWrap(1));
         content.addView(estimateCard, matchWrap());
-        TextView started = text("开始时间  " + task.optString("startedAt", "--:--"), 12, MUTED, false);
+        TextView started = text("开始时间  " + task.optString("startedAt", "--:--"), 12, Color.rgb(91,101,115), false);
         started.setGravity(Gravity.CENTER);
         started.setPadding(0, dp(12), 0, 0);
         content.addView(started);
@@ -2175,6 +2171,8 @@ public class MainActivity extends Activity {
         LinearLayout actions = horizontal();
         actions.setPadding(0, dp(16), 0, 0);
         Button pause = smallButton("休息一下");
+        pause.setTextColor(Color.rgb(91,101,115));
+        pause.setBackground(rounded(Color.rgb(245,246,248), 11, Color.rgb(216,222,231), 1));
         pause.setMinimumHeight(dp(44));
         pause.setMinWidth(0);
         pause.setMinimumWidth(0);
@@ -2186,15 +2184,15 @@ public class MainActivity extends Activity {
         complete.setMinWidth(0);
         complete.setMinimumWidth(0);
         complete.setTextColor(Color.WHITE);
-        complete.setBackground(rounded(GREEN, 11, GREEN, 0));
+        complete.setBackground(rounded(Color.rgb(49,129,108), 11, Color.rgb(49,129,108), 0));
         complete.setOnClickListener(v -> performTaskAction("complete", taskIndex));
         actions.addView(complete, weightedWrap(1.35f));
         content.addView(actions, matchWrap());
         int nextIndex = nextTaskIndexAfter(taskIndex);
         Button skip = smallButton(nextIndex >= 0 ? "跳过，开始下一项" : "没有其他可做项");
         skip.setMinimumHeight(dp(44));
-        skip.setTextColor(MUTED);
-        skip.setBackground(rounded(PAGE, 12, LINE, 1));
+        skip.setTextColor(Color.rgb(91,101,115));
+        skip.setBackground(rounded(Color.rgb(245,246,248), 12, Color.rgb(216,222,231), 1));
         skip.setEnabled(nextIndex >= 0);
         if (nextIndex < 0) skip.setAlpha(0.55f);
         skip.setOnClickListener(v -> performTaskAction("skip", taskIndex));
@@ -4094,7 +4092,6 @@ public class MainActivity extends Activity {
         String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
         LinearLayout mainRow = horizontal();
         mainRow.setGravity(Gravity.CENTER_VERTICAL);
-        if (hasLaunchAction) mainRow.setOrientation(LinearLayout.VERTICAL);
         mainRow.setMinimumHeight(dp(hasLaunchAction ? 84 : 60));
         mainRow.setPadding(dp(10), dp(compact ? 9 : 10), dp(10), dp(compact ? 9 : 10));
         LinearLayout taskCopy = vertical();
@@ -4114,7 +4111,7 @@ public class MainActivity extends Activity {
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
         metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
         if (!meta.isEmpty()) taskCopy.addView(metaView);
-        mainRow.addView(taskCopy, hasLaunchAction ? matchWrap() : weightedWrap(1));
+        mainRow.addView(taskCopy, weightedWrap(1));
         LinearLayout aside = vertical();
         aside.setGravity(Gravity.END);
         aside.addView(taskEstimateView(task), matchWrap());
@@ -4140,13 +4137,8 @@ public class MainActivity extends Activity {
             aside.addView(actions, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }
-        if (hasLaunchAction) {
-            aside.setPadding(0, 0, 0, dp(5));
-            mainRow.addView(aside, 0, matchWrap());
-        } else {
-            mainRow.addView(spaceHorizontal(8));
-            mainRow.addView(aside);
-        }
+        mainRow.addView(spaceHorizontal(8));
+        mainRow.addView(aside);
         item.addView(mainRow, weightedWrap(1));
         if (hasLaunchAction) {
             item.addView(createTaskLaunchButton(task, () -> performTaskAction("start", taskIndex)),
@@ -5462,6 +5454,7 @@ public class MainActivity extends Activity {
     }
 
     private void showDictationPage() {
+        hideSettingsDetailPage();
         hideHolidayPage();
         closeTaskEntryPage();
         dismissTaskFocusDialog();
@@ -5525,6 +5518,7 @@ public class MainActivity extends Activity {
     }
 
     private void showHistoryPage() {
+        hideSettingsDetailPage();
         hideHolidayPage();
         closeTaskEntryPage();
         stopDictation(false, false);
@@ -5543,6 +5537,7 @@ public class MainActivity extends Activity {
     }
 
     private void showMainPage() {
+        hideSettingsDetailPage();
         hideHolidayPage();
         closeTaskEntryPage();
         stopDictation(false, false);
@@ -6627,8 +6622,52 @@ public class MainActivity extends Activity {
         content.addView(holidayEntry, matchFixed(dp(60)));
         content.addView(space(14));
 
+        alarmSettingsEntryView = buildSettingsDetailEntry("休息结束提醒", () -> showSettingsDetailPage(true));
+        content.addView(alarmSettingsEntryView, matchFixed(dp(60)));
+        content.addView(space(14));
+        backupSettingsEntryView = buildSettingsDetailEntry("数据备份", () -> showSettingsDetailPage(false));
+        content.addView(backupSettingsEntryView, matchFixed(dp(60)));
+        return scroll;
+    }
+
+    private View buildSettingsDetailEntry(String title, Runnable action) {
+        LinearLayout entry = horizontal();
+        entry.setGravity(Gravity.CENTER_VERTICAL);
+        entry.setPadding(dp(20), 0, dp(20), 0);
+        entry.setBackground(rounded(Color.WHITE, 16, LINE, 1));
+        entry.addView(text(title, 16, INK, true), weightedWrap(1));
+        TextView arrow = text("›", 25, MUTED, false);
+        arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        entry.addView(arrow);
+        entry.setContentDescription(title + "，进入设置");
+        entry.setFocusable(true);
+        entry.setOnClickListener(v -> action.run());
+        return entry;
+    }
+
+    private View buildSettingsDetailPage(String title, View detail) {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(PAGE);
+        LinearLayout content = vertical();
+        content.setPadding(dp(16), dp(22), dp(16), dp(28));
+        scroll.addView(content, matchWrap());
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        Button back = smallButton("返回");
+        back.setContentDescription("返回设置");
+        back.setOnClickListener(v -> closeSettingsDetailPage());
+        header.addView(back, fixed(dp(64), dp(40)));
+        header.addView(spaceHorizontal(13));
+        header.addView(text(title, 25, GREEN_DARK, true), weightedWrap(1));
+        content.addView(header, matchWrap());
+        content.addView(space(12));
+        content.addView(detail, matchWrap());
+        return scroll;
+    }
+
+    private View buildAlarmSettingsPage() {
         LinearLayout alarmCard = card();
-        alarmCard.addView(text("休息结束提醒", 19, INK, true));
         breakAlarmRecordButton = smallButton("🎙 开始录音");
         breakAlarmRecordButton.setOnClickListener(v -> toggleBreakAlarmRecording());
         LinearLayout.LayoutParams recordParams = matchFixed(dp(48));
@@ -6650,12 +6689,12 @@ public class MainActivity extends Activity {
         breakAlarmHintView.setPadding(0, dp(9), 0, 0);
         breakAlarmHintView.setVisibility(View.GONE);
         alarmCard.addView(breakAlarmHintView);
-        content.addView(alarmCard, matchWrap());
-        content.addView(space(14));
+        renderBreakAlarmSettings();
+        return buildSettingsDetailPage("休息结束提醒", alarmCard);
+    }
 
+    private View buildBackupSettingsPage() {
         LinearLayout dataCard = card();
-        dataCard.addView(text("本地数据", 10, GREEN, true));
-        dataCard.addView(text("备份与恢复", 20, INK, true));
         Button export = smallButton("导出本地备份");
         export.setOnClickListener(v -> launchBackupExport());
         LinearLayout.LayoutParams exportParams = matchFixed(dp(46));
@@ -6670,9 +6709,37 @@ public class MainActivity extends Activity {
         note.setPadding(0, dp(11), 0, 0);
         note.setLineSpacing(dp(3), 1f);
         dataCard.addView(note);
-        content.addView(dataCard, matchWrap());
+        return buildSettingsDetailPage("数据备份", dataCard);
+    }
+
+    private void showSettingsDetailPage(boolean alarm) {
+        hideSettingsDetailPage();
+        settingsDetailIsAlarm = alarm;
+        settingsPageView.setVisibility(View.GONE);
+        taskKeywordSettingsPageView.setVisibility(View.GONE);
+        settingsDetailPageView.removeAllViews();
+        settingsDetailPageView.addView(alarm ? buildAlarmSettingsPage() : buildBackupSettingsPage(),
+                new FrameLayout.LayoutParams(-1, -1));
+        settingsDetailPageView.setVisibility(View.VISIBLE);
+    }
+
+    private void hideSettingsDetailPage() {
+        if (settingsDetailPageView == null || settingsDetailPageView.getVisibility() != View.VISIBLE) return;
+        if (settingsDetailIsAlarm) {
+            startBreakAlarmRecordingAfterPermission = false;
+            stopBreakAlarmRecording(true, false);
+            releaseBreakAlarmPlayer();
+            if (breakAlarmTts != null) breakAlarmTts.stop();
+        }
+        settingsDetailPageView.setVisibility(View.GONE);
+    }
+
+    private void closeSettingsDetailPage() {
+        boolean alarm = settingsDetailIsAlarm;
+        hideSettingsDetailPage();
+        settingsPageView.setVisibility(View.VISIBLE);
         renderBreakAlarmSettings();
-        return scroll;
+        (alarm ? alarmSettingsEntryView : backupSettingsEntryView).requestFocus();
     }
 
     private View buildTaskKeywordSettingsPage() {
@@ -6699,6 +6766,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTaskKeywordSettingsPage() {
+        hideSettingsDetailPage();
         stopBreakAlarmRecording(true, false);
         releaseBreakAlarmPlayer();
         settingsPageView.setVisibility(View.GONE);
@@ -6930,6 +6998,7 @@ public class MainActivity extends Activity {
     }
 
     private void showSettingsPage() {
+        hideSettingsDetailPage();
         hideHolidayPage();
         stopDictation(false, false);
         pendingDictationRecordingWord = null;
