@@ -589,7 +589,7 @@ input:focus { border-color: #75a2f5; box-shadow: 0 0 0 3px rgba(75, 130, 239, .1
 .order-estimate-control { display: grid; align-self: center; gap: 3px; min-width: 0; margin: 7px 10px 7px 0; color: var(--muted); font-size: .65rem; }
 .order-estimate-control select { width: 94px; min-width: 0; min-height: 40px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #fff; font: inherit; font-size: .75rem; cursor: pointer; }
 .order-estimate-control select:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.holiday-order-estimate { grid-column: 3; grid-row: 1; margin: 8px 10px 0 0; }
+.holiday-order-estimate { grid-column: 2; grid-row: 1; }
 .order-dialog-footer { flex-shrink: 0; display: grid; align-content: start; min-height: 120px; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .order-day-tabs[hidden], .order-dialog-footer button[hidden] { display: none; }
 .order-secondary-actions { display: flex; justify-content: space-between; gap: 12px; }
@@ -1017,33 +1017,51 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 .holiday-overdue { margin: 12px 0; padding: 12px; border: 1px solid #eed5aa; border-radius: 14px; background: #fffaf0; }
 .holiday-overdue summary { cursor: pointer; color: #886224; }
 .holiday-config-form label { display: grid; gap: 6px; }
-.holiday-config-form input, .holiday-day-toolbar input, .holiday-task-row input, .holiday-entry-options select, #holidayTaskEdit input:not([type=checkbox]), #holidayTaskEdit select { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #fff; font: inherit; }
+.holiday-config-form input, .holiday-task-row input, .holiday-entry-options select, #holidayTaskEdit input:not([type=checkbox]), #holidayTaskEdit select { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #fff; font: inherit; }
 .holiday-config-form small { color: var(--muted); }
 .holiday-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .holiday-plan-header { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; }
 .holiday-plan-header h1 { flex: 1; min-width: 0; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #holidayConfirm { min-width: 72px; padding: 10px 16px; }
 .holiday-day-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-bottom: 10px; font-size: .8rem; }
-.holiday-day-toolbar label { display: flex; gap: 8px; align-items: center; }
 .holiday-day-toolbar > span { flex: 1; }
-.holiday-short-days { display: flex; gap: 5px; overflow-x: auto; margin-bottom: 8px; }
-.holiday-short-days[hidden], .holiday-ledger-hint[hidden] { display: none; }
-.holiday-short-days button { flex: 0 0 auto; }
-.holiday-short-days [aria-pressed=true] { color: #fff; background: var(--green); }
+.holiday-short-days { display: flex; flex-shrink: 0; gap: 8px; min-width: 0; overflow-x: auto; padding: 2px 2px 8px; margin-bottom: 8px; }
+.holiday-ledger-hint[hidden] { display: none; }
+.holiday-short-days button { display: grid; flex: 0 0 auto; gap: 4px; min-width: 88px; min-height: 58px; padding: 10px 14px; text-align: center; }
+.holiday-day-heading { display: flex; align-items: baseline; justify-content: center; gap: 5px; white-space: nowrap; }
+.holiday-short-days strong { font-size: .75rem; }
+.holiday-day-count { color: var(--muted); font-size: .65rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.holiday-short-days small { color: var(--muted); font-size: .65rem; white-space: nowrap; }
+.holiday-short-days [aria-pressed=true] { border-color: var(--green); color: #fff; background: var(--green); }
+.holiday-short-days [aria-pressed=true] small { color: #fff; }
+.holiday-short-days [aria-pressed=true] .holiday-day-count { color: #fff; }
 .holiday-task-list { min-height: 0; flex: 1; overflow-y: auto; padding-bottom: 8px; }
 .holiday-task-row { --subject-color: #756f65; --subject-soft: #f2efe9; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 0 10px; margin: 8px 0; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; background: var(--subject-soft); }
 .holiday-task-row[data-subject="语文"] { --subject-color: #c56b45; --subject-soft: #fbe9df; }
 .holiday-task-row[data-subject="数学"] { --subject-color: #4075ae; --subject-soft: #e7f0fa; }
 .holiday-task-row[data-subject="英语"] { --subject-color: #765ca7; --subject-soft: #eee9f8; }
 .holiday-task-row[data-subject="科学"] { --subject-color: #377e68; --subject-soft: #e4f3ed; }
+.holiday-task-row.holiday-order-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0; align-items: stretch; }
+.holiday-order-row .task-copy small { display: block; margin-top: 3px; color: var(--muted); font-size: .72rem; }
 .holiday-subject { display: flex; grid-column: 1; grid-row: 1 / span 2; align-items: center; justify-content: center; padding: 8px; color: white; background: var(--subject-color); writing-mode: vertical-rl; letter-spacing: 3px; font-size: .75rem; }
 .holiday-task-copy { min-width: 0; grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 12px 0; overflow-wrap: anywhere; }
 .holiday-task-copy strong, .holiday-task-copy small { display: block; }
+.holiday-task-title { display: flex; align-items: center; gap: 2px; }
+.holiday-task-title strong { min-width: 0; }
 .holiday-task-copy small { margin-top: 5px; color: var(--muted); font-size: .72rem; }
 .holiday-task-estimate { grid-column: 3; grid-row: 1; padding: 9px 12px 0; text-align: right; color: var(--muted); font-size: .72rem; white-space: nowrap; }
 .holiday-task-actions { grid-column: 3; grid-row: 2; display: flex; gap: 5px; align-items: center; justify-content: flex-end; flex-wrap: wrap; padding: 4px 8px 8px; }
+#holidayTaskList .holiday-task-actions { grid-row: 1 / span 2; align-self: center; padding: 8px; }
 .holiday-task-actions input { width: 135px; font-size: .74rem; }
 .holiday-task-actions button { min-height: 36px; }
+.holiday-edit-actions { display: flex; flex-shrink: 0; gap: 6px; }
+.holiday-task-row .holiday-task-icon { display: grid; flex-shrink: 0; place-items: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; }
+.holiday-task-icon svg { width: 16px; height: 16px; }
+.holiday-task-title .holiday-task-icon { width: 32px; min-height: 32px; }
+.holiday-task-title .holiday-task-icon svg { width: 14px; height: 14px; }
+.holiday-move-controls { display: flex; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
+.holiday-move-day { width: 180px; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #fff; font: inherit; font-size: .74rem; }
+.holiday-move-controls :disabled { opacity: .45; cursor: default; }
 .holiday-composer { border-top: 1px dashed #bfd3f6; padding-top: 14px; margin-top: 14px; }
 .holiday-composer[hidden] { display: none; }
 .holiday-entry-options { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: .78rem; }
@@ -1054,6 +1072,9 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 @media(max-width: 600px) {
   .holiday-task-copy { grid-row: 1; }
   .holiday-task-actions { grid-column: 2 / -1; padding-top: 0; }
+  #holidayTaskList .holiday-task-actions { grid-row: 2; padding-top: 0; }
+  .holiday-move-controls { flex: 1; width: auto; }
+  .holiday-move-day { flex: 1; width: 0; }
   #holidayRepeatDateList { left: auto; right: 0; width: min(260px, calc(100vw - 48px)); }
 }
 .focus-modal {

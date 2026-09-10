@@ -379,8 +379,8 @@
   <section class="task-entry-page" id="holidayPlanPage" aria-labelledby="holidayPlanTitle" hidden>
     <div class="task-entry-layout">
       <header class="holiday-plan-header"><button class="history-back-button" id="holidayPlanBack" type="button" aria-label="返回">‹</button><h1 id="holidayPlanTitle">假期计划</h1><button class="primary-button compact-button" id="holidayConfirm" type="button">确定</button></header>
-      <div class="holiday-day-toolbar"><label>查看日期<input id="holidayViewDate" type="date"></label><span id="holidayDaySummary"></span><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
-      <div class="holiday-short-days" id="holidayShortDays" hidden></div>
+      <div class="holiday-short-days" id="holidayShortDays" role="group" aria-label="选择假期天数"></div>
+      <div class="holiday-day-toolbar"><span id="holidayDaySummary"></span><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
       <div class="holiday-ledger-hint" id="holidayLedgerHint" hidden><span id="holidayLedgerText"></span><button class="text-button bordered" id="holidayCheckLedger" type="button">去核对</button></div>
       <div class="holiday-task-list" id="holidayTaskList"></div>
       <form class="task-entry-composer holiday-composer" id="holidayTaskForm">
