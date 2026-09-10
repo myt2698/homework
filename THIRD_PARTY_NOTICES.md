@@ -1,5 +1,23 @@
 # Third-party notices
 
+## Hanzi Writer and offline stroke data
+
+- Hanzi Writer 3.7.3: https://github.com/chanind/hanzi-writer — MIT license.
+- hanzi-writer-data 2.0.1: https://github.com/chanind/hanzi-writer-data — ARPHIC PUBLIC LICENSE (APL).
+- Data derived from Make Me a Hanzi: https://github.com/skishore/makemeahanzi.
+- Font/data copyright: 1999 Arphic Technology Co., Ltd.; Make Me a Hanzi copyright 2016 Shaunak Kishore.
+- Unmodified license texts and upstream copying notices are packaged under `web/hanzi/licenses/` and viewable in the lookup screen.
+- Pinned npm archive integrity values: `web/hanzi/provenance.json`.
+
+On 2026-09-10 the per-character JSON data was compacted and grouped by Unicode
+code point into local JavaScript resources by `scripts/vendor-hanzi.py`.
+All 9,574 characters and their original stroke geometry, medians and radical
+indices are retained. Every transformed shard includes a modification notice.
+The transformed data files are distributed under the same APL terms, without
+warranty, as readable JavaScript files in `web/hanzi/data/` (also packaged as
+Android assets). The MIT component is shipped unchanged. The lookup UI is
+independent application code; the APL applies to the character data.
+
 ## sherpa-onnx Android runtime
 
 The repository retains sherpa-onnx 1.13.7 files from the former homework

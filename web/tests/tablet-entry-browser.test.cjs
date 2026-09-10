@@ -53,15 +53,14 @@ const { chromium } = require('playwright');
       const entryBox = await composer.boundingBox();
       const inputBox = await draft.boundingBox();
       const addBox = await add.boundingBox();
-      const estimateBox = await page.locator('#taskEntryEstimate').boundingBox();
+      assert.equal(await page.locator('#taskEntryEstimate').count(), 0, 'composer has no estimate control');
       assert(Math.abs(entryBox.width - (width - 24)) < 1, 'composer spans the full available width');
       assert.equal(addBox.width, width > 420 ? 112 : 80, 'add has a wider touch area');
       assert(addBox.height >= 48, 'add remains easy to touch');
       assert(addBox.y + addBox.height <= height - 10, 'input controls stay above the viewport bottom');
-      assert(addBox.x > estimateBox.x + estimateBox.width, 'estimate is on the left of add');
       assert(Math.abs(addBox.x + addBox.width - entryBox.x - entryBox.width) < 1, 'add sits at the right edge');
       if (width > 420) {
-        assert(estimateBox.x - (inputBox.x + inputBox.width) <= 9, 'estimate follows the input');
+        assert(addBox.x - (inputBox.x + inputBox.width) <= 9, 'add follows the input');
         assert(Math.abs(addBox.y + addBox.height - inputBox.y - inputBox.height) < 1, 'input and add align');
       }
       if (width >= 1024) {
@@ -91,7 +90,7 @@ const { chromium } = require('playwright');
     await add.tap();
     assert.equal(await page.locator('[data-pending-task-id]').count(), 16);
     assert.deepEqual(errors, []);
-    console.log('PASS: full-width composer, wider add with estimate on its left, touch/focus, stable position, horizontal keywords and responsive sizes.');
+    console.log('PASS: full-width composer without estimate picker, touch/focus, stable position, horizontal keywords and responsive sizes.');
     console.log('Screenshots: ' + output);
     await context.close();
   } finally {

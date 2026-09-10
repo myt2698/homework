@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>查字 · 作业小计划</title>
+  <link rel="stylesheet" href="lookup.css">
+</head>
+<body>
+  <main class="lookup-shell">
+    <header class="lookup-header">
+      <button id="lookupBack" class="back-button" type="button" aria-label="返回作业">‹ <span>返回</span></button>
+      <div><h1>查字</h1><p>看清每一笔，跟着写一写</p></div>
+      <span class="header-mark" aria-hidden="true">字</span>
+    </header>
+    <p id="lookupTimerNote" class="timer-note" hidden>专注计时继续中，查完就回去写作业</p>
+    <form id="lookupForm" class="lookup-search">
+      <label class="sr-only" for="lookupInput">要查的汉字或词语</label>
+      <input id="lookupInput" type="text" maxlength="48" placeholder="输入汉字或词语，如：学习" autocomplete="off" enterkeyhint="search" aria-describedby="lookupSearchHint">
+      <button class="primary" type="submit">查字</button>
+    </form>
+    <p id="lookupSearchHint" class="search-hint">也可以用键盘上的手写输入。</p>
+    <div id="lookupCharacters" class="character-choices" role="group" aria-label="选择要看的字" hidden></div>
+    <section class="writing-card" aria-label="汉字笔顺和跟写">
+      <div class="character-heading"><h2 id="lookupCharacter">来查一个字吧</h2><span id="lookupStrokeCount"></span></div>
+      <div id="lookupBoard" class="writing-board">
+        <svg class="grid-lines" viewBox="0 0 300 300" aria-hidden="true"><path d="M150 0V300M0 150H300"/><path class="diagonal" d="M0 0L300 300M300 0L0 300"/></svg>
+        <div id="lookupCanvas" role="img" aria-label="汉字书写区域"></div>
+        <span id="lookupPlaceholder" class="board-placeholder" aria-hidden="true">字</span>
+      </div>
+      <p id="lookupStatus" class="lookup-status" role="status" aria-live="polite">输入一个字，看看它是怎么写的</p>
+      <progress id="lookupPracticeProgress" value="0" max="1" aria-label="跟写进度" hidden></progress>
+      <div class="writing-actions">
+        <button id="lookupAnimate" class="primary" type="button" disabled>▶ 看笔顺</button>
+        <button id="lookupPractice" class="secondary" type="button" disabled>✎ 跟着写</button>
+      </div>
+      <div class="writing-secondary">
+        <button id="lookupPause" type="button" disabled>暂停</button>
+        <button id="lookupHint" type="button" disabled>提示下一笔</button>
+      </div>
+    </section>
+    <div id="lookupExamples" class="example-characters" aria-label="试着查一个字"><span>试一试</span><button type="button" data-character="永">永</button><button type="button" data-character="学">学</button><button type="button" data-character="写">写</button></div>
+    <details class="lookup-credits">
+      <summary>字库与使用说明</summary>
+      <p id="lookupCoverage"></p>
+      <p>笔顺演示与跟写由 Hanzi Writer 提供。笔画资料来自 Make Me a Hanzi / hanzi-writer-data。</p>
+      <p>字库版权 © 1999 Arphic Technology Co., Ltd.，按 ARPHIC PUBLIC LICENSE 提供，不附带保证；可按许可复制、修改和分发。</p>
+      <button id="lookupLicenseButton" type="button" aria-expanded="false" aria-controls="lookupLicenses">查看许可说明</button>
+      <div id="lookupLicenses" hidden><iframe title="字库许可" data-src="licenses/ARPHICPL.TXT"></iframe><iframe title="笔顺组件许可" data-src="licenses/HANZI-WRITER-LICENSE.txt"></iframe></div>
+    </details>
+  </main>
+  <script src="vendor/hanzi-writer.min.js"></script>
+  <script src="catalog.js"></script>
+  <script src="lookup.js"></script>
+</body>
+</html>

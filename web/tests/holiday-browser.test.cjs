@@ -22,12 +22,27 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   await page.locator('#holidayTaskTitle').fill('书本第1页');await page.locator('#holidayTaskForm button[type=submit]').click();
   const composerAfter=await page.locator('.holiday-input-row').boundingBox();assert.equal(composerBefore.y,composerAfter.y,'adding a task keeps the composer fixed');
   assert.equal(await page.locator('#holidayTaskTitle').evaluate(e=>e===document.activeElement),true);
-  await page.locator('#holidayRepeat').selectOption('daily');await page.locator('#holidayTaskTitle').fill('练字');await page.locator('#holidayTaskMinutes').selectOption('10');await page.locator('#holidayTaskForm button[type=submit]').click();
-  await page.locator('#holidaySubject').click();await page.locator('#holidaySubjectOptions [data-subject="数学"]').click();await page.locator('#holidayTaskTitle').fill('口算');await page.locator('#holidayTaskMinutes').selectOption('10');
+  await page.locator('#holidayRepeat').selectOption('daily');await page.locator('#holidayTaskTitle').fill('练字');await page.locator('#holidayTaskForm button[type=submit]').click();
+  await page.locator('#holidaySubject').click();await page.locator('#holidaySubjectOptions [data-subject="数学"]').click();await page.locator('#holidayTaskTitle').fill('口算');
   await page.locator('#holidayRepeatDates summary').click();await page.locator('[data-holiday-repeat-date="2026-09-11"]').uncheck();await page.locator('#holidayRepeatDates summary').click();await page.locator('#holidayTaskForm button[type=submit]').click();
   await page.locator('#holidayViewDate').fill('2026-09-10');
-  assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*20 分钟/);
-  await page.locator('#holidaySort').click();await page.locator('[data-holiday-action=pick]').nth(1).click();await page.locator('[data-holiday-action=pick]').nth(0).click();await page.locator('#holidaySort').click();
+  assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*30 分钟/);
+  assert.equal(await page.locator('#holidayTaskMinutes').count(),0);
+  await page.locator('#holidaySort').click();
+  await page.locator('[data-holiday-estimate]').nth(0).selectOption('10');
+  await page.locator('[data-holiday-action=pick]').nth(1).click();
+  await page.locator('[data-holiday-estimate]').nth(1).selectOption('20');
+  assert.equal(await page.locator('[data-holiday-action=pick]').nth(1).innerText(),'第 1 项','changing estimate preserves the selected order');
+  assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*30 分钟/);
+  for(const width of [320,390,1024]) {
+    await page.setViewportSize({width,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.screenshot({path:path.join(output,`holiday-sort-${width}.png`),fullPage:true});
+  }
+  await page.locator('[data-holiday-action=pick]').nth(0).click();await page.locator('#holidaySort').click();
+  const estimates=await page.evaluate(()=>JSON.parse(localStorage.getItem('homework-ledger-v1')).records);
+  assert.deepEqual(estimates['2026-09-10'].tasks.map(t=>t.estimatedMinutes),[20,10]);
+  assert(estimates['2026-09-12'].tasks.every(t=>t.estimatedMinutes===15),'changing a daily estimate does not edit other repeated instances');
   assert.match(await page.locator('#holidayTaskList .holiday-task-copy strong').first().innerText(),/口算/);
   for(const [width,height] of [[1024,768],[390,844],[320,740]]){
    await page.setViewportSize({width,height});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

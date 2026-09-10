@@ -1,0 +1,15 @@
+{
+  "writer": {
+    "name": "hanzi-writer",
+    "version": "3.7.3",
+    "integrity": "sha512-fdOFrb1cXWL/pV/oplJkcdziCvjJzhhf+qoIBm5IpVGxPBZEu4eLB6ZG5RJDbKXyNbNlyx8oIpa3XrcUBcSXpg=="
+  },
+  "data": {
+    "name": "hanzi-writer-data",
+    "version": "2.0.1",
+    "integrity": "sha512-nbQwM+MaryGoq7pBMIZLCd3lFq03nXuJuwku1+6UbjL58uU+9OULVcMkoNvNuJSoIV7f1bbPRfD4D/LQa5S7qg=="
+  },
+  "characterCount": 9574,
+  "shardCount": 99,
+  "convertedOn": "2026-09-10"
+}

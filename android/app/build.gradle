@@ -20,8 +20,8 @@ android {
     }
 
     sourceSets {
-        // This directory contains only the retired speech-recognition models.
-        // Keep the historical files in the repository, but do not package them.
-        main.assets.setSrcDirs([])
+        // Package only the shared offline lookup UI and stroke data.
+        // Retired speech-recognition models in src/main/assets stay excluded.
+        main.assets.setSrcDirs(["../../web/hanzi"])
     }
 }

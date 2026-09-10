@@ -33,6 +33,10 @@
       </div>
     </header>
 
+    <button class="home-lookup-entry" id="homeLookupButton" type="button" aria-controls="hanziLookupModal">
+      <span class="lookup-entry-mark" aria-hidden="true">字</span><strong>查字</strong><span>看笔顺 · 跟着写</span><b aria-hidden="true">›</b>
+    </button>
+
     <button class="historical-date-notice" id="historicalDateNotice" type="button" hidden>
       <span>正在查看</span>
       <strong id="historicalDateLabel"></strong>
@@ -125,6 +129,7 @@
           <div class="task-footer-actions">
             <button class="primary-button compact-button" id="taskOrderButton" type="button" hidden>选择作业顺序</button>
             <button class="secondary-button" id="confirmTaskListButton" type="button" hidden>修改计划</button>
+            <button class="secondary-button" id="supplementTaskButton" type="button" hidden>＋ 补加作业</button>
           </div>
         </div>
 
@@ -328,6 +333,12 @@
         <input id="importDataInput" type="file" accept="application/json,.json" hidden>
       </div>
       <p class="settings-description">备份包含作业、计划、打卡、听写词语和作业关键词；提示音录音仅保存在当前设备。</p>
+      <div class="backup-snapshot">
+        <h2>导入前的数据</h2>
+        <p class="settings-description" id="backupSnapshotStatus">每次导入前自动保存，只保留最近一份。</p>
+        <button class="secondary-button" id="restoreSnapshotButton" type="button" disabled>恢复到上次导入前</button>
+        <p class="settings-description">快照保存在本机。恢复后计时保持暂停，准备好再继续。</p>
+      </div>
     </section>
   </section>
 
@@ -386,7 +397,6 @@
             </div>
           </div>
           <textarea class="task-draft-input" id="holidayTaskTitle" rows="1" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required></textarea>
-          <select class="task-entry-estimate" id="holidayTaskMinutes" aria-label="这项作业预计用时" title="预计用时"></select>
           <button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button>
         </div>
       </form>
@@ -438,7 +448,6 @@
               </div>
             </div>
             <textarea class="task-draft-input" id="taskDraft" rows="1" maxlength="500" aria-label="作业内容" aria-describedby="taskDraftError" aria-invalid="false" placeholder="请输入一项作业…"></textarea>
-            <select class="task-entry-estimate" id="taskEntryEstimate" aria-label="这项作业预计用时" title="预计用时"></select>
             <button class="add-task-icon-button" id="addTasksButton" type="button" aria-label="加入语文作业" title="加入语文作业">＋</button>
           </div>
           <small class="task-draft-error" id="taskDraftError" role="alert" hidden>请先输入作业内容</small>
@@ -508,12 +517,12 @@
     <div class="focus-dialog">
       <div class="focus-header">
         <p class="section-kicker">专注计时中</p>
-        <div class="focus-overall-progress" role="group" aria-label="今日作业整体进度">
-          <div class="focus-overall-counts">
-            <span>已完成 <b id="focusOverallDone">0</b> 项</span>
-            <span>剩余 <b id="focusOverallRemaining">0</b> 项</span>
+        <div class="focus-overall-progress task-progress-row" role="group" aria-label="今日作业整体进度">
+          <span class="task-progress-counts" id="focusOverallCounts" title="已完成 0 项，共 0 项" aria-hidden="true"><b id="focusOverallDone">0</b><span>/</span><b id="focusOverallTotal">0</b></span>
+          <div class="task-progress-track" id="focusProgressBar" role="progressbar" aria-label="今日作业完成进度" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+            <span id="focusProgressFill"></span>
           </div>
-          <div>预计还需 <strong id="focusOverallTime">0 分钟</strong></div>
+          <span class="task-progress-time">预计还需 <strong id="focusOverallTime">0 分钟</strong></span>
         </div>
       </div>
       <span class="focus-subject" id="focusModalSubject">语文</span>
@@ -529,16 +538,30 @@
         <button class="primary-button" id="focusCompleteButton" type="button">完成这项</button>
       </div>
       <button class="focus-skip-button" id="focusSkipButton" type="button">跳过，开始下一项</button>
+      <div class="focus-extra-actions">
+        <button class="text-button" id="focusLookupButton" type="button" aria-controls="hanziLookupModal">查字 · 看笔顺</button>
+        <button class="text-button supplement-entry" id="focusSupplementButton" type="button" hidden>＋ 补加作业</button>
+      </div>
     </div>
   </div>
 
   <div class="focus-modal" id="startPlanModal" role="dialog" aria-modal="true" aria-labelledby="startPlanTitle" hidden>
     <div class="focus-dialog start-plan-dialog">
-      <button class="focus-close" id="startPlanCloseButton" type="button" aria-label="关闭开始安排">×</button>
+      <div class="start-plan-header">
+        <button class="focus-close" id="startPlanCloseButton" type="button" aria-label="关闭开始安排">×</button>
+        <div class="focus-overall-progress task-progress-row" role="group" aria-label="今日作业整体进度">
+          <span class="task-progress-counts" id="startPlanOverallCounts" title="已完成 0 项，共 0 项" aria-hidden="true"><b id="startPlanOverallDone">0</b><span>/</span><b id="startPlanOverallTotal">0</b></span>
+          <div class="task-progress-track" id="startPlanProgressBar" role="progressbar" aria-label="今日作业完成进度" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+            <span id="startPlanProgressFill"></span>
+          </div>
+          <span class="task-progress-time">预计还需 <strong id="startPlanOverallTime">0 分钟</strong></span>
+        </div>
+      </div>
       <h2 id="startPlanTitle">我准备什么时候开始？</h2>
       <div class="start-plan-task">
-        <span id="startPlanTaskLabel">第一项作业</span>
+        <span class="start-plan-subject" id="startPlanSubject"></span>
         <strong id="startPlanTask"></strong>
+        <span id="startPlanTaskLabel" hidden></span>
       </div>
       <div id="startPlanOptions">
         <div class="start-plan-shortcuts" role="group" aria-label="快捷选择开始时间">
@@ -548,7 +571,7 @@
         <div class="start-plan-time-row">
           <label for="startPlanTime">开始时间</label>
           <input id="startPlanTime" type="time">
-          <button id="saveStartPlanButton" type="button">确定</button>
+          <button id="saveStartPlanButton" type="button">现在开始</button>
         </div>
       </div>
       <div class="start-plan-countdown" id="startPlanCountdownPanel" hidden>
@@ -561,6 +584,7 @@
         </div>
       </div>
       <button class="focus-skip-button" id="skipPausedTaskButton" type="button" hidden>跳过，开始下一项</button>
+      <button class="text-button supplement-entry" id="startPlanSupplementButton" type="button" hidden>＋ 补加作业</button>
     </div>
   </div>
 
@@ -596,12 +620,40 @@
         <button class="primary-button" id="startNextTaskButton" type="button">现在开始</button>
       </div>
       <button class="text-button break-cancel-button" id="cancelBreakButton" type="button">取消这次提醒</button>
+      <button class="text-button supplement-entry" id="breakSupplementButton" type="button" hidden>＋ 补加作业</button>
     </div>
   </div>
 
+  <div class="task-edit-modal supplement-modal" id="supplementModal" role="dialog" aria-modal="true" aria-labelledby="supplementTitle" aria-describedby="supplementHint" hidden>
+    <div class="task-edit-dialog">
+      <button class="focus-close" id="supplementCloseButton" type="button" aria-label="关闭补加作业">×</button>
+      <h2 id="supplementTitle">补加作业</h2>
+      <p class="supplement-hint" id="supplementHint">老师又布置作业啦？加到今天清单末尾。</p>
+      <div class="supplement-options">
+        <label class="task-edit-field"><span>科目</span><select id="supplementSubject"><option>语文</option><option>数学</option><option>英语</option><option>科学</option></select></label>
+        <label class="task-edit-field"><span>预计用时</span><select id="supplementEstimate"></select></label>
+      </div>
+      <label class="task-edit-field"><span>作业内容</span><textarea id="supplementInput" rows="3" maxlength="120" placeholder="例如：完成练习册第 12 页" aria-describedby="supplementError"></textarea></label>
+      <p class="supplement-error" id="supplementError" role="alert" hidden></p>
+      <div class="task-edit-actions">
+        <button class="secondary-button" id="supplementCancelButton" type="button">取消</button>
+        <button class="primary-button" id="supplementSaveButton" type="button">加入今天清单</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="hanzi-lookup-modal" id="hanziLookupModal" role="dialog" aria-modal="true" aria-label="查字、笔顺动画和跟写" hidden>
+    <iframe id="hanziLookupFrame" title="查字、笔顺动画和跟写"></iframe>
+  </section>
+
+  <div class="completion-undo" id="completionUndoNotice" hidden>
+    <span id="completionUndoMessage" role="status" aria-live="polite"></span>
+    <button id="undoCompletionButton" type="button">撤销</button>
+  </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="holiday-plans.js"></script>
   <script src="holiday-ui.js"></script>
   <script src="app.js"></script>
+  <script src="hanzi-entry.js"></script>
 </body>
 </html>

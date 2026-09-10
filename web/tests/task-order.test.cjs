@@ -53,11 +53,11 @@ for (const [, value] of html.matchAll(/aria-(?:describedby|labelledby)="([^"]+)"
   for (const id of value.split(/\s+/)) assert(ids.includes(id), `Missing accessibility element: ${id}`);
 }
 assert(!/voiceTaskButton|voiceStatus|SpeechRecognition|toggleVoiceInput/.test(html + source), 'homework speech entry is removed');
-assert(/id="taskEntryEstimate"[^>]*><\/select>\s*<button[^>]*id="addTasksButton"/.test(html), 'estimate sits to the left of the wider add button');
+assert(!/taskEntryEstimate|holidayTaskMinutes/.test(html + source), 'entry composers no longer have an estimate picker');
 assert(/\.task-entry-composer\s*\{[^}]*width: 100%/.test(styles), 'composer returns to full page width');
 assert(/\.task-keyword-suggestions\s*\{[^}]*overflow-x: auto/.test(styles), 'keywords return to a horizontal strip');
 assert(!androidSource.includes('Math.min(View.MeasureSpec.getSize(widthMeasureSpec), dp(640))'), 'native composer no longer has the compact width cap');
-assert(androidSource.indexOf('taskEntryActions.addView(taskEntryEstimateButton,') < androidSource.indexOf('taskEntryActions.addView(taskEntryAddButton,'), 'native estimate is left of add');
+assert(!androidSource.includes('taskEntryEstimateButton') && androidSource.includes('showTaskEstimatePicker(task, estimate, true)'), 'native estimate editing is on sorting rows');
 assert(androidSource.includes('new android.widget.HorizontalScrollView(this)') && androidSource.includes('dp(compactTaskEntry ? 80 : 112)'), 'native restores horizontal keywords and widens add on both phone and tablet');
 assert(androidSource.includes('IME_FLAG_NO_EXTRACT_UI'), 'native landscape keyboard keeps the entry page visible');
 assert(source.includes('function toggleDictationWordRecording('), 'dictation recordings remain available');
@@ -92,7 +92,7 @@ for (const selector of ['.task-item', '.pending-task-row', '.weekend-plan-row[da
   assert(!/border-left|linear-gradient/.test(rule), `${selector} has no left accent or shaded gradient`);
 }
 assert.equal((androidSource.match(/addView\(taskSubjectLabel\(/g) || []).length, 4, 'all four native task-list renderers use the shared edge label');
-assert.equal((androidSource.match(/addView\(taskEstimateView\(/g) || []).length, 4, 'all four native task-list renderers use a separate estimate');
+assert.equal((androidSource.match(/addView\(taskEstimateView\(/g) || []).length, 3, 'ordinary native task lists keep read-only estimates while sorting gets a picker');
 assert(!androidSource.includes('TextView subjectBadge'), 'native inline subject badges are removed');
 assert(!/\.order-choice-row\.is-picked\s*\{/.test(styles), 'selected task cards retain the same subject background and text styles');
 assert(androidSource.includes('card.setBackground(rounded(taskSubjectSoftColor(subject), 13, LINE, 1));'), 'native sorting always uses the original subject background');
@@ -110,7 +110,7 @@ assert(nativeStartChoice.includes('int[] shortcutMinutes = {5, 10};'), 'native u
 assert(nativeStartChoice.includes('quickStartAt[0] = System.currentTimeMillis() + minutes * 60000L;'), 'native shortcuts calculate from click time, including seconds and day rollover');
 assert(nativeStartChoice.includes('scheduleTaskStart(taskId, planDate, quickStartAt[0], nextTask);'), 'native saves the selected shortcut only when confirmed');
 assert(nativeStartChoice.includes('quickStartAt[0] = 0L;') && nativeStartChoice.includes('defaultTimeUntouched[0] = false;'), 'native manual edits clear shortcut/default intent');
-assert(nativeStartChoice.includes('new TimePickerDialog(') && nativeStartChoice.includes('.setPositiveButton(resuming ? "继续这项" : "确定", null)'), 'native start choice keeps the system time picker, with a resume-specific confirmation label');
+assert(nativeStartChoice.includes('new TimePickerDialog(') && nativeStartChoice.includes('.setPositiveButton(resuming ? "现在继续" : "现在开始", null)'), 'native start choice keeps the system time picker, with a resume-specific confirmation label');
 assert(nativeStartChoice.includes('resuming ? "继续刚才的作业"') && nativeStartChoice.includes('resuming ? taskResumeTimeLabel(task)'), 'native resume reuses the title and label for prior work time');
 const nativeStartCountdown = androidSource.split('private void renderStartPlanTimerDialog(')[1].split('private void startTaskFromStartPlan(')[0];
 assert(nativeStartCountdown.includes('resuming ? taskResumeTimeLabel(task)') && nativeStartCountdown.includes('"提前继续这项" : "继续这项"'), 'native countdown preserves the resume-specific time and action');
@@ -134,7 +134,7 @@ assert(!/taskQuestProgressBar|taskQuestProgressPanel|taskQuestPhaseView/.test(an
 const focusMarkup = html.split('id="focusModal"')[1].split('id="startPlanModal"')[0];
 const nativeFocusDialog = androidSource.split('private void showTaskFocusDialog(')[1].split('private void dismissTaskFocusDialog(')[0];
 assert(!/已用时间|我先做好这一项，完成后再去下一关！/.test(focusMarkup + nativeFocusDialog), 'unnecessary focus captions are removed on both platforms');
-for (const id of ['focusModalElapsed', 'focusModalEstimate', 'focusModalComparison', 'focusModalStartedAt', 'focusPauseButton', 'focusCompleteButton', 'focusOverallDone', 'focusOverallRemaining', 'focusOverallTime']) {
+for (const id of ['focusModalElapsed', 'focusModalEstimate', 'focusModalComparison', 'focusModalStartedAt', 'focusPauseButton', 'focusCompleteButton', 'focusOverallDone', 'focusOverallTotal', 'focusOverallTime']) {
   assert(focusMarkup.includes(`id="${id}"`), `Focus timer and controls remain: ${id}`);
 }
 assert(!/focusCloseButton|暂时收起专注卡/.test(html + source), 'focus has no close button or binding');
@@ -147,7 +147,7 @@ for (const action of ['pause', 'complete', 'skip']) {
 assert(nativeFocusDialog.includes('skip.setEnabled(nextIndex >= 0)'), 'native skip is disabled if no other task can run today');
 assert(/\.focus-header\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between/.test(styles), 'focus header places the progress on the right without absolute-position overlaps');
 assert(/\.focus-overall-progress\s*\{[^}]*text-align:\s*right/.test(styles));
-assert(nativeFocusDialog.includes('header.addView(progress, weightedWrap(1))') && nativeFocusDialog.includes('progress.setGravity(Gravity.END)'), 'native overall progress uses the right side of the header');
+assert(nativeFocusDialog.includes('header.addView(progress, weightedWrap(1))') && nativeFocusDialog.includes('progress.setGravity(Gravity.END | Gravity.CENTER_VERTICAL)'), 'native overall progress uses the right side of the header');
 assert(nativeFocusDialog.includes('updateTaskFocusProgress();'), 'native progress is populated when focus opens');
 const nativeFocusTick = androidSource.split('private final Runnable taskFocusTick')[1].split('protected void onCreate')[0];
 assert(nativeFocusTick.includes('updateTaskFocusProgress();'), 'native progress refreshes with the running clock');
@@ -278,12 +278,11 @@ function harness(seed, date = '2026-09-08', savedStorage, fixedNow) {
       renderDailyCheckins, currentRecord, pendingDailyRequirements, toggleSport, resultFor,
       restSession: () => breakSession,
       startSession: () => startPlanSession,
-      estimateOptions: ESTIMATE_OPTIONS,
+      estimateOptions: ESTIMATE_OPTIONS, setTaskOrderEstimate, setTaskEntryEstimate,
       setState(value, date) { if (value) state = value; elements.recordDate.value = date; },
       tasks: () => tasksForDate(), owner: () => taskOwnerForDate() };
   })();`, context);
   const api = context.api, el = id => nodes.get('#' + id);
-  el('taskEntryEstimate').value = '15';
   api.setState(seed, date);
   api.renderTasks();
   api.renderDailyCheckins();
@@ -293,11 +292,11 @@ function harness(seed, date = '2026-09-08', savedStorage, fixedNow) {
   return {
     api, el, storage, signals, setClock: value => { clockNow = value; },
     emitWindow: windowEvents.emit, activeElement: () => document.activeElement,
-    add: (title, minutes) => {
+    add: title => {
       el('taskDraft').value = title;
-      if (minutes !== undefined) el('taskEntryEstimate').value = String(minutes);
       el('addTasksButton').click();
     },
+    estimate: (id, value) => delegate('taskOrderChoices', 'change', 'select[data-order-estimate]', { orderEstimate: id }, String(value)),
     pick: id => delegate('taskOrderChoices', 'click', 'button[data-order-pick]', { orderPick: id }),
     day: day => delegate('taskOrderDays', 'click', 'button[data-order-day]', { orderDay: day }),
     cardIds: () => [...el('taskOrderChoices').innerHTML.matchAll(/data-order-pick="([^"]+)"/g)].map(match => match[1]),
@@ -311,7 +310,7 @@ const owner = tasks => ({ tasks, tasksConfirmed: true, confirmed: true, ledgerCo
   orderSaved: false, mealAfterTaskId: tasks[0]?.id });
 const dailyState = () => ({ records: { '2026-09-08': owner([task('a'), { ...task('b'), estimatedMinutes: 60 }, task('c')]) }, weekends: {} });
 
-function assertReadOnlyEstimates(markup) {
+function assertOrderEstimateControls(markup) {
   const cards = [...markup.matchAll(/<article class="task-item order-choice-row[^>]*>([\s\S]*?)<\/article>/g)];
   assert(cards.length > 0);
   for (const [, content] of cards) {
@@ -319,17 +318,17 @@ function assertReadOnlyEstimates(markup) {
     assert(subject, 'subject label must have two text rows');
     assert(content.indexOf('task-subject-label') < content.indexOf('order-number'), 'subject label is left of the sequence number');
     assert(!content.includes('class="subject-badge"'), 'do not repeat the subject beside the title');
-    assert.equal([...content.matchAll(/class="task-estimate"/g)].length, 1);
-    assert(/>预计 \d+ 分钟<\/span>/.test(content));
-    assert(!content.includes('<select'), 'sorting shows the estimate without a picker');
-    assert(!content.includes('data-order-estimate='));
+    assert.equal([...content.matchAll(/class="order-estimate-control"/g)].length, 1);
+    assert(/<select data-order-estimate=/.test(content), 'sorting offers a separate estimate picker');
+    assert.equal([...content.matchAll(/<option /g)].length, 10);
+    assert.equal([...content.matchAll(/ selected>/g)].length, 1);
   }
 }
 
 function assertUnifiedTaskCards(markup, expectedCount) {
   const labels = [...markup.matchAll(/<span class="task-subject-label"><span>([^<]*)<\/span><span>([^<]*)<\/span><\/span>/g)];
   assert.equal(labels.length, expectedCount, 'one two-row subject label per task');
-  assert.equal([...markup.matchAll(/class="task-estimate"/g)].length, expectedCount, 'one separate estimate per task');
+  assert.equal([...markup.matchAll(/class="(?:task-estimate|task-plan-estimate)"/g)].length, expectedCount, 'one separate estimate per task');
   for (const match of labels) assert(match[1] && match[2], 'each subject uses two populated rows');
   assert(!markup.includes('class="subject-badge"'), 'old inline pill labels are removed');
 }
@@ -366,7 +365,7 @@ function assertTaskOverview(h, completed, total, minutes) {
 function assertFocusProgress(h, completed, remaining, minutes) {
   assert.equal(h.el('focusModal').hidden, false);
   assert.equal(h.el('focusOverallDone').textContent, String(completed));
-  assert.equal(h.el('focusOverallRemaining').textContent, String(remaining));
+  assert.equal(h.el('focusOverallTotal').textContent, String(completed + remaining));
   assert.equal(h.el('focusOverallTime').textContent, `${minutes} 分钟`);
   h.api.renderTasks();
   assertTaskOverview(h, completed, completed + remaining, minutes);
@@ -396,7 +395,7 @@ assert.equal(h.el('taskOrderModal').hidden, false);
 assert.equal(h.el('taskEntryComposer').hidden, true);
 assert.equal(h.el('taskOrderTitle').textContent, '第 1 项，我选……');
 assert.equal(h.el('taskOrderTitle').hidden, false, 'selection still indicates which task to choose');
-assertReadOnlyEstimates(h.el('taskOrderChoices').innerHTML);
+assertOrderEstimateControls(h.el('taskOrderChoices').innerHTML);
 assert.deepEqual(h.cardIds(), ['a', 'b', 'c']);
 assertOrderSelectionState(h, []);
 h.el('taskOrderChoices').scrollTop = 120;
@@ -422,7 +421,7 @@ assertOrderSelectionState(h, [], true);
 assert.equal(h.el('taskOrderTitle').hidden, true, 'completed sorting leaves no heading row');
 assert.equal(h.el('taskOrderTitle').textContent, '');
 assert.equal(h.el('taskOrderCloseButton').textContent, '返回录入');
-assertReadOnlyEstimates(h.el('taskOrderChoices').innerHTML);
+assertOrderEstimateControls(h.el('taskOrderChoices').innerHTML);
 assert.equal(h.el('taskOrderConfirmButton').hidden, true, 'only the common confirmation button remains');
 assert.equal(h.el('taskEntryConfirmButton').disabled, false);
 assert(!h.api.owner().orderSaved);
@@ -479,20 +478,20 @@ h.api.openTaskEntryPage();
 assert.deepEqual(Array.from(h.api.tasks(), item => item.subject), subjects);
 const entryMarkup = h.el('taskEntryPendingList').innerHTML;
 assertUnifiedTaskCards(entryMarkup, subjects.length);
-assert(/class="task-plan-actions"><div class="task-plan-schedule"><span class="task-estimate"/.test(entryMarkup), 'entry estimate is in the right-side schedule row');
+assert(/class="task-plan-actions"><div class="task-plan-schedule"><select class="task-plan-estimate"/.test(entryMarkup), 'entry estimate is editable in the right-side schedule row');
 assert(!entryMarkup.includes('task-plan-number'), 'entry task titles have no redundant sequence numbers');
 const nativeEntryRow = androidSource.split('private void addPendingTaskRow(')[1].split('private void showPendingTaskEditDialog(')[0];
 assert(!nativeEntryRow.includes('String.valueOf(number)'), 'native entry has no sequence numbers');
-assert(nativeEntryRow.includes('LinearLayout schedule = horizontal()') && nativeEntryRow.indexOf('schedule.addView(taskEstimateView(task)') < nativeEntryRow.indexOf('schedule.addView(day,'), 'native estimate appears before the date on the same row');
+assert(nativeEntryRow.includes('showTaskEstimatePicker(task, estimate, false)') && nativeEntryRow.indexOf('schedule.addView(estimate,') < nativeEntryRow.indexOf('schedule.addView(day,'), 'native estimate is editable before the date on the same row');
 for (const subject of subjects) assert(entryMarkup.includes('data-subject="' + subject + '"'));
 h.el('taskEntryOrderButton').click();
-assertReadOnlyEstimates(h.el('taskOrderChoices').innerHTML);
+assertOrderEstimateControls(h.el('taskOrderChoices').innerHTML);
 for (let index = 0; index < subjectTasks.length; index++) {
   h.pick(subjectTasks[index].id);
   const preview = index === subjectTasks.length - 1;
   assertOrderSelectionState(h, preview ? [] : subjectTasks.slice(0, index + 1).map(item => item.id), preview);
 }
-assertReadOnlyEstimates(h.el('taskOrderChoices').innerHTML);
+assertOrderEstimateControls(h.el('taskOrderChoices').innerHTML);
 h.el('taskEntryConfirmButton').click();
 assert.deepEqual(Array.from(h.api.tasks(), item => item.subject), subjects);
 assertUnifiedTaskCards(h.el('taskList').innerHTML, 3);
@@ -559,6 +558,10 @@ assert.equal(h.el('taskEntryOrderButton').hidden, true);
 assert.equal(h.el('taskEntryConfirmButton').hidden, true, 'read-only plan has no confirmation action');
 assertUnifiedTaskCards(h.el('taskEntryPendingList').innerHTML, weekendTasks.length);
 assert(!h.el('taskEntryPendingList').innerHTML.includes('data-entry-plan-day='));
+assert(!h.el('taskEntryPendingList').innerHTML.includes('data-entry-estimate='));
+const lockedEstimates = Array.from(h.api.tasks(), item => item.estimatedMinutes);
+h.api.setTaskEntryEstimate('s1', 60);
+assert.deepEqual(Array.from(h.api.tasks(), item => item.estimatedMinutes), lockedEstimates, 'read-only weekend entries reject estimate changes');
 assert(!h.el('taskEntryPendingList').innerHTML.includes('data-task-action='));
 h.api.selectWeekendTaskDay('s1', 'sunday');
 assert.equal(h.api.tasks().find(item => item.id === 's1').plannedDay, 'saturday');
@@ -601,56 +604,48 @@ h.api.openTaskEntryPage(); h.el('taskEntryOrderButton').click(); h.pick('a');
 h.api.tasks().push(task('d'));
 assert.deepEqual(h.selected(), []);
 assert.deepEqual(h.original(), ['a', 'b', 'c', 'd']);
-// Enter estimates while adding individual homework items, with no speech input.
+// New entries use 15 minutes; only the sorting list changes their planned duration.
 const emptyEntry = () => ({ records: { '2026-09-08': { ledgerConfirmed: true, tasks: [] } }, weekends: {} });
 h = harness(emptyEntry());
 assert.deepEqual(Array.from(h.api.estimateOptions), [5, 10, 15, 20, 30, 35, 40, 45, 50, 60]);
-assert.equal(h.el('taskEntryEstimate').value, '15');
-h.add('   ', 40);
+h.add('   ');
 assert.equal(h.api.tasks().length, 0);
-assert.equal(h.el('taskDraftError').hidden, false);
 assert.equal(h.el('taskDraftError').textContent, '请先输入作业内容');
-assert.equal(h.el('taskEntryEstimate').value, '40', 'validation failure preserves the chosen time');
 h.add('背诵第3课');
-assert.equal(h.api.tasks()[0].estimatedMinutes, 40);
+assert.equal(h.api.tasks()[0].estimatedMinutes, 15);
 assert.equal(h.el('taskDraft').value, '');
 assert.equal(h.el('taskDraftError').hidden, true);
-assert.equal(h.el('taskEntryEstimate').value, '15', 'successful add resets to 15 minutes');
 h.api.selectTaskSubject('数学');
+h.add('课作本第8页');
+const estimateIds = h.original();
+h.api.openTaskOrderModal();
+h.pick(estimateIds[1]);
 for (const minutes of h.api.estimateOptions) {
-  h.add('口算' + minutes + '题', minutes);
-  const added = h.api.tasks().find(item => item.title === '口算' + minutes + '题');
-  assert(added);
-  assert.equal(added.subject, '数学');
-  assert.equal(added.estimatedMinutes, minutes);
-  assert.equal(h.el('taskEntryEstimate').value, '15');
+  h.estimate(estimateIds[0], minutes);
+  assert.equal(h.api.tasks()[0].estimatedMinutes, minutes);
+  assert.deepEqual(h.selected(), [estimateIds[1]], 'duration changes keep chosen order');
+  assert.deepEqual(h.original(), estimateIds, 'duration changes do not move task cards');
 }
-h.el('taskDraft').value = '课作本第8页';
-h.el('taskEntryEstimate').value = '50';
-let prevented = false;
-h.el('taskDraft').emit('keydown', { key: 'Enter', isComposing: true, preventDefault() { prevented = true; } });
-assert(!prevented, 'IME composition is not submitted');
-h.el('taskDraft').emit('keydown', { key: 'Enter', preventDefault() { prevented = true; } });
-assert(prevented);
-assert.equal(h.api.tasks().find(item => item.title === '课作本第8页').estimatedMinutes, 50);
-assert.equal(h.el('taskEntryEstimate').value, '15');
-h.add('书本练习');
-assert.equal(h.api.tasks().find(item => item.title === '书本练习').estimatedMinutes, 15);
-h.add('小练习', 999);
-assert.equal(h.api.tasks().find(item => item.title === '小练习').estimatedMinutes, 15, 'invalid imported UI value falls back safely');
+h.estimate(estimateIds[0], 999);
+assert.equal(h.api.tasks()[0].estimatedMinutes, 60, 'unsupported durations are ignored');
+h.pick(estimateIds[0]);
+h.estimate(estimateIds[1], 40);
+assert.equal(h.api.tasks()[1].estimatedMinutes, 40, 'the final order preview remains editable');
+h.el('taskEntryConfirmButton').click();
+assert.deepEqual(h.original(), [estimateIds[1], estimateIds[0]]);
+assert.deepEqual(Array.from(h.api.tasks(), item => item.estimatedMinutes), [40, 60]);
+h.api.setTaskOrderEstimate(estimateIds[0], 5);
+assert.equal(h.api.tasks()[1].estimatedMinutes, 60, 'closed sorting lists reject stale changes');
 const savedEstimates = Array.from(h.api.tasks(), item => [item.subject, item.title, item.estimatedMinutes]);
 h = harness(null, '2026-09-08', h.storage);
-assert.deepEqual(Array.from(h.api.tasks(), item => [item.subject, item.title, item.estimatedMinutes]), savedEstimates, 'saved estimates survive reload');
+assert.deepEqual(Array.from(h.api.tasks(), item => [item.subject, item.title, item.estimatedMinutes]), savedEstimates);
 h = harness({ records: { '2026-09-11': { ledgerConfirmed: true } }, weekends: {} }, '2026-09-11');
-h.add('1.作文。写一件事 2.小古文', 45);
+h.add('1.作文。写一件事 2.小古文');
 assert.equal(h.api.tasks().length, 2, 'numbered entry still works without splitting sentences');
-assert(h.api.tasks().every(item => item.estimatedMinutes === 45 && item.plannedDay === 'saturday'));
-assert.equal(h.el('taskEntryEstimate').value, '15');
+assert(h.api.tasks().every(item => item.estimatedMinutes === 15 && item.plannedDay === 'saturday'));
 h = harness(null, '2026-09-12', h.storage);
-assert.equal(h.api.tasks().length, 2);
-h.add('不能重复录入', 60);
+h.add('不能重复录入');
 assert.equal(h.api.tasks().length, 2, 'Saturday continues to use Friday entries');
-assert.equal(h.el('taskEntryEstimate').value, '60', 'blocked add does not reset chosen estimate');
 // The single time picker still validates, saves, resumes and starts the chosen task.
 const planNow = new Date(2026, 8, 8, 18, 0, 0).getTime();
 const planState = dailyState();
@@ -658,8 +653,8 @@ planState.records['2026-09-08'].orderSaved = true;
 h = harness(planState, '2026-09-08', undefined, planNow);
 h.api.openTaskEntryPage();
 h.el('taskEntryConfirmButton').click();
-assert.equal(h.el('startPlanTaskLabel').textContent, '第一项作业');
-assert.equal(h.el('startPlanTask').textContent, '数学 · 作业a');
+assert.equal(h.el('startPlanTaskLabel').hidden, true);
+assert.equal(h.el('startPlanTask').textContent, '作业a');
 assert.equal(h.el('startPlanTask').dataset.subject, '数学');
 assert.equal(h.el('startPlanTime').value, '18:00', 'the first-task suggested time is now');
 h.el('startPlanTime').value = '';
@@ -680,7 +675,7 @@ assert.equal(h.el('startPlanCountdownPanel').hidden, false);
 assert.equal(h.api.tasks()[0].status, 'pending', 'confirmation schedules without auto-starting');
 h = harness(null, '2026-09-08', h.storage, planNow + 60000);
 h.api.openStartPlanTimer();
-assert.equal(h.el('startPlanTask').textContent, '数学 · 作业a');
+assert.equal(h.el('startPlanTask').textContent, '作业a');
 assert.equal(h.api.startSession().startAt, planNow + 10 * 60000, 'schedule survives reload');
 assert.equal(h.el('startPlanTask').dataset.subject, '数学', 'restored countdown retains the task color');
 h.setClock(planNow + 10 * 60000);
@@ -699,8 +694,8 @@ h.el('saveStartPlanButton').click();
 h.el('startPlannedTaskButton').click();
 assert.equal(h.api.tasks()[0].status, 'active');
 h.el('focusCompleteButton').click();
-assert.equal(h.el('startPlanTaskLabel').textContent, '下一项作业');
-assert.equal(h.el('startPlanTask').textContent, '数学 · 作业b');
+assert.equal(h.el('startPlanTaskLabel').hidden, true);
+assert.equal(h.el('startPlanTask').textContent, '作业b');
 assert.equal(h.el('startPlanTime').value, '18:15', 'completion offers the next task at the current time');
 h.el('startPlanTime').value = '18:25';
 h.el('saveStartPlanButton').click();
@@ -738,7 +733,7 @@ assertFocusProgress(h, 2, 1, 0);
 h.el('focusCompleteButton').click();
 assertTaskOverview(h, 3, 3, 0);
 h.api.performTaskAction('undo', 'c');
-assertTaskOverview(h, 2, 3, 15);
+assertTaskOverview(h, 2, 3, 0);
 h = harness(emptyEntry());
 assert.equal(h.el('taskPanelHeading').hidden, false, 'entry state retains its normal heading');
 assert(!h.el('taskList').innerHTML.includes('task-overview'), 'unconfirmed tasks do not display an execution summary');
@@ -750,7 +745,8 @@ for (let index = 0; index < coloredStartTasks.length; index++) {
   const item = coloredStartTasks[index];
   h.api.openStartPlanChoice(item.id, '2026-09-08', index === 0 ? 'first' : 'next');
   assert.equal(h.el('startPlanTask').dataset.subject, item.subject);
-  assert.equal(h.el('startPlanTask').textContent, `${item.subject} · ${item.title}`);
+  assert.equal(h.el('startPlanTask').textContent, item.title);
+  assert.equal(h.el('startPlanSubject').textContent, item.subject);
   assert.equal(h.el('startPlanTask').innerHTML, '', 'task content is assigned as text, never interpreted as HTML');
   h.el('startPlanTime').value = '18:30';
   h.el('saveStartPlanButton').click();
@@ -841,7 +837,7 @@ assert(/data-task-action="start"[^>]*>继续<\/button>/.test(h.el('taskList').in
 launchClick();
 h.el('focusCompleteButton').click();
 assertLaunchTask(h, 'b');
-assert.equal(h.el('startPlanTask').textContent, '数学 · 作业b', 'completion still offers the next-task schedule');
+assert.equal(h.el('startPlanTask').textContent, '作业b', 'completion still offers the next-task schedule');
 h.el('taskList').emit('click', { target: { closest: selector => selector === 'button[data-list-toggle]' ? { dataset: { listToggle: 'completed' } } : null } });
 assertLaunchTask(h, 'b');
 assert(h.el('taskList').innerHTML.includes('data-task-action="undo"'), 'completed cards retain undo, not launch');
@@ -867,8 +863,10 @@ const focusTab = shiftKey => h.emitWindow('keydown', { key: 'Tab', shiftKey, pre
 focusTab(false); assert.equal(h.activeElement(), h.el('focusPauseButton'));
 focusTab(false); assert.equal(h.activeElement(), h.el('focusCompleteButton'));
 focusTab(false); assert.equal(h.activeElement(), h.el('focusSkipButton'));
+focusTab(false); assert.equal(h.activeElement(), h.el('focusLookupButton'), 'lookup entry is reachable while timing');
+focusTab(false); assert.equal(h.activeElement(), h.el('focusSupplementButton'), 'supplement entry is reachable while timing');
 focusTab(false); assert.equal(h.activeElement(), h.el('focusPauseButton'), 'Tab stays within focus actions');
-focusTab(true); assert.equal(h.activeElement(), h.el('focusSkipButton'), 'Shift+Tab also stays inside');
+focusTab(true); assert.equal(h.activeElement(), h.el('focusSupplementButton'), 'Shift+Tab also stays inside');
 h.setClock(planNow + 2 * 60000);
 h.el('focusSkipButton').click();
 assert.deepEqual(Array.from(h.api.tasks(), item => item.status), ['paused', 'active', 'pending']);
@@ -878,7 +876,7 @@ assert(!h.api.tasks()[0].activeSince && !h.api.tasks()[0].completedAt, 'the skip
 assert.equal(h.api.tasks()[1].activeSince, planNow + 2 * 60000);
 assert.equal(h.el('focusModalTitle').textContent, '作业b');
 assert.equal(h.el('focusModal').hidden, false);
-assertFocusProgress(h, 0, 3, 90); // Paused work stays unfinished and keeps its original estimate.
+assertFocusProgress(h, 0, 3, 88); // Paused work retains its elapsed time in the remaining estimate.
 assert.equal(h.el('startPlanModal').hidden, true, 'skip starts directly without another scheduling step');
 assert.equal(h.el('breakChoiceModal').hidden, true, 'skip never opens a rest choice');
 assert.equal(h.api.owner().breaks?.length || 0, 0, 'skip adds no rest record');
@@ -895,7 +893,7 @@ assert.equal(h.el('focusModal').hidden, false);
 assert.equal(h.el('mainPage').inert, true);
 assert.equal(h.api.tasks()[0].elapsedMs, 150000);
 assert.equal(h.api.taskElapsedMs(h.api.tasks()[1]), 60000, 'reload keeps the active timer running');
-assertFocusProgress(h, 0, 3, 89);
+assertFocusProgress(h, 0, 3, 87);
 h.el('focusSkipButton').click();
 assert.equal(h.el('focusModalTitle').textContent, '作业c', 'repeated skips follow the planned order');
 h.setClock(planNow + 4 * 60000);
@@ -908,7 +906,7 @@ assert.equal(h.api.tasks()[0].elapsedMs, 210000, 'skipped time is counted once, 
 assert.equal(h.api.tasks()[0].status, 'done');
 assert.equal(h.el('focusModal').hidden, true, 'completion may exit focus');
 assert.equal(h.el('mainPage').inert, false);
-assert.equal(h.el('startPlanTask').textContent, '数学 · 作业b', 'earlier skipped work remains in the plan');
+assert.equal(h.el('startPlanTask').textContent, '作业b', 'earlier skipped work remains in the plan');
 h.el('saveStartPlanButton').click();
 h.el('focusPauseButton').click();
 assert.equal(h.api.tasks()[1].status, 'paused');
@@ -927,7 +925,7 @@ assert.equal(h.api.tasks()[0].status, 'active');
 assert.equal(h.api.tasks()[0].activeSince, planNow);
 assert.equal(h.el('focusModal').hidden, false);
 h.el('focusCompleteButton').focus(); focusTab(false);
-assert.equal(h.activeElement(), h.el('focusPauseButton'), 'Tab omits the disabled skip action');
+assert.equal(h.activeElement(), h.el('focusLookupButton'), 'Tab omits the disabled skip action');
 const weekendFocusState = { records: { '2026-09-11': { ledgerConfirmed: true } }, weekends: {
   '2026-09-11': { ...owner([task('fri-a', 'friday'), task('sun', 'sunday'),
     { ...task('fri-done', 'friday'), status: 'done' }, task('fri-b', 'friday'), task('sat', 'saturday')]), orderSaved: true }
@@ -967,11 +965,12 @@ for (const [date, tasks, done, remaining] of [
   ], 2, 3]
 ]) {
   h = harness({ records: {}, weekends: { '2026-09-11': { ...owner(tasks), orderSaved: true } } }, date, undefined, planNow);
+  const pausedMinutes = tasks.filter(item => item.status === 'paused').reduce((sum, item) => sum + Math.floor(item.elapsedMs / 60000), 0);
   h.api.performTaskAction('start', 'current');
-  assertFocusProgress(h, done, remaining, remaining * 15);
+  assertFocusProgress(h, done, remaining, remaining * 15 - pausedMinutes);
   h.setClock(planNow + 60000);
   h.api.updateFocusModal();
-  assertFocusProgress(h, done, remaining, remaining * 15 - 1);
+  assertFocusProgress(h, done, remaining, remaining * 15 - pausedMinutes - 1);
 }
 // Returning to skipped work uses resume copy while preserving its timer and the plan.
 const resumeCopyState = dailyState();
@@ -981,9 +980,9 @@ h.api.performTaskAction('start', 'a');
 h.setClock(planNow + 2 * 60000); h.el('focusSkipButton').click();
 h.setClock(planNow + 3 * 60000); h.el('focusCompleteButton').click();
 assert.equal(h.el('startPlanTitle').textContent, '继续刚才的作业');
-assert.equal(h.el('startPlanTask').textContent, '数学 · 作业a');
+assert.equal(h.el('startPlanTask').textContent, '作业a');
 assert.equal(h.el('startPlanTaskLabel').textContent, '之前已做 2 分钟');
-assert.equal(h.el('saveStartPlanButton').textContent, '继续这项');
+assert.equal(h.el('saveStartPlanButton').textContent, '现在继续');
 assert.equal(h.el('startPlanTime').value, '18:03', 'resume retains the current-time default');
 assert.equal(h.api.tasks()[0].status, 'paused', 'showing the new copy does not restart work');
 assert.equal(h.api.tasks()[0].elapsedMs, 120000);
@@ -994,8 +993,8 @@ assert.equal(h.api.tasks()[0].elapsedMs, 120000, 'confirmation resumes instead o
 h.setClock(planNow + 4 * 60000); h.el('focusCompleteButton').click();
 assert.equal(h.api.tasks()[0].elapsedMs, 180000);
 assert.equal(h.el('startPlanTitle').textContent, '我准备什么时候开始下一项？');
-assert.equal(h.el('startPlanTaskLabel').textContent, '下一项作业');
-assert.equal(h.el('saveStartPlanButton').textContent, '确定', 'new work does not inherit resume copy');
+assert.equal(h.el('startPlanTaskLabel').hidden, true);
+assert.equal(h.el('saveStartPlanButton').textContent, '现在开始', 'new work does not inherit resume copy');
 
 const pausedPlanState = elapsedMs => ({ records: { '2026-09-08': {
   ...owner([{ ...task('resume'), status: 'paused', elapsedMs, startedAt: '17:45' }, task('fresh')]), orderSaved: true
@@ -1034,16 +1033,16 @@ h.api.openStartPlanChoice('resume', '2026-09-08', 'next');
 h.el('startPlanTime').value = '18:10'; h.el('saveStartPlanButton').click();
 h.setClock(planNow + 60000); h.el('adjustStartPlanButton').click();
 assert.equal(h.el('startPlanTitle').textContent, '继续刚才的作业');
-assert.equal(h.el('saveStartPlanButton').textContent, '继续这项');
+assert.equal(h.el('saveStartPlanButton').textContent, '现在继续');
 assert.equal(h.el('startPlanTime').value, '18:01');
 h.api.openStartPlanChoice('fresh', '2026-09-08', 'first');
 assert.equal(h.el('startPlanTitle').textContent, '我准备什么时候开始？');
-assert.equal(h.el('startPlanTaskLabel').textContent, '第一项作业');
-assert.equal(h.el('saveStartPlanButton').textContent, '确定');
+assert.equal(h.el('startPlanTaskLabel').hidden, true);
+assert.equal(h.el('saveStartPlanButton').textContent, '现在开始');
 assert.equal(h.el('startPlanTime').value, '18:01', 'ordinary first-task scheduling also defaults to now');
 h.el('startPlanTime').value = '18:10'; h.el('saveStartPlanButton').click();
 assert.equal(h.el('startPlanTitle').textContent, '我按计划准备开始');
-assert.equal(h.el('startPlanTaskLabel').textContent, '第一项作业');
+assert.equal(h.el('startPlanTaskLabel').hidden, true);
 assert.equal(h.el('startPlannedTaskButton').textContent, '我准备好了，提前开始');
 // Compact rest choice keeps the same timer, validation and return logging behavior.
 const restChoiceState = () => ({ records: { '2026-09-08': {
@@ -1247,7 +1246,7 @@ assert.equal(h.api.tasks()[0].status, 'active', 'explicitly choosing the current
 h = harness(pausedPlanState(120000), '2026-09-08', undefined, planNow);
 h.api.openStartPlanChoice('resume', '2026-09-08', 'next');
 h.el('startPlanFiveMinutesButton').click();
-assert.equal(h.el('saveStartPlanButton').textContent, '继续这项');
+assert.equal(h.el('saveStartPlanButton').textContent, '确定开始时间');
 h.setClock(planNow + 5 * 60000); h.el('saveStartPlanButton').click();
 assert.equal(h.api.tasks()[0].status, 'paused');
 assert(!h.api.startSession());

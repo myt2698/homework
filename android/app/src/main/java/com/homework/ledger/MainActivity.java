@@ -13,6 +13,8 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.ScaleDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
@@ -44,6 +46,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.Space;
 import android.widget.TextView;
@@ -82,6 +85,7 @@ public class MainActivity extends Activity {
     private static final String KEY_BREAK_SESSION = "break_session";
     private static final String KEY_START_PLAN_SESSION = "start_plan_session";
     private static final String KEY_TASK_KEYWORDS = "task_keywords";
+    private static final String KEY_PRE_IMPORT_SNAPSHOT = "pre_import_snapshot";
     private static final int EXPORT_BACKUP_REQUEST = 301;
     private static final int IMPORT_BACKUP_REQUEST = 302;
     private static final String[] TIME_KEYS = {"startTime", "dinnerTime", "resumeTime", "finishTime"};
@@ -298,13 +302,14 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryPendingPanel;
     private LinearLayout taskEntryPendingList;
     private Button taskEntryConfirmButton;
+    private Button supplementTaskButton;
+    private AlertDialog supplementDialog;
+    private Button taskFocusSkipButton;
     private FrameLayout taskEntryAddButton;
     private TextView taskEntryAddLabel;
     private Button taskEntryUndoDeleteButton;
     private EditText taskDraftInput;
     private TextView taskDraftErrorView;
-    private Button taskEntryEstimateButton;
-    private int taskEntryEstimatedMinutes = 15;
     private LinearLayout taskPanel;
     private LinearLayout taskPanelHeading;
     private TextView taskSummaryView;
@@ -363,6 +368,13 @@ public class MainActivity extends Activity {
     private boolean taskListExpanded;
     private boolean completedTasksExpanded;
     private JSONObject lastDeletedTask;
+    private JSONObject lastCompletedTask;
+    private String lastCompletedTaskDate;
+    private boolean lastCompletedTaskWasActive;
+    private long completionUndoExpiresAt;
+    private PopupWindow completionUndoPopup;
+    private View completionUndoHost;
+    private Toast currentToast;
     private String lastDeletedTaskDate;
     private int lastDeletedTaskIndex;
 
@@ -397,6 +409,7 @@ public class MainActivity extends Activity {
     private boolean historyManageMode;
 
     private AlertDialog taskFocusDialog;
+    private HanziLookupDialog hanziLookupDialog;
     private FrameLayout taskEntryPageView;
     private TextView taskEntryNoticeView;
     private int taskEntryPreviousSoftInputMode;
@@ -415,6 +428,10 @@ public class MainActivity extends Activity {
     private TextView startPlanCountdownView;
     private TextView startPlanTaskLabelView;
     private TextView startPlanTaskView;
+    private TextView startPlanTitleView;
+    private TextView startPlanCountsView;
+    private ProgressBar startPlanProgressBar;
+    private TextView startPlanRemainingTimeView;
     private TextView startPlanScheduledTimeView;
     private Button startPlanSkipButton;
     private int breakChoiceTaskIndex = -1;
@@ -423,10 +440,22 @@ public class MainActivity extends Activity {
     private TextView taskFocusElapsedView;
     private TextView taskFocusComparisonView;
     private TextView taskFocusCountsView;
+    private ProgressBar taskFocusProgressBar;
     private TextView taskFocusRemainingTimeView;
     private JSONObject taskFocusTask;
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
+    private final Runnable completionUndoTick = new Runnable() {
+        @Override public void run() {
+            if (lastCompletedTask == null || System.currentTimeMillis() >= completionUndoExpiresAt
+                    || !currentDate.equals(lastCompletedTaskDate) || isFinishing()) {
+                clearCompletionUndo();
+                return;
+            }
+            showCompletionUndo();
+            timerHandler.postDelayed(this, 250L);
+        }
+    };
     private final Runnable clearDeletedTaskUndo = () -> {
         lastDeletedTask = null;
         lastDeletedTaskDate = null;
@@ -526,6 +555,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (hanziLookupDialog != null) hanziLookupDialog.dismiss();
+        dismissSupplementDialog();
+        clearCompletionUndo();
+        if (currentToast != null) currentToast.cancel();
         timerHandler.removeCallbacks(clearTaskEntryNotice);
         timerHandler.removeCallbacks(timerTick);
         timerHandler.removeCallbacks(taskFocusTick);
@@ -548,6 +581,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
+        clearCompletionUndo();
         stopDictationWordRecording(true, false);
         releaseDictationPreviewPlayer();
         stopBreakAlarmRecording(true, false);
@@ -557,6 +591,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (hanziLookupDialog != null && hanziLookupDialog.isShowing()) { hanziLookupDialog.dismiss(); return; }
         if (taskFocusDialog != null && taskFocusDialog.isShowing()) return;
         if (breakTimerDialog != null && breakTimerDialog.isShowing()) return;
         if (hasActiveStartPlanSession() && startPlanDialog != null && startPlanDialog.isShowing()) return;
@@ -670,6 +705,8 @@ public class MainActivity extends Activity {
         scrollView.addView(content, matchWrap());
         content.addView(buildHeader());
         content.addView(space(10));
+        content.addView(createHanziLookupButton(false), matchFixed(dp(54)));
+        content.addView(space(12));
         LinearLayout.LayoutParams noticeParams = matchWrap();
         noticeParams.bottomMargin = dp(10);
         content.addView(buildHistoricalDateNotice(), noticeParams);
@@ -745,6 +782,23 @@ public class MainActivity extends Activity {
         settings.setOnClickListener(v -> showSettingsPage());
         row.addView(settings);
         return row;
+    }
+
+    private Button createHanziLookupButton(boolean focus) {
+        Button button = textButton(focus ? "查字 · 看笔顺" : "字   查字     看笔顺 · 跟着写   ›");
+        button.setContentDescription("查字，查看笔顺动画并跟写");
+        button.setTextSize(focus ? 12 : 14);
+        if (!focus) {
+            button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            button.setPadding(dp(14), 0, dp(14), 0);
+            button.setBackground(rounded(Color.WHITE, 16, LINE, 1));
+        }
+        button.setOnClickListener(v -> {
+            if (hanziLookupDialog != null && hanziLookupDialog.isShowing()) return;
+            hanziLookupDialog = new HanziLookupDialog(this, focus);
+            hanziLookupDialog.show();
+        });
+        return button;
     }
 
     private View buildHistoricalDateNotice() {
@@ -1229,15 +1283,6 @@ public class MainActivity extends Activity {
         taskEntryAddButton.addView(taskEntryAddLabel, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        taskEntryEstimateButton = smallButton("15 分钟");
-        taskEntryEstimateButton.setTextSize(11);
-        taskEntryEstimateButton.setPadding(dp(5), 0, dp(5), 0);
-        taskEntryEstimateButton.setSingleLine(true);
-        taskEntryEstimateButton.setMinWidth(0);
-        taskEntryEstimateButton.setMinimumWidth(0);
-        setTaskEntryEstimate(15);
-        taskEntryEstimateButton.setOnClickListener(v -> showTaskEntryEstimatePicker());
-
         LinearLayout taskEntryInputRow = horizontal();
         taskEntryInputRow.setGravity(Gravity.BOTTOM);
         taskEntryInputRow.addView(taskSubjectPickerButton, fixed(dp(76), dp(48)));
@@ -1247,8 +1292,6 @@ public class MainActivity extends Activity {
         LinearLayout taskEntryActions = compactTaskEntry ? horizontal() : taskEntryInputRow;
         taskEntryActions.setGravity(Gravity.BOTTOM | Gravity.END);
         if (!compactTaskEntry) taskEntryActions.addView(spaceHorizontal(6));
-        taskEntryActions.addView(taskEntryEstimateButton, fixed(dp(80), dp(48)));
-        taskEntryActions.addView(spaceHorizontal(6));
         taskEntryActions.addView(taskEntryAddButton, fixed(dp(compactTaskEntry ? 80 : 112), dp(48)));
 
         taskKeywordSuggestionScroll = new android.widget.HorizontalScrollView(this);
@@ -1377,6 +1420,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams confirmParams = matchFixed(dp(43));
         confirmParams.topMargin = dp(6);
         panel.addView(taskConfirmButton, confirmParams);
+        supplementTaskButton = createSupplementButton();
+        panel.addView(supplementTaskButton, matchFixed(dp(44)));
 
         taskSettlementPanel = horizontal();
         taskSettlementPanel.setGravity(Gravity.CENTER_VERTICAL);
@@ -1810,6 +1855,157 @@ public class MainActivity extends Activity {
     }
 
 
+    private boolean canSupplementTasks() {
+        String key = weekendKeyFor(currentDate);
+        return todayIso().equals(currentDate) && taskListConfirmed() && taskOrderSaved()
+                && (key == null || weekendForDate(currentDate, false).optBoolean("planSaved"));
+    }
+
+    private Button createSupplementButton() {
+        Button button = textButton("＋ 补加作业");
+        button.setTextSize(12);
+        button.setMinimumHeight(dp(44));
+        button.setVisibility(canSupplementTasks() ? View.VISIBLE : View.GONE);
+        button.setOnClickListener(v -> showSupplementDialog());
+        return button;
+    }
+
+    private void dismissSupplementDialog() {
+        if (supplementDialog != null) supplementDialog.dismiss();
+        supplementDialog = null;
+    }
+
+    private void showSupplementDialog() {
+        if (!canSupplementTasks() || supplementDialog != null) return;
+        String date = currentDate;
+        JSONObject originalOwner = taskOwner(false);
+        String[] selectedSubject = {selectedTaskSubject};
+        int[] minutes = {15};
+        LinearLayout content = vertical();
+        content.setPadding(dp(22), dp(8), dp(22), dp(8));
+        content.addView(text("老师又布置作业啦？加到今天清单末尾。", 12, MUTED, false));
+        LinearLayout options = horizontal();
+        LinearLayout subjectColumn = vertical();
+        subjectColumn.addView(text("科目", 12, MUTED, false));
+        Button subject = smallButton(selectedSubject[0] + " ▾");
+        subject.setOnClickListener(v -> TaskSubjectPicker.show(this, selectedSubject[0], value -> {
+            selectedSubject[0] = value;
+            subject.setText(value + " ▾");
+        }));
+        subjectColumn.addView(subject, matchFixed(dp(48)));
+        options.addView(subjectColumn, weightedWrap(1));
+        options.addView(spaceHorizontal(10));
+        LinearLayout estimateColumn = vertical();
+        estimateColumn.addView(text("预计用时", 12, MUTED, false));
+        Button estimate = smallButton("15 分钟 ▾");
+        estimate.setOnClickListener(v -> {
+            String[] labels = new String[ESTIMATE_OPTIONS.length];
+            int checked = 0;
+            for (int i = 0; i < labels.length; i++) {
+                labels[i] = ESTIMATE_OPTIONS[i] + " 分钟";
+                if (minutes[0] == ESTIMATE_OPTIONS[i]) checked = i;
+            }
+            new AlertDialog.Builder(this).setTitle("预计用时")
+                    .setSingleChoiceItems(labels, checked, (picker, which) -> {
+                        minutes[0] = ESTIMATE_OPTIONS[which];
+                        estimate.setText(minutes[0] + " 分钟 ▾");
+                        picker.dismiss();
+                    }).setNegativeButton("取消", null).show();
+        });
+        estimateColumn.addView(estimate, matchFixed(dp(48)));
+        options.addView(estimateColumn, weightedWrap(1));
+        LinearLayout.LayoutParams optionParams = matchWrap();
+        optionParams.topMargin = dp(16);
+        optionParams.bottomMargin = dp(12);
+        content.addView(options, optionParams);
+        content.addView(text("作业内容", 12, MUTED, false));
+        EditText input = new EditText(this);
+        input.setHint("例如：完成练习册第 12 页");
+        input.setTextSize(16);
+        input.setTextColor(INK);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        input.setMinLines(2);
+        input.setMaxLines(4);
+        input.setGravity(Gravity.TOP);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});
+        input.setPadding(dp(12), dp(12), dp(12), dp(12));
+        input.setBackground(rounded(Color.WHITE, 10, LINE, 1));
+        input.setContentDescription("作业内容");
+        content.addView(input, matchWrap());
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content, matchWrap());
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("补加作业").setView(scroll)
+                .setNegativeButton("取消", null).setPositiveButton("加入今天清单", null).create();
+        supplementDialog = dialog;
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setOnDismissListener(ignored -> { if (supplementDialog == dialog) supplementDialog = null; });
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String title = input.getText().toString().trim();
+                if (title.isEmpty()) { input.setError("请先输入作业内容"); input.requestFocus(); return; }
+                if (appendSupplementTask(title, selectedSubject[0], minutes[0], date, originalOwner)) dialog.dismiss();
+            });
+            input.requestFocus();
+            if (dialog.getWindow() != null) dialog.getWindow().setSoftInputMode(
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                    | android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        });
+        dialog.show();
+    }
+
+    private JSONObject copyObjectReferences(JSONObject source) {
+        JSONObject copy = new JSONObject();
+        Iterator<String> keys = source.keys();
+        while (keys.hasNext()) { String key = keys.next(); put(copy, key, source.opt(key)); }
+        return copy;
+    }
+
+    private boolean appendSupplementTask(String title, String subject, int minutes, String date, JSONObject originalOwner) {
+        if (!canSupplementTasks() || !date.equals(currentDate) || taskOwner(false) != originalOwner) {
+            dismissSupplementDialog(); toast("清单已变化，请重新打开今天的补加作业"); return false;
+        }
+        String key = weekendKeyFor(currentDate);
+        JSONArray existing = taskArray(false), tasks = new JSONArray();
+        long stamp = System.currentTimeMillis();
+        for (int i = 0; i < existing.length(); i++) {
+            JSONObject task = existing.optJSONObject(i);
+            tasks.put(task);
+            stamp = Math.max(stamp, task.optLong("addedAt") + 1L);
+        }
+        JSONObject task = new JSONObject();
+        put(task, "id", stamp + "-supplement"); put(task, "addedAt", stamp); put(task, "addedSequence", 0);
+        put(task, "title", title); put(task, "subject", subject); put(task, "estimatedMinutes", minutes);
+        put(task, "status", "pending"); put(task, "elapsedMs", 0L); put(task, "supplemental", true);
+        if (key != null) put(task, "plannedDay", date.equals(key) ? "friday" : date.equals(addDays(key, 1)) ? "saturday" : "sunday");
+        JSONObject holiday = HolidayPlans.find(holidayState(), date);
+        if (holiday != null) {
+            put(task, "holidayId", holiday.optString("id")); put(task, "holidaySeriesId", "");
+            put(task, "holidayOriginalDate", date);
+        }
+        tasks.put(task);
+        JSONObject updated = copyObjectReferences(originalOwner);
+        put(updated, "tasks", tasks); put(updated, "orderSaved", true);
+        updated.remove("tasksFinishedAt");
+        if (key != null) {
+            updated.remove("allDoneDate"); updated.remove("allDoneTime"); updated.remove("penaltyConfirmed");
+        } else if (!updated.optBoolean("holidayDaily")) {
+            updated.remove("finishTime"); updated.remove("ruleId");
+        }
+        JSONObject group = copyObjectReferences(key == null ? records : weekends);
+        put(group, key == null ? date : key, updated);
+        String storageKey = key == null ? KEY_RECORDS : KEY_WEEKENDS;
+        String previous = preferences.getString(storageKey, "{}");
+        if (!preferences.edit().putString(storageKey, group.toString()).commit()) {
+            preferences.edit().putString(storageKey, previous).commit();
+            toast("保存失败，请检查本机存储空间后重试"); return false;
+        }
+        if (key == null) records = group; else weekends = group;
+        clearCompletionUndo();
+        renderAll(); updateTaskFocusProgress(); updateStartPlanProgress();
+        toast("新作业已加入今天清单末尾");
+        return true;
+    }
+
     private void addTasksFromDraft() {
         if (!canEditTaskPlan() || isTaskEntrySorting()) return;
         String weekendKey = weekendKeyFor(currentDate);
@@ -1845,7 +2041,7 @@ public class MainActivity extends Activity {
             put(task, "addedSequence", index);
             put(task, "status", "pending");
             put(task, "elapsedMs", 0L);
-            put(task, "estimatedMinutes", taskEntryEstimatedMinutes);
+            put(task, "estimatedMinutes", 15);
             if (weekendKey != null) put(task, "plannedDay", "saturday");
             tasks.put(task);
         }
@@ -1867,7 +2063,6 @@ public class MainActivity extends Activity {
         owner.remove("orderSaved");
         owner.remove("orderSavedAt");
         taskDraftInput.setText("");
-        setTaskEntryEstimate(15);
         saveTaskData();
         renderAll();
         scrollTaskEntryToBottom();
@@ -2024,8 +2219,7 @@ public class MainActivity extends Activity {
         for (int index : indexes) {
             JSONObject task = tasks.optJSONObject(index);
             if (task == null || "done".equals(task.optString("status"))) continue;
-            int spent = "active".equals(task.optString("status"))
-                    ? (int) (taskElapsedMillis(task) / 60000L) : 0;
+            int spent = (int) (Math.max(0L, taskElapsedMillis(task)) / 60000L);
             total += Math.max(0, estimatedMinutes(task) - spent);
         }
         return total;
@@ -2079,16 +2273,13 @@ public class MainActivity extends Activity {
     }
 
     private void updateTaskFocusProgress() {
-        if (taskFocusCountsView == null || taskFocusRemainingTimeView == null) return;
-        JSONArray tasks = taskArray(false);
-        List<Integer> indexes = dailyProgressTaskIndexes(tasks);
-        int done = 0;
-        for (int index : indexes) {
-            JSONObject task = tasks.optJSONObject(index);
-            if (task != null && "done".equals(task.optString("status"))) done++;
+        updateTaskProgress(taskFocusCountsView, taskFocusProgressBar, taskFocusRemainingTimeView);
+        if (taskFocusSkipButton != null && taskFocusTask != null) {
+            boolean hasNext = nextTaskIndexAfter(taskIndexById(taskFocusTask.optString("id"))) >= 0;
+            taskFocusSkipButton.setEnabled(hasNext);
+            taskFocusSkipButton.setAlpha(hasNext ? 1f : 0.55f);
+            taskFocusSkipButton.setText(hasNext ? "跳过，开始下一项" : "没有其他可做项");
         }
-        taskFocusCountsView.setText("已完成 " + done + " 项   剩余 " + (indexes.size() - done) + " 项");
-        taskFocusRemainingTimeView.setText(remainingTimeLabel(remainingEstimatedMinutes(tasks, indexes), Color.rgb(75,85,99)));
     }
 
     private String taskClockLabel(JSONObject task) {
@@ -2120,20 +2311,27 @@ public class MainActivity extends Activity {
         content.setPadding(dp(24), dp(22), dp(24), dp(18));
         content.setBackgroundColor(Color.WHITE);
         LinearLayout header = horizontal();
-        header.setGravity(Gravity.TOP);
-        TextView kicker = text("专注计时中", 11, Color.rgb(102, 112, 125), true);
-        kicker.setPadding(0, dp(2), dp(10), 0);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView kicker = text("专注计时中", 10, Color.rgb(102, 112, 125), true);
+        kicker.setPadding(0, 0, dp(8), 0);
         header.addView(kicker, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        LinearLayout progress = vertical();
-        progress.setGravity(Gravity.END);
-        taskFocusCountsView = text("", 11, Color.rgb(102,112,125), false);
+        LinearLayout progress = horizontal();
+        progress.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        progress.setBaselineAligned(false);
+        taskFocusCountsView = text("", 13, Color.rgb(53, 125, 171), true);
         taskFocusCountsView.setGravity(Gravity.END);
-        progress.addView(taskFocusCountsView, matchWrap());
+        taskFocusCountsView.setSingleLine(true);
+        progress.addView(taskFocusCountsView);
+        taskFocusProgressBar = createTaskProgressBar();
+        LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(0, dp(12), 1f);
+        barParams.leftMargin = dp(7);
+        barParams.rightMargin = dp(7);
+        progress.addView(taskFocusProgressBar, barParams);
         taskFocusRemainingTimeView = text("", 11, Color.rgb(102,112,125), false);
         taskFocusRemainingTimeView.setGravity(Gravity.END);
-        taskFocusRemainingTimeView.setPadding(0, dp(3), 0, 0);
-        progress.addView(taskFocusRemainingTimeView, matchWrap());
+        taskFocusRemainingTimeView.setSingleLine(true);
+        progress.addView(taskFocusRemainingTimeView);
         header.addView(progress, weightedWrap(1));
         content.addView(header, matchWrap());
         updateTaskFocusProgress();
@@ -2191,6 +2389,7 @@ public class MainActivity extends Activity {
         content.addView(actions, matchWrap());
         int nextIndex = nextTaskIndexAfter(taskIndex);
         Button skip = smallButton(nextIndex >= 0 ? "跳过，开始下一项" : "没有其他可做项");
+        taskFocusSkipButton = skip;
         skip.setMinimumHeight(dp(44));
         skip.setTextColor(Color.rgb(91,101,115));
         skip.setBackground(rounded(Color.rgb(245,246,248), 12, Color.rgb(216,222,231), 1));
@@ -2200,6 +2399,10 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams skipParams = matchWrap();
         skipParams.topMargin = dp(10);
         content.addView(skip, skipParams);
+        LinearLayout lookupActions = horizontal();
+        lookupActions.addView(createHanziLookupButton(true), new LinearLayout.LayoutParams(0, dp(44), 1f));
+        lookupActions.addView(createSupplementButton(), new LinearLayout.LayoutParams(0, dp(44), 1f));
+        content.addView(lookupActions, matchWrap());
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content, matchWrap());
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -2215,7 +2418,9 @@ public class MainActivity extends Activity {
                 taskFocusTask = null;
                 taskFocusElapsedView = null;
                 taskFocusComparisonView = null;
+                taskFocusSkipButton = null;
                 taskFocusCountsView = null;
+                taskFocusProgressBar = null;
                 taskFocusRemainingTimeView = null;
             }
         });
@@ -2227,6 +2432,7 @@ public class MainActivity extends Activity {
     }
 
     private void dismissTaskFocusDialog() {
+        taskFocusSkipButton = null;
         timerHandler.removeCallbacks(taskFocusTick);
         if (taskFocusDialog != null && taskFocusDialog.isShowing()) taskFocusDialog.dismiss();
         taskFocusDialog = null;
@@ -2234,6 +2440,7 @@ public class MainActivity extends Activity {
         taskFocusElapsedView = null;
         taskFocusComparisonView = null;
         taskFocusCountsView = null;
+        taskFocusProgressBar = null;
         taskFocusRemainingTimeView = null;
     }
 
@@ -2300,6 +2507,10 @@ public class MainActivity extends Activity {
         startPlanCountdownView = null;
         startPlanTaskLabelView = null;
         startPlanTaskView = null;
+        startPlanTitleView = null;
+        startPlanCountsView = null;
+        startPlanProgressBar = null;
+        startPlanRemainingTimeView = null;
         startPlanScheduledTimeView = null;
         startPlanSkipButton = null;
     }
@@ -2337,6 +2548,7 @@ public class MainActivity extends Activity {
 
     private void addStartPlanSkipAction(LinearLayout content, JSONObject task, int taskIndex) {
         startPlanSkipButton = smallButton("跳过，开始下一项");
+        startPlanSkipButton.setTag(task.optString("id"));
         startPlanSkipButton.setMinimumHeight(dp(44));
         startPlanSkipButton.setTextColor(MUTED);
         startPlanSkipButton.setBackground(rounded(PAGE, 12, LINE, 1));
@@ -2360,6 +2572,94 @@ public class MainActivity extends Activity {
         button.setBackground(rounded(selected ? Color.rgb(255, 235, 179) : PAGE, 10, selected ? AMBER : LINE, 1));
     }
 
+    private ProgressBar createTaskProgressBar() {
+        ProgressBar progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setIndeterminate(false);
+        progressBar.setPadding(0, 0, 0, 0);
+        GradientDrawable fill = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.rgb(120, 179, 248), Color.rgb(103, 214, 178)});
+        fill.setCornerRadius(dp(6));
+        LayerDrawable track = new LayerDrawable(new android.graphics.drawable.Drawable[]{
+                rounded(Color.rgb(230, 243, 250), 6, Color.TRANSPARENT, 0),
+                new ScaleDrawable(fill, Gravity.LEFT, 1f, 0f)});
+        track.setId(0, android.R.id.background);
+        track.setId(1, android.R.id.progress);
+        progressBar.setProgressDrawable(track);
+        return progressBar;
+    }
+
+    private LinearLayout buildStartPlanHeader(String title) {
+        LinearLayout header = vertical();
+        header.setPadding(dp(24), dp(18), dp(24), dp(12));
+        LinearLayout progress = horizontal();
+        progress.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        progress.setBaselineAligned(false);
+        startPlanCountsView = text("", 13, Color.rgb(53, 125, 171), true);
+        startPlanCountsView.setGravity(Gravity.END);
+        startPlanCountsView.setSingleLine(true);
+        progress.addView(startPlanCountsView);
+        startPlanProgressBar = createTaskProgressBar();
+        LinearLayout.LayoutParams barParams = fixed(dp(64), dp(12));
+        barParams.leftMargin = dp(7);
+        barParams.rightMargin = dp(7);
+        progress.addView(startPlanProgressBar, barParams);
+        startPlanRemainingTimeView = text("", 11, Color.rgb(102, 112, 125), false);
+        startPlanRemainingTimeView.setGravity(Gravity.END);
+        startPlanRemainingTimeView.setSingleLine(true);
+        progress.addView(startPlanRemainingTimeView);
+        header.addView(progress, matchWrap());
+        startPlanTitleView = text(title, 20, INK, true);
+        startPlanTitleView.setGravity(Gravity.CENTER);
+        startPlanTitleView.setPadding(0, dp(12), 0, 0);
+        header.addView(startPlanTitleView, matchWrap());
+        updateStartPlanProgress();
+        return header;
+    }
+
+    private void updateStartPlanProgress() {
+        updateTaskProgress(startPlanCountsView, startPlanProgressBar, startPlanRemainingTimeView);
+        if (startPlanSkipButton != null && startPlanSkipButton.getTag() instanceof String) {
+            int index = taskIndexById((String) startPlanSkipButton.getTag());
+            updateStartPlanSkipAction(taskArray(false).optJSONObject(index), index);
+        }
+    }
+
+    private void updateTaskProgress(TextView countsView, ProgressBar progressBar, TextView remainingTimeView) {
+        if (countsView == null || progressBar == null || remainingTimeView == null) return;
+        JSONArray tasks = taskArray(false);
+        List<Integer> indexes = dailyProgressTaskIndexes(tasks);
+        int done = 0;
+        for (int index : indexes) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && "done".equals(task.optString("status"))) done++;
+        }
+        int remaining = indexes.size() - done;
+        String doneText = String.valueOf(done);
+        SpannableString counts = new SpannableString(doneText + "/" + indexes.size());
+        counts.setSpan(new ForegroundColorSpan(Color.rgb(154, 174, 188)), doneText.length(), doneText.length() + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        countsView.setText(counts);
+        countsView.setContentDescription("已完成 " + done + " 项，共 " + indexes.size() + " 项");
+        progressBar.setMax(Math.max(1, indexes.size()));
+        progressBar.setProgress(done);
+        progressBar.setContentDescription("已完成 " + done + " 项，共 " + indexes.size() + " 项，剩余 " + remaining + " 项");
+        String prefix = "预计还需 ";
+        SpannableString time = new SpannableString(prefix + remainingEstimatedMinutes(tasks, indexes) + " 分钟");
+        time.setSpan(new StyleSpan(Typeface.BOLD), prefix.length(), time.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        time.setSpan(new ForegroundColorSpan(Color.rgb(75, 85, 99)), prefix.length(), time.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        remainingTimeView.setText(time);
+    }
+
+    private void addStartPlanSubjectBadge(LinearLayout content, String subject) {
+        TextView badge = text(subject, 12, taskSubjectColor(subject), true);
+        badge.setGravity(Gravity.CENTER);
+        badge.setPadding(dp(10), dp(4), dp(10), dp(4));
+        badge.setBackground(rounded(taskSubjectSoftColor(subject), 16, Color.TRANSPARENT, 0));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.gravity = Gravity.CENTER_HORIZONTAL;
+        content.addView(badge, params);
+    }
+
     private void showTaskStartChoice(int taskIndex, boolean nextTask) {
         JSONObject task = taskArray(false).optJSONObject(taskIndex);
         if (!taskCanBeScheduled(task)) return;
@@ -2370,20 +2670,24 @@ public class MainActivity extends Activity {
 
         LinearLayout content = vertical();
         content.setPadding(dp(22), dp(6), dp(22), 0);
-        TextView taskLabel = text(resuming ? taskResumeTimeLabel(task) : nextTask ? "下一项作业" : "第一项作业", 11, MUTED, false);
-        taskLabel.setGravity(Gravity.CENTER);
-        content.addView(taskLabel, matchWrap());
-        TextView taskText = text(task.optString("subject", "其他") + " · " + task.optString("title", "作业"),
+        addStartPlanSubjectBadge(content, task.optString("subject", "其他"));
+        TextView taskText = text(task.optString("title", "作业"),
                 16, taskSubjectColor(task.optString("subject", "其他")), true);
         taskText.setGravity(Gravity.CENTER);
-        taskText.setPadding(0, dp(5), 0, dp(18));
+        taskText.setPadding(0, dp(5), 0, dp(resuming ? 5 : 18));
         taskText.setLineSpacing(dp(3), 1f);
         content.addView(taskText, matchWrap());
+        TextView taskLabel = text(resuming ? taskResumeTimeLabel(task) : "", 11, MUTED, false);
+        taskLabel.setGravity(Gravity.CENTER);
+        taskLabel.setPadding(0, 0, 0, dp(18));
+        taskLabel.setVisibility(resuming ? View.VISIBLE : View.GONE);
+        content.addView(taskLabel, matchWrap());
 
         Calendar suggested = Calendar.getInstance();
         int[] selectedTime = {suggested.get(Calendar.HOUR_OF_DAY), suggested.get(Calendar.MINUTE)};
         long[] quickStartAt = {0L};
         boolean[] defaultTimeUntouched = {true};
+        Runnable[] refreshStartButton = {() -> { }};
         LinearLayout timeRow = horizontal();
         timeRow.setGravity(Gravity.CENTER_VERTICAL);
         timeRow.addView(text("开始时间", 12, MUTED, false));
@@ -2421,6 +2725,7 @@ public class MainActivity extends Activity {
                 for (int buttonIndex = 0; buttonIndex < shortcutButtons.length; buttonIndex++) {
                     styleStartPlanShortcut(shortcutButtons[buttonIndex], buttonIndex == selectedShortcut);
                 }
+                refreshStartButton[0].run();
             });
             if (shortcutIndex > 0) shortcuts.addView(spaceHorizontal(8));
             shortcuts.addView(shortcut, weightedFixed(1, dp(44)));
@@ -2430,14 +2735,33 @@ public class MainActivity extends Activity {
         content.addView(shortcuts, shortcutParams);
         content.addView(timeRow, matchWrap());
         addStartPlanSkipAction(content, task, taskIndex);
+        content.addView(createSupplementButton(), matchFixed(dp(44)));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(resuming ? "继续刚才的作业" : nextTask ? "我准备什么时候开始下一项？" : "我准备什么时候开始？")
-                .setView(content)
+                .setCustomTitle(buildStartPlanHeader(resuming ? "继续刚才的作业" : nextTask ? "我准备什么时候开始下一项？" : "我准备什么时候开始？"))
+                .setView(scroll)
                 .setNegativeButton("取消", null)
-                .setPositiveButton(resuming ? "继续这项" : "确定", null)
+                .setPositiveButton(resuming ? "现在继续" : "现在开始", null)
                 .create();
         startPlanDialog = dialog;
+        Runnable updateStartButton = new Runnable() {
+            @Override public void run() {
+                if (startPlanDialog != dialog || !dialog.isShowing()) return;
+                Calendar now = Calendar.getInstance();
+                boolean startNow = quickStartAt[0] == 0L && (defaultTimeUntouched[0]
+                        || selectedTime[0] == now.get(Calendar.HOUR_OF_DAY) && selectedTime[1] == now.get(Calendar.MINUTE));
+                Button confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                if (confirm != null) confirm.setText(startNow ? resuming ? "现在继续" : "现在开始" : "确定开始时间");
+                timerHandler.postDelayed(this, 1000L);
+            }
+        };
+        refreshStartButton[0] = () -> {
+            timerHandler.removeCallbacks(updateStartButton);
+            updateStartButton.run();
+        };
         exactTimeButton.setOnClickListener(v -> new TimePickerDialog(this, (view, hour, minute) -> {
             selectedTime[0] = hour;
             selectedTime[1] = minute;
@@ -2446,8 +2770,10 @@ public class MainActivity extends Activity {
             for (Button shortcut : shortcutButtons) styleStartPlanShortcut(shortcut, false);
             exactTimeButton.setText(String.format(Locale.CHINA, "%02d:%02d", hour, minute));
             exactTimeButton.setContentDescription("选择开始时间 " + exactTimeButton.getText());
+            refreshStartButton[0].run();
         }, selectedTime[0], selectedTime[1], true).show());
         dialog.setOnShowListener(ignored -> {
+            refreshStartButton[0].run();
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 Calendar now = Calendar.getInstance();
@@ -2480,6 +2806,7 @@ public class MainActivity extends Activity {
             });
         });
         dialog.setOnDismissListener(ignored -> {
+            timerHandler.removeCallbacks(updateStartButton);
             if (startPlanDialog == dialog) startPlanDialog = null;
         });
         dialog.show();
@@ -2526,19 +2853,25 @@ public class MainActivity extends Activity {
         startPlanScheduledTimeView.setGravity(Gravity.CENTER);
         startPlanScheduledTimeView.setPadding(0, 0, 0, dp(10));
         content.addView(startPlanScheduledTimeView);
-        startPlanTaskLabelView = text("", 11, MUTED, false);
-        startPlanTaskLabelView.setGravity(Gravity.CENTER);
-        content.addView(startPlanTaskLabelView, matchWrap());
+        addStartPlanSubjectBadge(content, task.optString("subject", "其他"));
         startPlanTaskView = text("", 16, INK, true);
         startPlanTaskView.setGravity(Gravity.CENTER);
         startPlanTaskView.setLineSpacing(dp(3), 1f);
         startPlanTaskView.setPadding(0, dp(5), 0, dp(10));
         content.addView(startPlanTaskView, matchWrap());
+        startPlanTaskLabelView = text("", 11, MUTED, false);
+        startPlanTaskLabelView.setGravity(Gravity.CENTER);
+        startPlanTaskLabelView.setVisibility(View.GONE);
+        content.addView(startPlanTaskLabelView, matchWrap());
         addStartPlanSkipAction(content, task, taskIndex);
+        ScrollView scroll = new ScrollView(this);
+        content.addView(createSupplementButton(), matchFixed(dp(44)));
+        scroll.addView(content, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("我的开始计划")
-                .setView(content)
+                .setCustomTitle(buildStartPlanHeader("我的开始计划"))
+                .setView(scroll)
                 .setNegativeButton("重新选时间", null)
                 .setPositiveButton("我准备好了，提前开始", null)
                 .create();
@@ -2576,6 +2909,7 @@ public class MainActivity extends Activity {
         boolean resuming = "paused".equals(task.optString("status"));
         long remaining = Math.max(0L, startPlanSession.optLong("startAt") - now);
         updateStartPlanSkipAction(task, taskIndex);
+        updateStartPlanProgress();
         long seconds = (remaining + 999L) / 1000L;
         if (startPlanCountdownView != null) {
             startPlanCountdownView.setText(remaining > 0
@@ -2584,16 +2918,19 @@ public class MainActivity extends Activity {
         }
         if (startPlanScheduledTimeView != null) startPlanScheduledTimeView.setText(
                 "我计划 " + timeFromEpoch(startPlanSession.optLong("startAt")) + (resuming ? " 继续" : " 开始"));
-        if (startPlanTaskLabelView != null) startPlanTaskLabelView.setText(resuming ? taskResumeTimeLabel(task)
-                : nextTask ? "下一项作业" : "第一项作业");
+        if (startPlanTaskLabelView != null) {
+            startPlanTaskLabelView.setText(resuming ? taskResumeTimeLabel(task) : "");
+            startPlanTaskLabelView.setVisibility(resuming ? View.VISIBLE : View.GONE);
+        }
         if (startPlanTaskView != null) {
             String subject = task.optString("subject", "其他");
-            startPlanTaskView.setText(subject + " · " + task.optString("title", "作业"));
+            startPlanTaskView.setText(task.optString("title", "作业"));
             startPlanTaskView.setTextColor(taskSubjectColor(subject));
         }
-        startPlanDialog.setTitle(resuming
+        String title = resuming
                 ? remaining > 0 ? "继续刚才的作业" : "我计划的继续时间到了"
-                : remaining > 0 ? "我按计划准备开始" : "我计划的开始时间到了");
+                : remaining > 0 ? "我按计划准备开始" : "我计划的开始时间到了";
+        if (startPlanTitleView != null) startPlanTitleView.setText(title);
         Button start = startPlanDialog.getButton(AlertDialog.BUTTON_POSITIVE);
         if (start != null) start.setText(resuming
                 ? remaining > 0 ? "提前继续这项" : "继续这项"
@@ -2922,6 +3259,7 @@ public class MainActivity extends Activity {
         breakNextTaskView = text("", 12, INK, true);
         breakNextTaskView.setPadding(dp(12), dp(10), dp(12), dp(10));
         content.addView(breakNextTaskView, matchWrap());
+        content.addView(createSupplementButton(), matchFixed(dp(44)));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("我的休息计划")
@@ -3431,7 +3769,14 @@ public class MainActivity extends Activity {
         }
         card.addView(row, weightedWrap(1));
         card.addView(spaceHorizontal(8));
-        card.addView(taskEstimateView(task), new LinearLayout.LayoutParams(-2, dp(44)));
+        Button estimate = smallButton("预计用时\n" + estimatedMinutes(task) + " 分钟 ▾");
+        estimate.setTextSize(11);
+        estimate.setPadding(dp(6), 0, dp(6), 0);
+        estimate.setMinWidth(0);
+        estimate.setMinimumWidth(0);
+        estimate.setContentDescription(task.optString("title", "作业") + "预计用时 " + estimatedMinutes(task) + " 分钟，点击调整");
+        estimate.setOnClickListener(v -> showTaskEstimatePicker(task, estimate, true));
+        card.addView(estimate, fixed(dp(94), dp(60)));
         LinearLayout.LayoutParams params = matchWrap();
         params.bottomMargin = dp(8);
         orderChoicesPanel.addView(card, params);
@@ -3534,6 +3879,7 @@ public class MainActivity extends Activity {
         taskPanelHelpView.setVisibility(questMode || taskPanelHelpView.getText().length() == 0 ? View.GONE : View.VISIBLE);
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
         taskEntryLauncher.setVisibility(canEnterTasks && holiday == null ? View.VISIBLE : View.GONE);
+        supplementTaskButton.setVisibility(canSupplementTasks() ? View.VISIBLE : View.GONE);
         taskEntryPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
         String entryStatus = tasks.length() > 0
                 ? "已录入 " + tasks.length() + " 项，可继续补充其他科目"
@@ -3703,28 +4049,38 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void setTaskEntryEstimate(int minutes) {
-        taskEntryEstimatedMinutes = estimatedMinutesWithFallback(minutes);
-        if (taskEntryEstimateButton != null) {
-            taskEntryEstimateButton.setText(taskEntryEstimatedMinutes + " 分钟  ▾");
-            taskEntryEstimateButton.setContentDescription("这项作业预计用时 " + taskEntryEstimatedMinutes + " 分钟");
-        }
-    }
-
     private int estimatedMinutesWithFallback(int value) {
         for (int minutes : ESTIMATE_OPTIONS) if (minutes == value) return value;
         return 15;
     }
 
-    private void showTaskEntryEstimatePicker() {
+    private boolean canAdjustTaskEstimate(boolean sorting) {
+        return taskEntryPageView != null && taskEntryPageView.getVisibility() == View.VISIBLE
+                && (sorting ? isTaskEntrySorting() && canChooseTaskOrder() : !isTaskEntrySorting() && canEditTaskPlan());
+    }
+
+    private void showTaskEstimatePicker(JSONObject task, Button button, boolean sorting) {
+        if (!canAdjustTaskEstimate(sorting)) return;
+        String date = currentDate;
         String[] labels = new String[ESTIMATE_OPTIONS.length];
+        int checked = 0;
         for (int index = 0; index < ESTIMATE_OPTIONS.length; index++) {
             labels[index] = ESTIMATE_OPTIONS[index] + " 分钟";
+            if (ESTIMATE_OPTIONS[index] == estimatedMinutes(task)) checked = index;
         }
         new AlertDialog.Builder(this)
-                .setTitle("这项作业预计多久？")
-                .setItems(labels, (dialog, which) -> {
-                    setTaskEntryEstimate(ESTIMATE_OPTIONS[which]);
+                .setTitle("预计用时")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    JSONObject current = taskArray(false).optJSONObject(taskIndexById(task.optString("id")));
+                    if (date.equals(currentDate) && canAdjustTaskEstimate(sorting) && current == task
+                            && "pending".equals(task.optString("status", "pending"))) {
+                        int minutes = ESTIMATE_OPTIONS[which];
+                        put(task, "estimatedMinutes", minutes);
+                        saveTaskData();
+                        button.setText((sorting ? "预计用时\n" : "预计 ") + minutes + " 分钟 ▾");
+                        button.setContentDescription(task.optString("title", "作业") + "预计用时 " + minutes + " 分钟，点击调整");
+                    }
+                    dialog.dismiss();
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -3879,6 +4235,7 @@ public class MainActivity extends Activity {
             detail.setPadding(0, dp(6), 0, 0);
             notice.addView(detail, matchWrap());
             taskListContainer.addView(notice, matchWrap());
+            addDailyTaskReview();
             return;
         }
         LinearLayout victory = vertical();
@@ -3899,6 +4256,38 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(8);
         taskListContainer.addView(victory, params);
+        addDailyTaskReview();
+    }
+
+    private void addDailyTaskReview() {
+        JSONArray tasks = taskArray(false);
+        List<Integer> indexes = dailyProgressTaskIndexes(tasks);
+        if (indexes.isEmpty()) return;
+        int estimated = 0;
+        long elapsed = 0L;
+        boolean recorded = true;
+        for (int index : indexes) {
+            JSONObject task = tasks.optJSONObject(index);
+            if (task == null || !"done".equals(task.optString("status"))) return;
+            estimated += estimatedMinutes(task);
+            long taskElapsed = task.optLong("elapsedMs", -1L);
+            recorded &= taskElapsed >= 0L;
+            elapsed += Math.max(0L, taskElapsed);
+        }
+        String actual = recorded ? (elapsed > 0L ? Math.max(1L, Math.round(elapsed / 60000.0)) : 0L) + " 分钟" : "未记录";
+        LinearLayout review = vertical();
+        review.setGravity(Gravity.CENTER);
+        review.setPadding(dp(14), dp(14), dp(14), dp(14));
+        review.setBackground(rounded(Color.rgb(244, 251, 247), 14, Color.rgb(220, 238, 230), 1));
+        review.addView(text("今天的作业小复盘", 13, Color.rgb(55, 107, 89), true));
+        TextView summary = text("预计 " + estimated + " 分钟   实际 " + actual, 12, Color.rgb(55, 107, 89), true);
+        summary.setGravity(Gravity.CENTER);
+        summary.setPadding(0, dp(8), 0, dp(8));
+        review.addView(summary, matchWrap());
+        review.addView(text("记住这次用时，下次计划更有数。", 10, MUTED, false));
+        LinearLayout.LayoutParams params = matchWrap();
+        params.topMargin = dp(12);
+        taskListContainer.addView(review, params);
     }
 
     private void renderPendingTaskGroups(JSONArray tasks) {
@@ -3939,7 +4328,20 @@ public class MainActivity extends Activity {
         actions.setPadding(0, dp(8), 0, dp(8));
         LinearLayout schedule = horizontal();
         schedule.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-        schedule.addView(taskEstimateView(task), new LinearLayout.LayoutParams(-2, dp(32)));
+        if (editable) {
+            Button estimate = textButton("预计 " + estimatedMinutes(task) + " 分钟 ▾");
+            estimate.setTextSize(11);
+            estimate.setSingleLine(true);
+            estimate.setMinWidth(0);
+            estimate.setMinimumWidth(0);
+            estimate.setPadding(dp(6), 0, dp(6), 0);
+            estimate.setBackground(rounded(Color.WHITE, 8, LINE, 1));
+            estimate.setContentDescription(task.optString("title", "作业") + "预计用时 " + estimatedMinutes(task) + " 分钟，点击调整");
+            estimate.setOnClickListener(v -> showTaskEstimatePicker(task, estimate, false));
+            schedule.addView(estimate, new LinearLayout.LayoutParams(-2, dp(32)));
+        } else {
+            schedule.addView(taskEstimateView(task), new LinearLayout.LayoutParams(-2, dp(32)));
+        }
         if (weekendKeyFor(currentDate) != null) {
             Button day = textButton(plannedDayLabel(task));
             day.setTextSize(11);
@@ -4384,6 +4786,68 @@ public class MainActivity extends Activity {
         row.addView(button, params);
     }
 
+    private void clearCompletionUndo() {
+        timerHandler.removeCallbacks(completionUndoTick);
+        lastCompletedTask = null;
+        lastCompletedTaskDate = null;
+        if (completionUndoPopup != null) completionUndoPopup.dismiss();
+        completionUndoPopup = null;
+        completionUndoHost = null;
+    }
+
+    private void rememberTaskCompletion(JSONObject task) {
+        clearCompletionUndo();
+        lastCompletedTask = task;
+        lastCompletedTaskDate = currentDate;
+        lastCompletedTaskWasActive = "active".equals(task.optString("status"));
+        completionUndoExpiresAt = System.currentTimeMillis() + 8000L;
+    }
+
+    private void showCompletionUndo() {
+        if (lastCompletedTask == null) return;
+        View host = startPlanDialog != null && startPlanDialog.isShowing() && startPlanDialog.getWindow() != null
+                ? startPlanDialog.getWindow().getDecorView() : getWindow().getDecorView();
+        if (!host.isAttachedToWindow()) return;
+        if (completionUndoPopup != null && completionUndoPopup.isShowing() && completionUndoHost == host) return;
+        if (completionUndoPopup != null) completionUndoPopup.dismiss();
+        if (currentToast != null) currentToast.cancel();
+        LinearLayout notice = horizontal();
+        notice.setGravity(Gravity.CENTER_VERTICAL);
+        notice.setPadding(dp(14), dp(8), dp(8), dp(8));
+        notice.setBackground(rounded(Color.rgb(55, 107, 89), 14, Color.TRANSPARENT, 0));
+        TextView message = text("已完成：" + lastCompletedTask.optString("title", "作业"), 12, Color.WHITE, true);
+        message.setMaxLines(2);
+        message.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        notice.addView(message, new LinearLayout.LayoutParams(0, -2, 1f));
+        notice.addView(spaceHorizontal(8));
+        Button undo = smallButton("撤销");
+        undo.setTextColor(Color.rgb(40, 84, 66));
+        undo.setBackground(rounded(Color.rgb(239, 250, 244), 9, Color.TRANSPARENT, 0));
+        undo.setOnClickListener(v -> undoLastTaskCompletion());
+        notice.addView(undo, fixed(dp(64), dp(44)));
+        completionUndoPopup = new PopupWindow(notice,
+                Math.min(getResources().getDisplayMetrics().widthPixels - dp(32), dp(360)), -2, false);
+        completionUndoPopup.setBackgroundDrawable(rounded(Color.TRANSPARENT, 14, Color.TRANSPARENT, 0));
+        completionUndoPopup.setElevation(dp(8));
+        completionUndoHost = host;
+        completionUndoPopup.showAtLocation(host, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, dp(24));
+    }
+
+    private void undoLastTaskCompletion() {
+        JSONObject saved = lastCompletedTask;
+        boolean resume = lastCompletedTaskWasActive;
+        if (saved == null || System.currentTimeMillis() >= completionUndoExpiresAt
+                || !currentDate.equals(lastCompletedTaskDate)) { clearCompletionUndo(); return; }
+        int index = taskIndexById(saved.optString("id"));
+        if (taskArray(false).optJSONObject(index) != saved || !"done".equals(saved.optString("status"))
+                || activeTask(false) != null) { clearCompletionUndo(); return; }
+        clearCompletionUndo();
+        clearStartPlanSession();
+        if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
+        performTaskAction("undo", index);
+        if (resume && "paused".equals(saved.optString("status"))) performTaskAction("start", index);
+    }
+
     private void performTaskAction(String action, int index) {
         String weekendKey = weekendKeyFor(currentDate);
         JSONObject weekend = weekendKey == null ? null : weekendForDate(currentDate, true);
@@ -4477,6 +4941,7 @@ public class MainActivity extends Activity {
                 toast("请先暂停或完成“" + active.optString("title", "当前作业") + "”");
                 return;
             }
+            clearCompletionUndo();
             if (hasActiveBreakSession()) clearBreakSession();
             if (hasActiveStartPlanSession() || startPlanDialog != null) clearStartPlanSession();
             if (skipping) stopTaskClock(task, "paused");
@@ -4494,6 +4959,8 @@ public class MainActivity extends Activity {
             offerBreakSourceTaskIndex = index;
             offerBreakFromPause = true;
         } else if ("complete".equals(action)) {
+            if ("done".equals(task.optString("status"))) return;
+            rememberTaskCompletion(task);
             stopTaskClock(task, "done");
             dismissTaskFocusDialog();
             put(task, "completedAt", currentTime());
@@ -4551,6 +5018,7 @@ public class MainActivity extends Activity {
             }
             nextStartPlanTaskIndex = nextTaskIndexForToday();
         } else if ("undo".equals(action)) {
+            clearCompletionUndo();
             put(task, "status", "paused");
             task.remove("completedAt");
             task.remove("completedDate");
@@ -4572,6 +5040,7 @@ public class MainActivity extends Activity {
         else if (nextStartPlanTaskIndex >= 0) showTaskStartChoice(nextStartPlanTaskIndex, true);
         else if (offerBreakTaskIndex >= 0) showBreakChoiceDialog(
                 offerBreakTaskIndex, offerBreakFromPause, offerBreakSourceTaskIndex);
+        if ("complete".equals(action)) timerHandler.post(completionUndoTick);
     }
 
     private void saveTaskData() {
@@ -6710,6 +7179,24 @@ public class MainActivity extends Activity {
         note.setPadding(0, dp(11), 0, 0);
         note.setLineSpacing(dp(3), 1f);
         dataCard.addView(note);
+        TextView snapshotTitle = text("导入前的数据", 14, INK, true);
+        snapshotTitle.setPadding(0, dp(22), 0, dp(8));
+        dataCard.addView(snapshotTitle);
+        JSONObject snapshot = readBackupSnapshot();
+        String savedLabel = snapshot == null ? "每次导入前自动保存，只保留最近一份。"
+                : "保存于 " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA)
+                .format(new java.util.Date(snapshot.optLong("savedAt"))) + "。可恢复到这次导入前。";
+        dataCard.addView(text(savedLabel, 11, MUTED, false));
+        Button recover = smallButton("恢复到上次导入前");
+        recover.setEnabled(snapshot != null);
+        recover.setAlpha(snapshot == null ? 0.45f : 1f);
+        recover.setOnClickListener(v -> restoreBackupSnapshot());
+        LinearLayout.LayoutParams recoverParams = matchFixed(dp(46));
+        recoverParams.topMargin = dp(10);
+        dataCard.addView(recover, recoverParams);
+        TextView snapshotNote = text("快照保存在本机。恢复后计时保持暂停，准备好再继续。", 10, MUTED, false);
+        snapshotNote.setPadding(0, dp(9), 0, 0);
+        dataCard.addView(snapshotNote);
         return buildSettingsDetailPage("数据备份", dataCard);
     }
 
@@ -7209,6 +7696,7 @@ public class MainActivity extends Activity {
         put(state, "holidays", holidays);
         put(state, "dictationCustom", dictationCustomWords);
         put(state, "taskKeywords", taskKeywords);
+        put(state, "dictationLesson", selectedDictationLessonId());
         JSONObject payload = new JSONObject();
         put(payload, "format", "homework-ledger-backup");
         put(payload, "version", 3);
@@ -7243,38 +7731,151 @@ public class MainActivity extends Activity {
                     || source.optJSONObject("weekends") == null) {
                 throw new JSONException("invalid backup");
             }
-            confirmBackupRestore(source);
+            normalizeBackupState(source, backupCaptureTime(parsed.optString("exportedAt")));
+            confirmBackupRestore(source, backupCaptureTime(parsed.optString("exportedAt")));
         } catch (Exception exception) {
             toast("备份文件无法识别，请选择本应用导出的文件");
         }
     }
 
-    private void confirmBackupRestore(JSONObject source) {
+    private void confirmBackupRestore(JSONObject source, long capturedAt) {
         new AlertDialog.Builder(this)
                 .setTitle("恢复本地备份")
-                .setMessage("恢复会替换当前全部记录，确定继续吗？")
+                .setMessage("恢复会替换当前全部记录，导入前会自动保存一份快照，确定继续吗？")
                 .setNegativeButton("取消", null)
-                .setPositiveButton("恢复", (dialog, which) -> {
-                    records = source.optJSONObject("records");
-                    weekends = source.optJSONObject("weekends");
-                    holidays = source.optJSONObject("holidays") == null ? new JSONObject() : source.optJSONObject("holidays");
-                    JSONObject restoredWords = source.optJSONObject("dictationCustom");
-                    dictationCustomWords = restoredWords == null ? new JSONObject() : restoredWords;
-                    taskKeywords = normalizeTaskKeywords(source.optJSONObject("taskKeywords"));
-                    currentDate = todayIso();
-                    preferences.edit()
-                            .putString(KEY_RECORDS, records.toString())
-                            .putString(KEY_WEEKENDS, weekends.toString())
-                            .putString(KEY_HOLIDAYS, holidays.toString())
-                            .putString(KEY_DICTATION_CUSTOM, dictationCustomWords.toString())
-                            .putString(KEY_TASK_KEYWORDS, taskKeywords.toString())
-                            .apply();
-                    closeTaskEntryPage();
-                    dismissTaskFocusDialog();
-                    renderAll();
-                    toast("备份已恢复");
-                })
+                .setPositiveButton("恢复", (dialog, which) -> applyBackupState(source, capturedAt, true))
                 .show();
+    }
+
+    private long backupCaptureTime(String value) {
+        String normalized = value.replaceFirst("Z$", "+0000").replaceFirst("([+-]\\d{2}):(\\d{2})$", "$1$2");
+        for (String format : new String[]{"yyyy-MM-dd'T'HH:mm:ss.SSSZ", "yyyy-MM-dd'T'HH:mm:ssZ"}) {
+            try {
+                SimpleDateFormat parser = new SimpleDateFormat(format, Locale.US);
+                parser.setLenient(false);
+                return parser.parse(normalized).getTime();
+            } catch (ParseException ignored) { }
+        }
+        return 0L;
+    }
+
+    private JSONObject normalizeBackupState(JSONObject source, long capturedAt) throws JSONException {
+        if (source == null || source.optJSONObject("records") == null || source.optJSONObject("weekends") == null)
+            throw new JSONException("invalid backup");
+        for (String group : new String[]{"records", "weekends"}) {
+            JSONObject owners = source.getJSONObject(group);
+            Iterator<String> keys = owners.keys();
+            while (keys.hasNext()) {
+                JSONObject owner = owners.optJSONObject(keys.next());
+                if (owner == null) throw new JSONException("invalid record");
+                if (owner.has("tasks") && !owner.isNull("tasks")) {
+                    JSONArray tasks = owner.optJSONArray("tasks");
+                    if (tasks == null) throw new JSONException("invalid tasks");
+                    for (int i = 0; i < tasks.length(); i++)
+                        if (tasks.optJSONObject(i) == null) throw new JSONException("invalid task");
+                }
+            }
+        }
+        JSONObject restored = new JSONObject(source.toString());
+        for (String key : new String[]{"holidays", "dictationCustom"})
+            if (restored.optJSONObject(key) == null) put(restored, key, new JSONObject());
+        put(restored, "taskKeywords", normalizeTaskKeywords(restored.optJSONObject("taskKeywords")));
+        String lesson = DICTATION_LESSONS[0][0];
+        for (String[] item : DICTATION_LESSONS)
+            if (item[0].equals(restored.optString("dictationLesson"))) lesson = item[0];
+        put(restored, "dictationLesson", lesson);
+        pauseSavedClocks(restored, capturedAt);
+        return restored;
+    }
+
+    private void pauseSavedClocks(Object value, long capturedAt) {
+        if (value instanceof JSONArray) {
+            JSONArray array = (JSONArray) value;
+            for (int i = 0; i < array.length(); i++) pauseSavedClocks(array.opt(i), capturedAt);
+        } else if (value instanceof JSONObject) {
+            JSONObject object = (JSONObject) value;
+            if (object.has("id") && "active".equals(object.optString("status"))) {
+                long activeSince = object.optLong("activeSince");
+                long activeMillis = capturedAt > 0L && activeSince > 0L
+                        ? Math.max(0L, Math.min(System.currentTimeMillis(), capturedAt) - activeSince) : 0L;
+                put(object, "elapsedMs", Math.max(0L, object.optLong("elapsedMs")) + activeMillis);
+                put(object, "status", "paused");
+                object.remove("activeSince");
+            }
+            Iterator<String> keys = object.keys();
+            while (keys.hasNext()) pauseSavedClocks(object.opt(keys.next()), capturedAt);
+        }
+    }
+
+    private JSONObject readBackupSnapshot() {
+        try {
+            JSONObject snapshot = new JSONObject(preferences.getString(KEY_PRE_IMPORT_SNAPSHOT, "{}"));
+            if (snapshot.optLong("savedAt") <= 0L) return null;
+            normalizeBackupState(snapshot.optJSONObject("state"), snapshot.optLong("savedAt"));
+            return snapshot;
+        } catch (JSONException exception) { return null; }
+    }
+
+    private void restoreBackupSnapshot() {
+        JSONObject snapshot = readBackupSnapshot();
+        if (snapshot == null) { toast("还没有可恢复的导入前快照"); return; }
+        new AlertDialog.Builder(this).setTitle("恢复导入前的数据")
+                .setMessage("恢复到上次导入前会替换当前记录，确定继续吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("恢复", (dialog, which) -> applyBackupState(
+                        snapshot.optJSONObject("state"), snapshot.optLong("savedAt"), false)).show();
+    }
+
+    private void applyBackupState(JSONObject source, long capturedAt, boolean saveSnapshot) {
+        dismissSupplementDialog();
+        JSONObject restored;
+        try { restored = normalizeBackupState(source, capturedAt); }
+        catch (JSONException exception) { toast("备份文件无法识别，请选择本应用导出的文件"); return; }
+        SharedPreferences.Editor rollback = preferences.edit();
+        for (String key : new String[]{KEY_RECORDS, KEY_WEEKENDS, KEY_HOLIDAYS, KEY_DICTATION_CUSTOM,
+                KEY_DICTATION_LESSON, KEY_TASK_KEYWORDS, KEY_PRE_IMPORT_SNAPSHOT, KEY_BREAK_SESSION, KEY_START_PLAN_SESSION}) {
+            if (preferences.contains(key)) rollback.putString(key, preferences.getString(key, ""));
+            else rollback.remove(key);
+        }
+        SharedPreferences.Editor editor = preferences.edit()
+                .putString(KEY_RECORDS, restored.optJSONObject("records").toString())
+                .putString(KEY_WEEKENDS, restored.optJSONObject("weekends").toString())
+                .putString(KEY_HOLIDAYS, restored.optJSONObject("holidays").toString())
+                .putString(KEY_DICTATION_CUSTOM, restored.optJSONObject("dictationCustom").toString())
+                .putString(KEY_TASK_KEYWORDS, restored.optJSONObject("taskKeywords").toString())
+                .putString(KEY_DICTATION_LESSON, restored.optString("dictationLesson"))
+                .remove(KEY_BREAK_SESSION).remove(KEY_START_PLAN_SESSION);
+        if (saveSnapshot) {
+            JSONObject snapshot = new JSONObject();
+            put(snapshot, "savedAt", System.currentTimeMillis());
+            put(snapshot, "state", backupPayload().optJSONObject("state"));
+            editor.putString(KEY_PRE_IMPORT_SNAPSHOT, snapshot.toString());
+        }
+        if (!editor.commit()) {
+            rollback.commit();
+            toast("保存失败，未替换当前记录。请检查本机存储空间后重试");
+            return;
+        }
+        clearCompletionUndo();
+        clearStartPlanSession();
+        clearBreakSession();
+        if (breakChoiceDialog != null) breakChoiceDialog.dismiss();
+        closeTaskEntryPage();
+        dismissTaskOrderDialog();
+        dismissTaskFocusDialog();
+        lastDeletedTask = null;
+        lastDeletedTaskDate = null;
+        records = restored.optJSONObject("records");
+        weekends = restored.optJSONObject("weekends");
+        holidays = restored.optJSONObject("holidays");
+        dictationCustomWords = restored.optJSONObject("dictationCustom");
+        taskKeywords = restored.optJSONObject("taskKeywords");
+        for (int i = 0; i < DICTATION_LESSONS.length; i++)
+            if (DICTATION_LESSONS[i][0].equals(restored.optString("dictationLesson"))) selectedDictationLessonIndex = i;
+        currentDate = todayIso();
+        renderAll();
+        showSettingsDetailPage(false);
+        toast(saveSnapshot ? "备份已恢复，导入前的数据可在本页找回" : "已恢复到上次导入前");
     }
 
     private void showRecordDatePicker() {
@@ -7287,6 +7888,8 @@ public class MainActivity extends Activity {
     }
 
     private void selectDate(String date) {
+        dismissSupplementDialog();
+        clearCompletionUndo();
         dismissTaskOrderDialog();
         closeTaskEntryPage();
         dismissTaskFocusDialog();
@@ -7732,6 +8335,10 @@ public class MainActivity extends Activity {
             taskEntryNoticeView.setVisibility(View.VISIBLE);
             timerHandler.removeCallbacks(clearTaskEntryNotice);
             timerHandler.postDelayed(clearTaskEntryNotice, 1800);
-        } else Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        } else {
+            if (currentToast != null) currentToast.cancel();
+            currentToast = Toast.makeText(this, message, Toast.LENGTH_SHORT);
+            currentToast.show();
+        }
     }
 }

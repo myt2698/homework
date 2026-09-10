@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "homework-ledger-v1";
+  const PRE_IMPORT_SNAPSHOT_KEY = "homework-pre-import-snapshot-v1";
   const BREAK_SESSION_KEY = "homework-break-session-v1";
   const START_PLAN_SESSION_KEY = "homework-start-plan-session-v1";
   const BREAK_ALARM_KEY = "homework-break-alarm-v1";
@@ -160,7 +161,8 @@
     keywordSettingsSubjects: $("#keywordSettingsSubjects"), keywordSettingsList: $("#keywordSettingsList"),
     keywordSettingsInput: $("#keywordSettingsInput"), addKeywordButton: $("#addKeywordButton"),
     exportDataButton: $("#exportDataButton"), importDataButton: $("#importDataButton"),
-    importDataInput: $("#importDataInput"), historyManageButton: $("#historyManageButton"),
+    importDataInput: $("#importDataInput"), backupSnapshotStatus: $("#backupSnapshotStatus"),
+    restoreSnapshotButton: $("#restoreSnapshotButton"), historyManageButton: $("#historyManageButton"),
     recordDate: $("#recordDate"), todayButton: $("#todayButton"),
     historicalDateNotice: $("#historicalDateNotice"), historicalDateLabel: $("#historicalDateLabel"),
     recordHeading: $("#recordHeading"),
@@ -194,7 +196,6 @@
     taskEditTitle: $("#taskEditTitle"), taskEditInput: $("#taskEditInput"),
     taskEditEstimate: $("#taskEditEstimate"),
     taskEditCancelButton: $("#taskEditCancelButton"), taskEditSaveButton: $("#taskEditSaveButton"),
-    taskEntryEstimate: $("#taskEntryEstimate"),
     taskEntryOrderButton: $("#taskEntryOrderButton"), taskEntryDays: $("#taskEntryDays"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
     taskSummary: $("#taskSummary"),
@@ -210,16 +211,30 @@
     emptyTaskList: $("#emptyTaskList"), taskListFooter: $("#taskListFooter"), taskConfirmHint: $("#taskConfirmHint"),
     confirmTaskListButton: $("#confirmTaskListButton"), dayResult: $("#dayResult"),
     focusModal: $("#focusModal"),
-    focusOverallDone: $("#focusOverallDone"), focusOverallRemaining: $("#focusOverallRemaining"),
+    focusOverallDone: $("#focusOverallDone"), focusOverallTotal: $("#focusOverallTotal"),
     focusOverallTime: $("#focusOverallTime"),
+    focusOverallCounts: $("#focusOverallCounts"), focusProgressBar: $("#focusProgressBar"),
+    focusProgressFill: $("#focusProgressFill"),
     focusModalSubject: $("#focusModalSubject"), focusModalTitle: $("#focusModalTitle"),
     focusModalElapsed: $("#focusModalElapsed"), focusModalEstimate: $("#focusModalEstimate"),
     focusModalComparison: $("#focusModalComparison"), focusModalStartedAt: $("#focusModalStartedAt"),
     focusPauseButton: $("#focusPauseButton"), focusCompleteButton: $("#focusCompleteButton"),
     focusSkipButton: $("#focusSkipButton"),
+    focusLookupButton: $("#focusLookupButton"),
+    supplementTaskButton: $("#supplementTaskButton"), focusSupplementButton: $("#focusSupplementButton"),
+    startPlanSupplementButton: $("#startPlanSupplementButton"), breakSupplementButton: $("#breakSupplementButton"),
+    supplementModal: $("#supplementModal"), supplementCloseButton: $("#supplementCloseButton"),
+    supplementCancelButton: $("#supplementCancelButton"), supplementSaveButton: $("#supplementSaveButton"),
+    supplementSubject: $("#supplementSubject"), supplementEstimate: $("#supplementEstimate"),
+    supplementInput: $("#supplementInput"), supplementError: $("#supplementError"),
     startPlanModal: $("#startPlanModal"), startPlanCloseButton: $("#startPlanCloseButton"),
     startPlanTitle: $("#startPlanTitle"),
+    startPlanOverallDone: $("#startPlanOverallDone"), startPlanOverallTotal: $("#startPlanOverallTotal"),
+    startPlanOverallTime: $("#startPlanOverallTime"),
+    startPlanOverallCounts: $("#startPlanOverallCounts"), startPlanProgressBar: $("#startPlanProgressBar"),
+    startPlanProgressFill: $("#startPlanProgressFill"),
     startPlanTask: $("#startPlanTask"), startPlanTaskLabel: $("#startPlanTaskLabel"),
+    startPlanSubject: $("#startPlanSubject"),
     startPlanOptions: $("#startPlanOptions"),
     startPlanTime: $("#startPlanTime"), saveStartPlanButton: $("#saveStartPlanButton"),
     startPlanFiveMinutesButton: $("#startPlanFiveMinutesButton"), startPlanTenMinutesButton: $("#startPlanTenMinutesButton"),
@@ -247,7 +262,8 @@
     deductionTotal: $("#deductionTotal"), weeklyReviewRange: $("#weeklyReviewRange"),
     weeklyPlanDays: $("#weeklyPlanDays"), weeklyEstimatedTime: $("#weeklyEstimatedTime"),
     weeklyActualTime: $("#weeklyActualTime"), weeklyReviewInsight: $("#weeklyReviewInsight"),
-    toast: $("#toast")
+    toast: $("#toast"), completionUndoNotice: $("#completionUndoNotice"),
+    completionUndoMessage: $("#completionUndoMessage"), undoCompletionButton: $("#undoCompletionButton")
   };
 
   let selectedTaskSubject = "语文";
@@ -262,6 +278,8 @@
   let taskEntryDay = "all";
   let lastDeletedTask = null;
   let undoDeleteTimer = null;
+  let lastCompletedTask = null;
+  let undoCompletionTimer = null;
   let sportOptionsExpanded = false;
   let sportOptionsDate = null;
   let taskEntryReturnScroll = 0;
@@ -435,7 +453,7 @@
   function remainingEstimatedMinutes(tasks) {
     return tasks.reduce((sum, task) => {
       if ((task.status || "pending") === "done") return sum;
-      const spent = task.status === "active" ? Math.floor(taskElapsedMs(task) / 60000) : 0;
+      const spent = Math.floor(Math.max(0, taskElapsedMs(task)) / 60000);
       return sum + Math.max(0, estimatedMinutes(task) - spent);
     }, 0);
   }
@@ -477,6 +495,19 @@
     return tasksForDate().find((task) => String(task.id) === String(id));
   }
 
+  function updateTaskProgress(prefix, todayTasks) {
+    const done = todayTasks.filter((item) => item.status === "done").length;
+    const remaining = todayTasks.length - done;
+    elements[`${prefix}OverallDone`].textContent = String(done);
+    elements[`${prefix}OverallTotal`].textContent = String(todayTasks.length);
+    elements[`${prefix}OverallCounts`].title = `已完成 ${done} 项，共 ${todayTasks.length} 项`;
+    elements[`${prefix}ProgressBar`].setAttribute("aria-valuemax", String(Math.max(1, todayTasks.length)));
+    elements[`${prefix}ProgressBar`].setAttribute("aria-valuenow", String(done));
+    elements[`${prefix}ProgressBar`].setAttribute("aria-valuetext", `已完成 ${done} 项，共 ${todayTasks.length} 项，剩余 ${remaining} 项`);
+    elements[`${prefix}ProgressFill`].style.width = `${todayTasks.length ? done / todayTasks.length * 100 : 0}%`;
+    elements[`${prefix}OverallTime`].textContent = `${remainingEstimatedMinutes(todayTasks)} 分钟`;
+  }
+
   function updateFocusModal() {
     if (!focusModalTaskId || elements.focusModal.hidden) return;
     const task = taskById(focusModalTaskId);
@@ -489,10 +520,7 @@
     elements.focusModalComparison.textContent = taskEstimateComparisonLabel(task);
     elements.focusModalStartedAt.textContent = task.startedAt || "--:--";
     const todayTasks = dailyProgressTasks();
-    const done = todayTasks.filter((item) => item.status === "done").length;
-    elements.focusOverallDone.textContent = String(done);
-    elements.focusOverallRemaining.textContent = String(todayTasks.length - done);
-    elements.focusOverallTime.textContent = `${remainingEstimatedMinutes(todayTasks)} 分钟`;
+    updateTaskProgress("focus", todayTasks);
     elements.focusCompleteButton.textContent = "完成这项";
     const next = nextTaskAfter(task.id);
     elements.focusSkipButton.disabled = !next;
@@ -566,12 +594,17 @@
     return `之前已做 ${duration}`;
   }
 
-  function renderStartPlanTask(task, isNextTask, date = elements.recordDate.value) {
+  function renderStartPlanTask(task, date = elements.recordDate.value) {
     const resuming = task.status === "paused";
-    elements.startPlanTask.textContent = `${task.subject || "其他"} · ${task.title}`;
-    elements.startPlanTask.dataset.subject = task.subject || "其他";
-    elements.startPlanTaskLabel.textContent = resuming ? taskResumeTimeLabel(task)
-      : isNextTask ? "下一项作业" : "第一项作业";
+    const todayTasks = dailyProgressTasks(tasksForDate(date), date);
+    updateTaskProgress("startPlan", todayTasks);
+    const subject = task.subject || "其他";
+    elements.startPlanSubject.textContent = subject;
+    elements.startPlanSubject.dataset.subject = subject;
+    elements.startPlanTask.textContent = task.title || "作业";
+    elements.startPlanTask.dataset.subject = subject;
+    elements.startPlanTaskLabel.textContent = resuming ? taskResumeTimeLabel(task) : "";
+    elements.startPlanTaskLabel.hidden = !resuming;
     const next = resuming ? nextTaskAfter(task.id, date) : null;
     elements.skipPausedTaskButton.hidden = !resuming;
     elements.skipPausedTaskButton.disabled = !next || Boolean(activeTaskForDate(date));
@@ -585,10 +618,9 @@
     if (!taskCanBeScheduled(task, date)) return;
     if (startPlanSession) clearStartPlanSession();
     if (elements.recordDate.value !== date) setRecordDate(date);
-    const resuming = renderStartPlanTask(task, kind === "next", date);
+    const resuming = renderStartPlanTask(task, date);
     elements.startPlanTitle.textContent = resuming ? "继续刚才的作业"
       : kind === "next" ? "我准备什么时候开始下一项？" : "我准备什么时候开始？";
-    elements.saveStartPlanButton.textContent = resuming ? "继续这项" : "确定";
     elements.startPlanOptions.hidden = false;
     elements.startPlanCountdownPanel.hidden = true;
     elements.startPlanCloseButton.hidden = false;
@@ -601,6 +633,7 @@
     elements.startPlanModal.dataset.defaultStartTime = elements.startPlanTime.value;
     clearStartPlanQuickChoice();
     elements.startPlanModal.hidden = false;
+    updateStartPlanButton();
     document.body.classList.add("modal-open");
   }
 
@@ -635,6 +668,20 @@
     elements.startPlanModal.dataset.quickStartTime = elements.startPlanTime.value;
     const button = minutes === 5 ? elements.startPlanFiveMinutesButton : elements.startPlanTenMinutesButton;
     button.setAttribute("aria-pressed", "true");
+    updateStartPlanButton();
+  }
+
+  function updateStartPlanButton() {
+    if (elements.startPlanModal.hidden || elements.startPlanOptions.hidden) return;
+    const date = elements.startPlanModal.dataset.date;
+    const task = tasksForDate(date).find((item) => String(item.id) === elements.startPlanModal.dataset.taskId);
+    const value = elements.startPlanTime.value;
+    const unchangedDefault = value && value === elements.startPlanModal.dataset.defaultStartTime;
+    const quickChoice = Number(elements.startPlanModal.dataset.quickStartAt)
+      && value === elements.startPlanModal.dataset.quickStartTime;
+    const startNow = !quickChoice && (unchangedDefault || value === currentTime());
+    elements.saveStartPlanButton.textContent = startNow
+      ? task?.status === "paused" ? "现在继续" : "现在开始" : "确定开始时间";
   }
 
   function renderStartPlanTimer() {
@@ -646,7 +693,7 @@
       return;
     }
     const isNextTask = startPlanSession.kind === "next";
-    const resuming = renderStartPlanTask(task, isNextTask, startPlanSession.date);
+    const resuming = renderStartPlanTask(task, startPlanSession.date);
     const now = Date.now();
     const remaining = Math.max(0, Number(startPlanSession.startAt) - now);
     const seconds = Math.ceil(remaining / 1000);
@@ -876,6 +923,7 @@
     const alarm = kind === "alarm";
     (alarm ? elements.alarmSettingsPage : elements.backupSettingsPage).hidden = false;
     if (alarm) renderAlarmSettings();
+    else renderBackupSnapshot();
     window.scrollTo({ top: 0, behavior: "instant" });
     (alarm ? elements.closeAlarmSettingsButton : elements.closeBackupSettingsButton).focus({ preventScroll: true });
   }
@@ -1248,6 +1296,39 @@
     return new Intl.DateTimeFormat("zh-CN", { weekday: "long" })
       .format(new Date(`${date}T00:00:00`));
   }
+  function clearCompletionUndo() {
+    clearTimeout(undoCompletionTimer);
+    undoCompletionTimer = null;
+    lastCompletedTask = null;
+    elements.completionUndoNotice.hidden = true;
+  }
+
+  function rememberTaskCompletion(task, date) {
+    clearCompletionUndo();
+    lastCompletedTask = { id: String(task.id), date, task, wasActive: task.status === "active", expiresAt: Date.now() + 8000 };
+    undoCompletionTimer = setTimeout(clearCompletionUndo, 8000);
+  }
+
+  function showCompletionUndo() {
+    if (!lastCompletedTask || Date.now() >= lastCompletedTask.expiresAt) return clearCompletionUndo();
+    clearTimeout(toastTimer);
+    elements.toast.classList.remove("show");
+    elements.completionUndoMessage.textContent = `已完成：${lastCompletedTask.task.title || "作业"}`;
+    elements.completionUndoNotice.hidden = false;
+  }
+
+  function undoLastTaskCompletion() {
+    const saved = lastCompletedTask;
+    if (!saved || Date.now() >= saved.expiresAt || saved.date !== elements.recordDate.value) return clearCompletionUndo();
+    const task = taskById(saved.id);
+    if (task !== saved.task || task.status !== "done" || activeTaskForDate()) return clearCompletionUndo();
+    clearCompletionUndo();
+    clearStartPlanSession();
+    closeBreakChoice();
+    performTaskAction("undo", saved.id);
+    if (saved.wasActive && task.status === "paused") performTaskAction("start", saved.id);
+  }
+
   function showToast(message) {
     clearTimeout(toastTimer);
     elements.toast.textContent = message;
@@ -2195,7 +2276,7 @@
       ${taskSubjectBadgeHtml(task.subject)}
       <div class="task-plan-copy">${editing ? `<input class="pending-task-edit-input" data-pending-edit-id="${id}" maxlength="120" value="${escapeAttribute(task.title || "")}" aria-label="修改作业内容">` : `<strong class="pending-task-title">${escapeHtml(task.title || "未命名作业")}</strong>`}
         ${!editable && task.status === "done" ? "<small>已完成</small>" : ""}</div>
-      <div class="task-plan-actions"><div class="task-plan-schedule">${taskEstimateHtml(task)}${dayControl}</div>${editable ? `<div class="pending-task-actions">${editing ? taskButton("保存", "save-edit", task.id) + taskButton("取消", "cancel-edit", task.id) : taskButton("修改", "edit", task.id) + taskButton("删除", "delete", task.id, "danger-task-action")}</div>` : ""}</div>
+      <div class="task-plan-actions"><div class="task-plan-schedule">${editable ? entryTaskEstimateHtml(task) : taskEstimateHtml(task)}${dayControl}</div>${editable ? `<div class="pending-task-actions">${editing ? taskButton("保存", "save-edit", task.id) + taskButton("取消", "cancel-edit", task.id) : taskButton("修改", "edit", task.id) + taskButton("删除", "delete", task.id, "danger-task-action")}</div>` : ""}</div>
     </div>`;
   }
 
@@ -2207,6 +2288,7 @@
   }
 
   function renderTasks() {
+    updateSupplementButtons();
     const date = elements.recordDate.value;
     const holiday = HolidayPlans.find(state, date);
     holidayUI?.renderHome();
@@ -2369,7 +2451,7 @@
       const completionHtml = pendingRequired.length
         ? `<div class="day-tasks-pending" role="status"><strong>${questTasks.length ? "作业已完成" : "今天没有安排作业"}，习惯打卡还剩 ${pendingRequired.length} 项</strong><small>${pendingRequired.join("、")}</small></div>`
         : '<div class="quest-victory" role="status"><span aria-hidden="true">🎉</span><strong>今天的任务都完成啦！</strong><small>作业和习惯打卡，全部完成。</small></div>';
-      elements.taskList.innerHTML = `${overviewHtml}${completionHtml}${completedHtml}`;
+      elements.taskList.innerHTML = `${overviewHtml}${completionHtml}${dailyTaskReviewHtml(questTasks)}${completedHtml}`;
       return;
     }
 
@@ -2382,6 +2464,15 @@
     const doneHtml = questDone.length ? `<button class="quest-toggle completed" type="button" data-list-toggle="completed">✅ 已闯过 ${questDone.length} 关 <span>${completedTasksExpanded ? "⌃" : "⌄"}</span></button>
       ${completedTasksExpanded ? `<div class="quest-collapsed-list">${questDone.map((task) => taskCard(task, { compact: true })).join("")}</div>` : ""}` : "";
     elements.taskList.innerHTML = `${overviewHtml}${currentHtml}${upcomingHtml}${laterHtml}${doneHtml}`;
+  }
+
+  function dailyTaskReviewHtml(tasks) {
+    if (!tasks.length || tasks.some((task) => task.status !== "done")) return "";
+    const estimated = tasks.reduce((sum, task) => sum + estimatedMinutes(task), 0);
+    const recorded = tasks.every((task) => task.elapsedMs != null && Number.isFinite(Number(task.elapsedMs)) && Number(task.elapsedMs) >= 0);
+    const elapsed = tasks.reduce((sum, task) => sum + Math.max(0, taskElapsedMs(task, false)), 0);
+    const actual = recorded ? `${elapsed > 0 ? Math.max(1, Math.round(elapsed / 60000)) : 0} 分钟` : "未记录";
+    return `<div class="daily-task-review" role="group" aria-label="今日作业复盘"><strong>今天的作业小复盘</strong><div><span>预计 <b>${estimated} 分钟</b></span><span>实际 <b>${actual}</b></span></div><small>记住这次用时，下次计划更有数。</small></div>`;
   }
 
   function renderCurrentRecord() {
@@ -2543,6 +2634,8 @@
     saveAndRender("时间已调整");
   }
   function setRecordDate(date) {
+    closeSupplementDialog(false);
+    clearCompletionUndo();
     closeTaskOrderModal();
     closeTaskEntryPage();
     closeTaskEditor();
@@ -2551,6 +2644,96 @@
     completedTasksExpanded = false;
     elements.recordDate.value = date;
     render();
+  }
+
+  let supplementContext = null;
+
+  function canSupplementTasks() {
+    const date = elements.recordDate.value, key = weekendKeyFor(date);
+    return date === todayIso() && taskListConfirmed() && taskOrderSaved()
+      && (!key || Boolean(weekendForDate(date)?.planSaved));
+  }
+
+  function updateSupplementButtons() {
+    const enabled = canSupplementTasks();
+    [elements.supplementTaskButton, elements.focusSupplementButton,
+      elements.startPlanSupplementButton, elements.breakSupplementButton].forEach(button => { button.hidden = !enabled; });
+  }
+
+  function openSupplementDialog() {
+    if (!canSupplementTasks() || !elements.supplementModal.hidden) return;
+    supplementContext = { date: elements.recordDate.value, owner: taskOwnerForDate(), trigger: document.activeElement,
+      overflow: document.body.style.overflow,
+      backgrounds: [elements.mainPage, elements.focusModal, elements.startPlanModal, elements.breakChoiceModal, elements.breakTimerModal]
+        .map(element => ({ element, inert: element.inert })) };
+    supplementContext.backgrounds.forEach(({ element }) => { element.inert = true; });
+    elements.supplementSubject.value = selectedTaskSubject;
+    elements.supplementEstimate.innerHTML = ESTIMATE_OPTIONS.map(minutes => `<option value="${minutes}">${minutes} 分钟</option>`).join("");
+    elements.supplementEstimate.value = "15";
+    elements.supplementInput.value = "";
+    elements.supplementInput.removeAttribute("aria-invalid");
+    elements.supplementError.hidden = true;
+    elements.supplementModal.hidden = false;
+    document.body.style.overflow = "hidden";
+    elements.supplementInput.focus();
+  }
+
+  function closeSupplementDialog(restoreFocus = true) {
+    if (elements.supplementModal.hidden) return;
+    const context = supplementContext;
+    supplementContext = null;
+    elements.supplementModal.hidden = true;
+    if (!context) return;
+    context.backgrounds.forEach(({ element, inert }) => { element.inert = inert; });
+    document.body.style.overflow = context.overflow;
+    if (restoreFocus) context.trigger?.focus();
+  }
+
+  function saveSupplementTask() {
+    if (!supplementContext || !canSupplementTasks() || supplementContext.date !== elements.recordDate.value
+      || supplementContext.owner !== taskOwnerForDate()) {
+      closeSupplementDialog();
+      return showToast("清单已变化，请重新打开今天的补加作业");
+    }
+    const title = elements.supplementInput.value.trim();
+    if (!title) {
+      elements.supplementError.textContent = "请先输入作业内容";
+      elements.supplementError.hidden = false;
+      elements.supplementInput.setAttribute("aria-invalid", "true");
+      elements.supplementInput.focus();
+      return;
+    }
+    const date = elements.recordDate.value, key = weekendKeyFor(date), owner = taskOwnerForDate();
+    const tasks = tasksForDate();
+    const stamp = Math.max(Date.now(), ...tasks.map(task => Number(task.addedAt) + 1 || 0));
+    const holiday = HolidayPlans.find(state, date);
+    const task = { id: `${stamp}-supplement`, addedAt: stamp, addedSequence: 0,
+      subject: TASK_SUBJECTS.includes(elements.supplementSubject.value) ? elements.supplementSubject.value : "语文",
+      title, estimatedMinutes: estimatedMinutes({ estimatedMinutes: Number(elements.supplementEstimate.value) }),
+      status: "pending", elapsedMs: 0, supplemental: true,
+      ...(key ? { plannedDay: date === key ? "friday" : date === addDays(key, 1) ? "saturday" : "sunday" } : {}),
+      ...(holiday ? { holidayId: holiday.id, holidaySeriesId: "", holidayOriginalDate: date } : {}) };
+    const updated = { ...owner, tasks: [...tasks, task], orderSaved: true };
+    delete updated.tasksFinishedAt;
+    if (key) {
+      delete updated.allDoneDate; delete updated.allDoneTime; delete updated.penaltyConfirmed;
+    } else if (!updated.holidayDaily) {
+      delete updated.finishTime; delete updated.ruleId;
+    }
+    const nextState = key ? { ...state, weekends: { ...state.weekends, [key]: updated } }
+      : { ...state, records: { ...state.records, [date]: updated } };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState)); }
+    catch (_) { elements.supplementError.textContent = "保存失败，请检查本机存储空间后重试"; elements.supplementError.hidden = false; return; }
+    state = nextState;
+    clearCompletionUndo();
+    closeSupplementDialog();
+    render();
+    updateFocusModal();
+    if (!elements.startPlanModal.hidden) {
+      const scheduled = taskById(elements.startPlanModal.dataset.taskId);
+      if (scheduled) renderStartPlanTask(scheduled);
+    }
+    showToast("新作业已加入今天清单末尾");
   }
 
   function addTasksFromDraft() {
@@ -2577,7 +2760,7 @@
       title: task.title,
       status: "pending",
       elapsedMs: 0,
-      estimatedMinutes: estimatedMinutes({ estimatedMinutes: Number(elements.taskEntryEstimate.value) }),
+      estimatedMinutes: 15,
       ...(key ? { plannedDay: "saturday" } : {})
     }));
     owner.tasks = pendingTaskOrder(existing.concat(addedTasks));
@@ -2598,7 +2781,6 @@
     delete owner.orderSaved;
     delete owner.orderSavedAt;
     elements.taskDraft.value = "";
-    elements.taskEntryEstimate.value = "15";
     resizeTaskDraft();
     editingPendingTaskId = null;
     persist();
@@ -2746,6 +2928,30 @@
     return `<span class="task-estimate" aria-label="${escapeAttribute(task.title || "作业")}预计用时 ${estimatedMinutes(task)} 分钟">预计 ${estimatedMinutes(task)} 分钟</span>`;
   }
 
+  function entryTaskEstimateHtml(task) {
+    return `<select class="task-plan-estimate" data-entry-estimate="${escapeAttribute(String(task.id))}" aria-label="${escapeAttribute(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map(minutes => `<option value="${minutes}"${minutes === estimatedMinutes(task) ? " selected" : ""}>预计 ${minutes} 分钟</option>`).join("")}</select>`;
+  }
+
+  function setTaskEntryEstimate(id, value) {
+    if (elements.taskEntryPage.hidden || !elements.taskOrderModal.hidden || !canEditTaskPlan()) return;
+    const task = taskById(id), minutes = Number(value);
+    if (!task || (task.status || "pending") !== "pending" || !ESTIMATE_OPTIONS.includes(minutes)) return;
+    task.estimatedMinutes = minutes;
+    persist();
+  }
+
+  function taskOrderEstimateHtml(task) {
+    return `<label class="order-estimate-control"><span>预计用时</span><select data-order-estimate="${escapeAttribute(String(task.id))}" aria-label="${escapeAttribute(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map(minutes => `<option value="${minutes}"${minutes === estimatedMinutes(task) ? " selected" : ""}>${minutes} 分钟</option>`).join("")}</select></label>`;
+  }
+
+  function setTaskOrderEstimate(id, value) {
+    if (elements.taskOrderModal.hidden || !canChooseTaskOrder()) return;
+    const task = taskById(id), minutes = Number(value);
+    if (!task || (task.status || "pending") !== "pending" || !ESTIMATE_OPTIONS.includes(minutes)) return;
+    task.estimatedMinutes = minutes;
+    persist();
+  }
+
   function renderOrderSelection(resetScroll = false) {
     if (elements.taskOrderModal.hidden) return;
     if (!canChooseTaskOrder()) return closeTaskOrderModal();
@@ -2768,7 +2974,7 @@
         <span class="order-number" aria-hidden="true">${number || ""}</span>
         <span class="task-copy"><strong class="task-title">${escapeHtml(task.title || "未命名作业")}</strong></span>
       ${preview ? "</div>" : "</button>"}
-      ${taskEstimateHtml(task)}
+      ${taskOrderEstimateHtml(task)}
     </article>`;
     const scrollTop = resetScroll || preview !== orderPreviewShowing ? 0 : elements.taskOrderChoices.scrollTop;
     const focusedId = document.activeElement?.dataset?.orderPick;
@@ -2955,6 +3161,7 @@
       }
       const active = activeTaskForDate();
       if (active && active !== task) return showToast(`请先暂停或完成“${active.title}”`);
+      clearCompletionUndo();
       if (breakSession) cancelBreak(false);
       if (startPlanSession || action === "skip-paused") clearStartPlanSession();
       if (skipping) stopTaskClock(task, "paused");
@@ -2971,6 +3178,8 @@
       offerBreakMode = "pause";
       offerBreakSourceTaskId = String(task.id);
     } else if (action === "complete") {
+      if (task.status === "done") return;
+      rememberTaskCompletion(task, date);
       stopTaskClock(task, "done");
       closeFocusModal();
       task.completedAt = currentTime();
@@ -3015,6 +3224,7 @@
       const nextTask = nextTaskForToday(date);
       if (nextTask) nextStartPlanTaskId = String(nextTask.id);
     } else if (action === "undo") {
+      clearCompletionUndo();
       task.status = "paused";
       delete task.completedAt;
       delete task.completedDate;
@@ -3035,6 +3245,7 @@
     if (focusAfterRenderTaskId) openFocusModal(focusAfterRenderTaskId);
     else if (nextStartPlanTaskId) openStartPlanChoice(nextStartPlanTaskId, date, "next");
     else if (offerBreakTaskId) openBreakChoice(offerBreakTaskId, offerBreakMode, offerBreakSourceTaskId);
+    if (action === "complete") showCompletionUndo();
   }
 
 
@@ -3142,34 +3353,113 @@
 
   async function importBackup(file) {
     if (!file) return;
+    let nextState;
     try {
       const parsed = JSON.parse(await file.text());
       const source = parsed?.format === "homework-ledger-backup" ? parsed.state : parsed;
-      if (!source || typeof source !== "object" || !source.records || !source.weekends) throw new Error("invalid");
-      if (!window.confirm("恢复备份会替换当前全部记录，确定继续吗？")) return;
-      state = {
-        records: source.records && typeof source.records === "object" ? source.records : {},
-        weekends: source.weekends && typeof source.weekends === "object" ? source.weekends : {},
-        holidays: source.holidays && typeof source.holidays === "object" ? source.holidays : {},
-        dictationCustom: source.dictationCustom && typeof source.dictationCustom === "object" ? source.dictationCustom : {},
-        dictationLesson: typeof source.dictationLesson === "string" ? source.dictationLesson : DICTATION_LESSONS[0].id,
-        taskKeywords: normalizeTaskKeywords(source.taskKeywords)
-      };
-      selectedDictationLesson = state.dictationLesson;
-      persist();
-      elements.recordDate.value = todayIso();
-      closeFocusModal();
-      render();
-      renderTaskKeywordSuggestions();
-      renderTaskKeywordSettings();
-      showToast("备份已恢复");
+      nextState = normalizeBackupState(source, Date.parse(parsed.exportedAt));
     } catch (_) {
       showToast("备份文件无法识别，请选择本应用导出的文件");
+      return;
     } finally {
       elements.importDataInput.value = "";
     }
+    if (!window.confirm("恢复备份会替换当前全部记录，导入前会自动保存一份快照，确定继续吗？")) return;
+    try {
+      const snapshot = { savedAt: new Date().toISOString(), state };
+      localStorage.setItem(PRE_IMPORT_SNAPSHOT_KEY, JSON.stringify(snapshot));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+    } catch (_) {
+      renderBackupSnapshot();
+      showToast("保存失败，未替换当前记录。请检查本机存储空间后重试");
+      return;
+    }
+    applyRestoredState(nextState);
+    showToast("备份已恢复，导入前的数据可在本页找回");
   }
 
+  function normalizeBackupState(source, capturedAt) {
+    const isObject = value => Boolean(value && typeof value === "object" && !Array.isArray(value));
+    if (!isObject(source) || !isObject(source.records) || !isObject(source.weekends)) throw new Error("invalid");
+    for (const owner of [...Object.values(source.records), ...Object.values(source.weekends)]) {
+      if (!isObject(owner) || (owner.tasks != null && (!Array.isArray(owner.tasks) || !owner.tasks.every(isObject)))) throw new Error("invalid");
+    }
+    const restored = JSON.parse(JSON.stringify({
+      records: source.records, weekends: source.weekends,
+      holidays: isObject(source.holidays) ? source.holidays : {},
+      dictationCustom: isObject(source.dictationCustom) ? source.dictationCustom : {},
+      dictationLesson: DICTATION_LESSONS.some(lesson => lesson.id === source.dictationLesson)
+        ? source.dictationLesson : DICTATION_LESSONS[0].id,
+      taskKeywords: normalizeTaskKeywords(source.taskKeywords)
+    }));
+    // Restored clocks resume only when the child chooses to continue.
+    function pauseSavedClocks(value) {
+      if (!value || typeof value !== "object") return;
+      if (value.id != null && value.status === "active") {
+        const endAt = Math.min(Date.now(), capturedAt);
+        const activeMs = Number(value.activeSince) > 0 && Number.isFinite(endAt)
+          ? Math.max(0, endAt - Number(value.activeSince)) : 0;
+        value.elapsedMs = Math.max(0, Number(value.elapsedMs) || 0) + activeMs;
+        value.status = "paused";
+        delete value.activeSince;
+      }
+      Object.values(value).forEach(pauseSavedClocks);
+    }
+    pauseSavedClocks(restored);
+    return restored;
+  }
+
+  function readBackupSnapshot() {
+    try {
+      const snapshot = JSON.parse(localStorage.getItem(PRE_IMPORT_SNAPSHOT_KEY));
+      if (!snapshot || !Number.isFinite(Date.parse(snapshot.savedAt))) return null;
+      normalizeBackupState(snapshot.state, Date.parse(snapshot.savedAt));
+      return snapshot;
+    } catch (_) { return null; }
+  }
+
+  function renderBackupSnapshot() {
+    const snapshot = readBackupSnapshot();
+    elements.backupSnapshotStatus.textContent = snapshot
+      ? `保存于 ${new Date(snapshot.savedAt).toLocaleString("zh-CN", { hour12: false })}。可恢复到这次导入前。`
+      : "每次导入前自动保存，只保留最近一份。";
+    elements.restoreSnapshotButton.disabled = !snapshot;
+  }
+
+  function restoreBackupSnapshot() {
+    const snapshot = readBackupSnapshot();
+    if (!snapshot) { renderBackupSnapshot(); showToast("还没有可恢复的导入前快照"); return; }
+    if (!window.confirm("恢复到上次导入前会替换当前记录，确定继续吗？")) return;
+    let restored;
+    try {
+      restored = normalizeBackupState(snapshot.state, Date.parse(snapshot.savedAt));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
+    } catch (_) { showToast("恢复失败，当前记录未替换，请检查本机存储空间"); return; }
+    applyRestoredState(restored);
+    showToast("已恢复到上次导入前");
+  }
+
+  function applyRestoredState(restored) {
+    closeSupplementDialog(false);
+    clearCompletionUndo();
+    clearStartPlanSession();
+    breakSession = null;
+    saveBreakSession();
+    closeBreakChoice();
+    closeBreakTimer();
+    closeTaskEntryPage();
+    closeTaskEditor();
+    closeTaskOrderModal();
+    closeFocusModal();
+    state = restored;
+    lastDeletedTask = null;
+    selectedDictationLesson = state.dictationLesson;
+    elements.recordDate.value = todayIso();
+    render();
+    renderTaskKeywordSuggestions();
+    renderTaskKeywordSettings();
+    renderBackupSnapshot();
+  }
 
   function selectWeekendTaskDay(id, plannedDay) {
     if (!weekendKeyFor(elements.recordDate.value) || !canEditTaskPlan() || !elements.taskOrderModal.hidden) return;
@@ -3247,6 +3537,7 @@
   elements.exportDataButton.addEventListener("click", exportBackup);
   elements.importDataButton.addEventListener("click", () => elements.importDataInput.click());
   elements.importDataInput.addEventListener("change", () => importBackup(elements.importDataInput.files?.[0]));
+  elements.restoreSnapshotButton.addEventListener("click", restoreBackupSnapshot);
   elements.recordDate.addEventListener("change", () => setRecordDate(elements.recordDate.value));
   elements.todayButton.addEventListener("click", () => setRecordDate(todayIso()));
   elements.historicalDateNotice.addEventListener("click", () => setRecordDate(todayIso()));
@@ -3307,11 +3598,23 @@
     if (event.target === elements.weekendPlanModal) closeWeekendPlanModal();
   });
   window.addEventListener("keydown", (event) => {
+    if (window.HanziLookup?.isOpen()) return;
+    if (!elements.supplementModal.hidden) {
+      if (event.key === "Escape") { event.preventDefault(); closeSupplementDialog(); }
+      if (event.key === "Tab") {
+        const controls = [elements.supplementCloseButton, elements.supplementSubject, elements.supplementEstimate,
+          elements.supplementInput, elements.supplementCancelButton, elements.supplementSaveButton];
+        const index = controls.indexOf(document.activeElement);
+        event.preventDefault();
+        controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length].focus();
+      }
+      return;
+    }
     if (!elements.focusModal.hidden) {
       if (event.key === "Escape") event.preventDefault();
       if (event.key === "Tab") {
-        const buttons = [elements.focusPauseButton, elements.focusCompleteButton, elements.focusSkipButton]
-          .filter((button) => !button.disabled);
+        const buttons = [elements.focusPauseButton, elements.focusCompleteButton, elements.focusSkipButton, elements.focusLookupButton, elements.focusSupplementButton]
+          .filter((button) => !button.disabled && (button !== elements.focusSupplementButton || !button.hidden));
         const current = buttons.indexOf(document.activeElement);
         const next = current < 0 ? (event.shiftKey ? buttons.length - 1 : 0)
           : (current + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
@@ -3398,6 +3701,8 @@
     if (button) { taskEntryDay = button.dataset.entryDay; renderTaskEntryPlan(); }
   });
   elements.taskEntryPendingList.addEventListener("change", event => {
+    const estimate = event.target.closest("select[data-entry-estimate]");
+    if (estimate) return setTaskEntryEstimate(estimate.dataset.entryEstimate, estimate.value);
     const select = event.target.closest("select[data-entry-plan-day]");
     if (select) selectWeekendTaskDay(select.dataset.entryPlanDay, select.value);
   });
@@ -3433,6 +3738,10 @@
   elements.taskOrderChoices.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-order-pick]");
     if (button) chooseTaskOrder(button.dataset.orderPick);
+  });
+  elements.taskOrderChoices.addEventListener("change", (event) => {
+    const select = event.target.closest("select[data-order-estimate]");
+    if (select) setTaskOrderEstimate(select.dataset.orderEstimate, select.value);
   });
   elements.taskOrderDays.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-order-day]");
@@ -3473,6 +3782,15 @@
   elements.focusCompleteButton.addEventListener("click", () => {
     if (focusModalTaskId) performTaskAction("complete", focusModalTaskId);
   });
+  elements.undoCompletionButton.addEventListener("click", undoLastTaskCompletion);
+  [elements.supplementTaskButton, elements.focusSupplementButton, elements.startPlanSupplementButton,
+    elements.breakSupplementButton].forEach(button => button.addEventListener("click", openSupplementDialog));
+  [elements.supplementCloseButton, elements.supplementCancelButton].forEach(button => button.addEventListener("click", () => closeSupplementDialog()));
+  elements.supplementSaveButton.addEventListener("click", saveSupplementTask);
+  elements.supplementInput.addEventListener("input", () => {
+    elements.supplementError.hidden = true;
+    elements.supplementInput.removeAttribute("aria-invalid");
+  });
   elements.startPlanCloseButton.addEventListener("click", closeStartPlanModal);
   elements.startPlanModal.addEventListener("click", (event) => {
     if (event.target === elements.startPlanModal && !startPlanSession) closeStartPlanModal();
@@ -3482,6 +3800,7 @@
   const onStartPlanTimeEdited = () => {
     elements.startPlanModal.dataset.defaultStartTime = "";
     clearStartPlanQuickChoice();
+    updateStartPlanButton();
   };
   elements.startPlanTime.addEventListener("input", onStartPlanTimeEdited);
   elements.startPlanTime.addEventListener("change", onStartPlanTimeEdited);
@@ -3582,8 +3901,6 @@
   });
 
   elements.recordDate.value = todayIso();
-  elements.taskEntryEstimate.innerHTML = ESTIMATE_OPTIONS
-    .map((minutes) => `<option value="${minutes}"${minutes === 15 ? " selected" : ""}>${minutes} 分钟</option>`).join("");
   elements.dictationLessonSelect.innerHTML = DICTATION_LESSONS
     .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);
@@ -3598,6 +3915,8 @@
   else restoreActiveFocus();
   setInterval(() => {
     updateFocusModal();
+    updateStartPlanButton();
+    updateSupplementButtons();
     const active = activeTaskForDate();
     if (active) elements.activeTaskTime.textContent = `已专注 ${taskDurationLabel(active)}`;
   }, 1000);

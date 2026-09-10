@@ -2,7 +2,7 @@
   "use strict";
   root.mountHolidayUI = function (host) {
     const H = root.HolidayPlans, $ = s => document.querySelector(s), state = host.getState;
-    const e = Object.fromEntries(["holidaySettingsPage", "holidaySettingsList", "holidayConfigForm", "holidayConfigTitle", "holidayName", "holidayStart", "holidayEnd", "holidayPlanDate", "holidayConfigCancel", "holidayPlanPage", "holidayPlanTitle", "holidayViewDate", "holidayDaySummary", "holidaySort", "holidaySortReset", "holidayShortDays", "holidayTaskList", "holidayTaskForm", "holidayRepeat", "holidayRepeatDates", "holidayRepeatDateList", "holidaySubject", "holidayTaskTitle", "holidayTaskMinutes", "holidayPlanEntry", "holidayOverdue", "holidayOverdueSummary", "holidayOverdueList", "holidayLedgerHint", "holidayLedgerText", "holidayTaskEdit", "holidayEditContent", "holidayEditMinutes", "holidayEditSeries", "holidayEditSeriesLabel"].map(id => [id, $("#" + id)]));
+    const e = Object.fromEntries(["holidaySettingsPage", "holidaySettingsList", "holidayConfigForm", "holidayConfigTitle", "holidayName", "holidayStart", "holidayEnd", "holidayPlanDate", "holidayConfigCancel", "holidayPlanPage", "holidayPlanTitle", "holidayViewDate", "holidayDaySummary", "holidaySort", "holidaySortReset", "holidayShortDays", "holidayTaskList", "holidayTaskForm", "holidayRepeat", "holidayRepeatDates", "holidayRepeatDateList", "holidaySubject", "holidayTaskTitle", "holidayPlanEntry", "holidayOverdue", "holidayOverdueSummary", "holidayOverdueList", "holidayLedgerHint", "holidayLedgerText", "holidayTaskEdit", "holidayEditContent", "holidayEditMinutes", "holidayEditSeries", "holidayEditSeriesLabel"].map(id => [id, $("#" + id)]));
     let configId = null, planId = null, fromSettings = false, sortIds = null, editRef = null;
     const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
     const attempt = action => { try { action(); } catch (error) { host.toast(error.message); } };
@@ -10,8 +10,7 @@
     const currentHoliday = () => state().holidays?.[planId];
     const ready = () => Boolean(state().records[currentHoliday()?.planDate]?.ledgerConfirmed);
     const minutesOptions = host.estimates.map(n => `<option value="${n}">${n} 分钟</option>`).join("");
-    e.holidayTaskMinutes.innerHTML = minutesOptions; e.holidayEditMinutes.innerHTML = minutesOptions;
-    e.holidayTaskMinutes.value = "15";
+    e.holidayEditMinutes.innerHTML = minutesOptions;
     const keywordSuggestions = $("#holidayKeywordSuggestions");
     const subjectPicker = $("#holidaySubjectPicker"), subjectOptions = $("#holidaySubjectOptions"), subjectLabel = $("#holidaySubjectLabel");
     function subjectMenu(open) { subjectOptions.hidden = !open; e.holidaySubject.setAttribute("aria-expanded", String(open)); }
@@ -50,13 +49,19 @@
       const t = { ...ref.task, estimatedMinutes: Number(ref.task.estimatedMinutes) || 15 }, canEdit = H.pending(t), movable = !["done", "active"].includes(t.status);
       const selected = sortIds?.indexOf(t.id) ?? -1;
       const info = [overdue ? ref.date : "", t.holidaySeriesId ? "每天" : "", t.status === "done" ? "已完成" : t.status === "active" ? "进行中" : t.status === "paused" ? "已暂停" : ""].filter(Boolean).join(" · ");
-      return `<article class="holiday-task-row" data-subject="${esc(t.subject)}" data-holiday-task="${esc(t.id)}" data-holiday-date="${ref.date}"><span class="holiday-subject">${esc(t.subject)}</span><div class="holiday-task-copy"><strong>${esc(t.title)}</strong><small>${esc(info)}</small></div><span class="holiday-task-estimate">预计 ${t.estimatedMinutes || 15} 分钟</span><div class="holiday-task-actions">${sortIds ? canEdit ? `<button class="secondary-button" data-holiday-action="pick"${selected >= 0 ? " disabled" : ""}>${selected >= 0 ? `第 ${selected + 1} 项` : "选这项"}</button>` : "" : `${canEdit && !overdue ? '<button class="text-button" data-holiday-action="edit">修改</button><button class="text-button danger" data-holiday-action="delete">删除当天</button>' : ""}${movable ? `<input type="date" aria-label="${esc(t.title)}改期日期" value="${overdue ? host.date() : ref.date}"><button class="text-button bordered" data-holiday-action="move">${overdue ? "安排补做" : "改期"}</button>` : ""}`}</div></article>`;
+      const estimate = sortIds && canEdit && !overdue
+        ? `<label class="order-estimate-control holiday-order-estimate"><span>预计用时</span><select data-holiday-estimate="${esc(t.id)}" aria-label="${esc(t.title)}预计用时">${host.estimates.map(n => `<option value="${n}"${n === t.estimatedMinutes ? " selected" : ""}>${n} 分钟</option>`).join("")}</select></label>`
+        : `<span class="holiday-task-estimate">预计 ${t.estimatedMinutes || 15} 分钟</span>`;
+      return `<article class="holiday-task-row" data-subject="${esc(t.subject)}" data-holiday-task="${esc(t.id)}" data-holiday-date="${ref.date}"><span class="holiday-subject">${esc(t.subject)}</span><div class="holiday-task-copy"><strong>${esc(t.title)}</strong><small>${esc(info)}</small></div>${estimate}<div class="holiday-task-actions">${sortIds ? canEdit ? `<button class="secondary-button" data-holiday-action="pick"${selected >= 0 ? " disabled" : ""}>${selected >= 0 ? `第 ${selected + 1} 项` : "选这项"}</button>` : "" : `${canEdit && !overdue ? '<button class="text-button" data-holiday-action="edit">修改</button><button class="text-button danger" data-holiday-action="delete">删除当天</button>' : ""}${movable ? `<input type="date" aria-label="${esc(t.title)}改期日期" value="${overdue ? host.date() : ref.date}"><button class="text-button bordered" data-holiday-action="move">${overdue ? "安排补做" : "改期"}</button>` : ""}`}</div></article>`;
+    }
+    function renderDaySummary(list) {
+      e.holidayDaySummary.textContent = `${list.length} 项 · 预计 ${list.reduce((n, t) => n + Number(t.estimatedMinutes || 15), 0)} 分钟`;
     }
     function renderPlan() {
       const h = currentHoliday(); if (!h) return;
       const date = e.holidayViewDate.value, list = H.tasks(state(), date);
       e.holidayPlanTitle.textContent = h.name;
-      e.holidayDaySummary.textContent = `${list.length} 项 · 预计 ${list.reduce((n, t) => n + Number(t.estimatedMinutes || 15), 0)} 分钟`;
+      renderDaySummary(list);
       e.holidaySort.textContent = sortIds ? `确定顺序 ${sortIds.length}/${list.filter(H.pending).length}` : "调整当天顺序";
       e.holidaySort.disabled = !list.some(H.pending); e.holidaySortReset.hidden = !sortIds;
       const days = H.days(h.planDate, h.end); e.holidayShortDays.hidden = days.length > 8;
@@ -155,8 +160,8 @@
       if (!ready()) throw Error("请先核对假期作业");
       const repeat = e.holidayRepeat.value === "daily";
       const dates = repeat ? [...e.holidayRepeatDateList.querySelectorAll("input:checked")].map(i => i.dataset.holidayRepeatDate) : [e.holidayViewDate.value];
-      H.add(state(), currentHoliday(), { subject: e.holidaySubject.value, title: e.holidayTaskTitle.value, minutes: Number(e.holidayTaskMinutes.value), repeat }, dates);
-      e.holidayTaskTitle.value = ""; resizeDraft(); e.holidayTaskMinutes.value = "15"; save(); renderPlan(); e.holidayTaskList.scrollTop = e.holidayTaskList.scrollHeight; e.holidayTaskTitle.focus({ preventScroll: true }); host.toast(`已安排 ${dates.length} 天`);
+      H.add(state(), currentHoliday(), { subject: e.holidaySubject.value, title: e.holidayTaskTitle.value, minutes: 15, repeat }, dates);
+      e.holidayTaskTitle.value = ""; resizeDraft(); save(); renderPlan(); e.holidayTaskList.scrollTop = e.holidayTaskList.scrollHeight; e.holidayTaskTitle.focus({ preventScroll: true }); host.toast(`已安排 ${dates.length} 天`);
     }); });
     e.holidaySort.addEventListener("click", () => attempt(() => { if (sortIds) { H.order(state(), e.holidayViewDate.value, sortIds); sortIds = null; save(); } else sortIds = []; renderPlan(); }));
     e.holidaySortReset.addEventListener("click", () => { sortIds = []; renderPlan(); });
@@ -170,6 +175,16 @@
     }));
     $("#holidayCheckLedger").addEventListener("click", () => { const date = currentHoliday().planDate; e.holidayPlanPage.hidden = true; host.back(false); host.goDate(date); });
     e.holidayTaskList.addEventListener("click", taskAction); e.holidayOverdueList.addEventListener("click", taskAction);
+    e.holidayTaskList.addEventListener("change", event => attempt(() => {
+      const select = event.target.closest("select[data-holiday-estimate]");
+      if (!sortIds || !select || !host.estimates.includes(Number(select.value))) return;
+      const row = select.closest("[data-holiday-task]"), date = row.dataset.holidayDate;
+      if (date !== e.holidayViewDate.value) return;
+      const task = H.tasks(state(), date).find(t => t.id === select.dataset.holidayEstimate);
+      if (!task || !H.pending(task)) return;
+      H.edit(state(), { date, task }, task.title, Number(select.value), false, host.today());
+      save(); renderDaySummary(H.tasks(state(), date));
+    }));
     $("#holidayEditCancel").addEventListener("click", closeEdit);
     $("#holidayTaskEditForm").addEventListener("submit", event => { event.preventDefault(); attempt(() => { if (!editRef) return; H.edit(state(), editRef, e.holidayEditContent.value, Number(e.holidayEditMinutes.value), !e.holidayEditSeriesLabel.hidden && e.holidayEditSeries.checked, host.today()); closeEdit(); save(); renderPlan(); }); });
     return { renderHome, back, openPlan, resize, hide() { subjectMenu(false); if (!e.holidayPlanPage.hidden) document.body.classList.remove("task-entry-page-open"); e.holidaySettingsPage.hidden = true; e.holidayPlanPage.hidden = true; closeEdit(); }, isOpen: () => !e.holidayPlanPage.hidden || !e.holidaySettingsPage.hidden };
