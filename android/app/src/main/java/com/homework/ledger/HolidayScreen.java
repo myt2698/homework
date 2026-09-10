@@ -217,9 +217,9 @@ final class HolidayScreen {
             dates.add(date);labels.add((date.equals(host.today())?"今天":ordinal)+" · "+dayDetail(date,ordinal));
         }
         if(dates.size()==1)labels.set(0,"假期已结束");
-        LinearLayout controls=row();controls.setPadding(0,dp(6),0,0);Spinner target=spinner(labels.toArray(new String[0]));
+        LinearLayout controls=row();controls.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);controls.setPadding(0,dp(6),0,0);Spinner target=spinner(labels.toArray(new String[0]));
         int initialPosition=Math.max(0,dates.indexOf(ref.date));
-        target.setContentDescription(ref.task.optString("title")+"改到第几天");target.setEnabled(dates.size()>1);target.setMinimumHeight(dp(44));target.setSelection(initialPosition);controls.addView(target,weight());
+        target.setContentDescription(ref.task.optString("title")+"改到第几天");target.setEnabled(dates.size()>1);target.setMinimumHeight(dp(44));target.setSelection(initialPosition);controls.addView(target,new LinearLayout.LayoutParams(-2,-2));
         target.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(android.widget.AdapterView<?> parent){}
             public void onItemSelected(android.widget.AdapterView<?> parent,View v,int position,long id){
