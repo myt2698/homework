@@ -309,6 +309,7 @@ public class MainActivity extends Activity {
     private TextView taskEntryAddLabel;
     private Button taskEntryUndoDeleteButton;
     private EditText taskDraftInput;
+    private android.widget.Spinner taskEntryEstimate;
     private TextView taskDraftErrorView;
     private LinearLayout taskPanel;
     private LinearLayout taskPanelHeading;
@@ -329,7 +330,7 @@ public class MainActivity extends Activity {
     private LinearLayout taskEntryDaysPanel;
     private Button taskEntryOrderButton;
     private Button orderReturnButton;
-    private String taskEntryDay = "all";
+    private String taskEntryDay = "daily", taskEntryDate;
     private LinearLayout orderDaysPanel;
     private LinearLayout orderChoicesPanel;
     private ScrollView orderChoicesScroll;
@@ -1297,6 +1298,22 @@ public class MainActivity extends Activity {
         LinearLayout taskEntryActions = compactTaskEntry ? horizontal() : taskEntryInputRow;
         taskEntryActions.setGravity(Gravity.BOTTOM | Gravity.END);
         if (!compactTaskEntry) taskEntryActions.addView(spaceHorizontal(6));
+        LinearLayout estimateControl = vertical();
+        estimateControl.setPadding(dp(6), dp(2), dp(4), dp(2));
+        estimateControl.setBackground(rounded(Color.WHITE, 11, LINE, 1));
+        taskEntryEstimate = new android.widget.Spinner(this);
+        String[] entryEstimateLabels = new String[ESTIMATE_OPTIONS.length];
+        for (int i = 0; i < ESTIMATE_OPTIONS.length; i++) entryEstimateLabels[i] = ESTIMATE_OPTIONS[i] + " 分钟";
+        android.widget.ArrayAdapter<String> estimateAdapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_item, entryEstimateLabels);
+        estimateAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        taskEntryEstimate.setAdapter(estimateAdapter);
+        taskEntryEstimate.setSelection(2);
+        taskEntryEstimate.setContentDescription("新增作业预计用时");
+        estimateControl.addView(taskEntryEstimate, new LinearLayout.LayoutParams(-1, -1));
+        estimateControl.setOnClickListener(v -> taskEntryEstimate.performClick());
+        LinearLayout.LayoutParams entryEstimateParams = fixed(dp(112), dp(48));
+        entryEstimateParams.rightMargin = dp(6);
+        taskEntryActions.addView(estimateControl, entryEstimateParams);
         taskEntryActions.addView(taskEntryAddButton, fixed(dp(compactTaskEntry ? 80 : 112), dp(48)));
 
         taskKeywordSuggestionScroll = new android.widget.HorizontalScrollView(this);
@@ -1473,6 +1490,16 @@ public class MainActivity extends Activity {
         return entry;
     }
 
+    private String selectedTaskEntryDay() {
+        if (!currentDate.equals(taskEntryDate)) {
+            String key = weekendKeyFor(currentDate);
+            taskEntryDay = key == null ? "daily" : currentDate.equals(key) ? "friday"
+                    : currentDate.equals(addDays(key, 1)) ? "saturday" : "sunday";
+            taskEntryDate = currentDate;
+        }
+        return taskEntryDay;
+    }
+
     private void showTaskEntryPage() {
         hideSettingsDetailPage();
         JSONObject holiday = HolidayPlans.find(holidayState(), currentDate);
@@ -1480,7 +1507,7 @@ public class MainActivity extends Activity {
         if (taskEntryPanel == null || (!canEditTaskPlan() && weekendKeyFor(currentDate) == null)) return;
         if (taskEntryPageView == null || taskEntryPageView.getVisibility() == View.VISIBLE) return;
         if (canEditTaskPlan()) invalidateTaskPlan();
-        taskEntryDay = "all";
+        selectedTaskEntryDay();
         dismissTaskOrderDialog();
         taskEntryPanel.setVisibility(View.VISIBLE);
         setTaskDraftError(null);
@@ -1558,7 +1585,7 @@ public class MainActivity extends Activity {
         copy.addView(weekendTaskPlannerKicker);
         weekendTaskPlannerTitle = text("给每项作业安排完成日期", 17, INK, true);
         copy.addView(weekendTaskPlannerTitle);
-        weekendTaskPlannerHelp = text("默认安排在周六；挑一部分放到今天完成，其余再分到周末。", 10, MUTED, false);
+        weekendTaskPlannerHelp = text("先选周五、周六或周日，再添加作业；新作业会安排在所选日期。", 10, MUTED, false);
         weekendTaskPlannerHelp.setPadding(0, dp(4), 0, 0);
         copy.addView(weekendTaskPlannerHelp);
         head.addView(copy, weightedWrap(1));
@@ -2046,13 +2073,12 @@ public class MainActivity extends Activity {
             put(task, "addedSequence", index);
             put(task, "status", "pending");
             put(task, "elapsedMs", 0L);
-            put(task, "estimatedMinutes", 15);
-            if (weekendKey != null) put(task, "plannedDay", "saturday");
+            put(task, "estimatedMinutes", ESTIMATE_OPTIONS[taskEntryEstimate.getSelectedItemPosition()]);
+            if (weekendKey != null) put(task, "plannedDay", selectedTaskEntryDay());
             tasks.put(task);
         }
         put(owner, "tasks", sortedPendingTasks(tasks));
         owner.remove("orderDraft");
-        taskEntryDay = "all";
         if (weekendKey != null) {
             put(owner, "confirmed", false);
             owner.remove("confirmedAt");
@@ -3539,15 +3565,23 @@ public class MainActivity extends Activity {
         taskEntryOrderButton.setVisibility(editable && tasks.length() > 0 && !sorting ? View.VISIBLE : View.GONE);
         taskEntryOrderButton.setText(taskOwner(false) != null && taskOwner(false).has("orderDraft") ? "继续调整" : "调整顺序");
         taskEntryDaysPanel.removeAllViews();
-        taskEntryDaysPanel.setVisibility(weekend && !sorting && tasks.length() > 0 ? View.VISIBLE : View.GONE);
-        for (String day : new String[]{"all", "friday", "saturday", "sunday"}) {
-            Button tab = smallButton("all".equals(day) ? "全部" : orderDayLabel(day));
+        selectedTaskEntryDay();
+        taskEntryDaysPanel.setVisibility(weekend && !sorting ? View.VISIBLE : View.GONE);
+        for (String day : new String[]{"friday", "saturday", "sunday"}) {
+            String label = orderDayLabel(day);
+            int count = orderTasksForDay(day).size();
+            Button tab = smallButton(label + " " + count + "项");
+            tab.setContentDescription(label + "，" + count + "项作业");
+            android.text.SpannableString caption = new android.text.SpannableString(label + " " + count + "项");
+            caption.setSpan(new android.text.style.RelativeSizeSpan(.9f), label.length() + 1, caption.length(), 0);
+            tab.setText(caption);
             tab.setTextSize(11);
+            tab.setSingleLine(true); tab.setMinWidth(0); tab.setMinimumWidth(0);
             tab.setPadding(dp(3), 0, dp(3), 0);
             tab.setSelected(day.equals(taskEntryDay));
             tab.setBackground(rounded(day.equals(taskEntryDay) ? GREEN_SOFT : SURFACE, 9, day.equals(taskEntryDay) ? GREEN : LINE, 1));
             tab.setOnClickListener(v -> { taskEntryDay = day; renderTaskEntryPlan(); });
-            taskEntryDaysPanel.addView(tab, weightedFixed(1, dp(38)));
+            taskEntryDaysPanel.addView(tab, weightedFixed(1, dp(44)));
         }
         taskEntryComposerPanel.setVisibility(editable && !sorting ? View.VISIBLE : View.GONE);
         taskEntryUndoDeleteButton.setVisibility(!sorting && editable && lastDeletedTask != null && currentDate.equals(lastDeletedTaskDate) ? View.VISIBLE : View.GONE);
@@ -4348,8 +4382,15 @@ public class MainActivity extends Activity {
 
     private void renderPendingTaskGroups(JSONArray tasks) {
         boolean weekend = weekendKeyFor(currentDate) != null;
+        String selectedDay = selectedTaskEntryDay();
+        if (weekend && orderTasksForDay(selectedDay).isEmpty()) {
+            TextView empty = text(orderDayLabel(selectedDay) + "还没有安排作业", 12, MUTED, false);
+            empty.setGravity(Gravity.CENTER); empty.setPadding(0, dp(24), 0, dp(24));
+            taskEntryPendingList.addView(empty, matchWrap());
+            return;
+        }
         for (String day : taskOrderDays()) {
-            if (!"all".equals(taskEntryDay) && !day.equals(taskEntryDay)) continue;
+            if (weekend && !day.equals(selectedDay)) continue;
             if (weekend) {
                 TextView heading = text(orderDayLabel(day), 12, INK, true);
                 heading.setPadding(0, dp(8), 0, dp(5));
@@ -4369,67 +4410,81 @@ public class MainActivity extends Activity {
         boolean editable = canEditTaskPlan();
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, 0, dp(8), 0);
         row.setMinimumHeight(dp(56));
         row.setClipToOutline(true);
-        row.setBackground(rounded(taskSubjectSoftColor(subject), 10, LINE, 1));
-        row.addView(taskSubjectLabel(subject), fixed(dp(28), LinearLayout.LayoutParams.MATCH_PARENT));
+        row.setBackground(rounded(taskSubjectSoftColor(subject), 13, LINE, 1));
+        row.addView(taskSubjectLabel(subject), fixed(dp(30), LinearLayout.LayoutParams.MATCH_PARENT));
         LinearLayout copy = vertical();
-        copy.setPadding(dp(8), dp(8), dp(6), dp(8));
-        copy.addView(text(task.optString("title", "未命名作业"), 12, INK, true));
+        copy.setPadding(dp(10), dp(10), dp(10), dp(10));
+        LinearLayout title = horizontal();
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        title.addView(text(task.optString("title", "未命名作业"), 15, INK, true), new LinearLayout.LayoutParams(-2, -2, 1));
+        if (editable) {
+            LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(dp(32), dp(32));
+            editParams.leftMargin = dp(2);
+            title.addView(pendingTaskIcon(true, task.optString("title"), () -> showPendingTaskEditDialog(taskIndexById(id))), editParams);
+        }
+        copy.addView(title, new LinearLayout.LayoutParams(-2, -2));
         if (!editable && "done".equals(task.optString("status"))) copy.addView(text("已完成", 10, MUTED, false));
         row.addView(copy, weightedWrap(1));
-        LinearLayout actions = vertical();
-        actions.setGravity(Gravity.END);
-        actions.setPadding(0, dp(8), 0, dp(8));
-        LinearLayout schedule = horizontal();
-        schedule.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-        if (editable) {
-            Button estimate = textButton("预计 " + estimatedMinutes(task) + " 分钟 ▾");
-            estimate.setTextSize(11);
-            estimate.setSingleLine(true);
-            estimate.setMinWidth(0);
-            estimate.setMinimumWidth(0);
-            estimate.setPadding(dp(6), 0, dp(6), 0);
-            estimate.setBackground(rounded(Color.WHITE, 8, LINE, 1));
-            estimate.setContentDescription(task.optString("title", "作业") + "预计用时 " + estimatedMinutes(task) + " 分钟，点击调整");
-            estimate.setOnClickListener(v -> showTaskEstimatePicker(task, estimate, false));
-            schedule.addView(estimate, new LinearLayout.LayoutParams(-2, dp(32)));
-        } else {
-            schedule.addView(taskEstimateView(task), new LinearLayout.LayoutParams(-2, dp(32)));
-        }
+        LinearLayout actions = horizontal();
+        actions.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        actions.setPadding(0, dp(6), 0, 0);
         if (weekendKeyFor(currentDate) != null) {
-            Button day = textButton(plannedDayLabel(task));
-            day.setTextSize(11);
+            String[] days = {"friday", "saturday", "sunday"};
+            android.widget.Spinner day = new android.widget.Spinner(this);
+            android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item, new String[]{"周五", "周六", "周日"});
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            day.setAdapter(adapter);
+            day.setContentDescription(task.optString("title", "作业") + "完成日期");
+            day.setMinimumHeight(dp(44));
+            day.setBackground(rounded(Color.WHITE, 10, LINE, 1));
+            day.setPadding(dp(8), 0, dp(8), 0);
             day.setEnabled(editable);
-            day.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("完成日期")
-                    .setItems(new String[]{"周五", "周六", "周日"}, (dialog, which) -> selectWeekendTaskDay(taskIndexById(id), new String[]{"friday", "saturday", "sunday"}[which]))
-                    .setNegativeButton("取消", null).show());
-            LinearLayout.LayoutParams dayParams = new LinearLayout.LayoutParams(-2, dp(32));
-            dayParams.leftMargin = dp(8);
-            schedule.addView(day, dayParams);
+            for (int i = 0; i < days.length; i++) if (days[i].equals(orderDayForTask(task))) day.setSelection(i);
+            day.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+                public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+                public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long itemId) {
+                    if (!day.isAttachedToWindow() || !editable || !canEditTaskPlan() || days[position].equals(orderDayForTask(task))) return;
+                    selectWeekendTaskDay(taskIndexById(id), days[position]);
+                }
+            });
+            actions.addView(day, new LinearLayout.LayoutParams(-2, dp(44)));
         }
-        actions.addView(schedule);
         if (editable) {
-            LinearLayout editActions = horizontal();
-            addTaskActionButton(editActions, "修改", false, false, () -> showPendingTaskEditDialog(taskIndexById(id)));
-            addTaskActionButton(editActions, "删除", false, true, () -> performTaskAction("delete", taskIndexById(id)));
-            actions.addView(editActions, matchWrap());
+            LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(dp(44), dp(44));
+            deleteParams.leftMargin = dp(6);
+            actions.addView(pendingTaskIcon(false, task.optString("title"), () -> performTaskAction("delete", taskIndexById(id))), deleteParams);
         }
-        row.addView(actions);
+        if (actions.getChildCount() > 0) copy.addView(actions, matchWrap());
         LinearLayout.LayoutParams params = matchWrap();
         params.bottomMargin = dp(7);
         taskEntryPendingList.addView(row, params);
     }
 
+    private android.widget.ImageButton pendingTaskIcon(boolean edit, String title, Runnable action) {
+        android.widget.ImageButton button = new android.widget.ImageButton(this);
+        button.setImageResource(edit ? R.drawable.ic_holiday_edit : R.drawable.ic_holiday_delete);
+        button.setImageTintList(android.content.res.ColorStateList.valueOf(edit ? GREEN : Color.rgb(221, 88, 104)));
+        button.setContentDescription((edit ? "修改" : "删除") + title);
+        button.setBackgroundColor(Color.TRANSPARENT);
+        int padding = dp(edit ? 9 : 14);
+        button.setPadding(padding, padding, padding, padding);
+        button.setOnClickListener(v -> action.run());
+        return button;
+    }
+
     private void showPendingTaskEditDialog(int index) {
         JSONArray tasks = taskArray(false);
         JSONObject task = tasks.optJSONObject(index);
-        if (task == null || taskListConfirmed()) return;
+        if (task == null || !canEditTaskPlan() || !"pending".equals(task.optString("status", "pending"))) return;
         String taskId = task.optString("id");
+        String editDate = currentDate;
         EditText input = new EditText(this);
         input.setSingleLine(false);
         input.setMaxLines(3);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});
         input.setText(task.optString("title"));
         input.setTextSize(14);
         input.setTextColor(INK);
@@ -4439,6 +4494,27 @@ public class MainActivity extends Activity {
         LinearLayout content = vertical();
         content.setPadding(dp(20), dp(4), dp(20), 0);
         content.addView(input, matchWrap());
+        LinearLayout estimateRow = horizontal();
+        estimateRow.setGravity(Gravity.CENTER_VERTICAL);
+        estimateRow.addView(text("预计用时", 14, INK, false));
+        String[] minuteLabels = new String[ESTIMATE_OPTIONS.length];
+        int selected = 2;
+        for (int i = 0; i < ESTIMATE_OPTIONS.length; i++) {
+            minuteLabels[i] = ESTIMATE_OPTIONS[i] + " 分钟";
+            if (ESTIMATE_OPTIONS[i] == estimatedMinutes(task)) selected = i;
+        }
+        android.widget.Spinner estimate = new android.widget.Spinner(this);
+        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_item, minuteLabels);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        estimate.setAdapter(adapter);
+        estimate.setSelection(selected);
+        estimate.setContentDescription("预计用时");
+        LinearLayout.LayoutParams estimateParams = new LinearLayout.LayoutParams(-2, dp(44));
+        estimateParams.leftMargin = dp(12);
+        estimateRow.addView(estimate, estimateParams);
+        LinearLayout.LayoutParams estimateRowParams = matchWrap();
+        estimateRowParams.topMargin = dp(12);
+        content.addView(estimateRow, estimateRowParams);
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("修改" + task.optString("subject", "") + "作业")
                 .setView(content)
@@ -4455,11 +4531,12 @@ public class MainActivity extends Activity {
                 }
                 int currentIndex = taskIndexById(taskId);
                 JSONObject currentTask = taskArray(false).optJSONObject(currentIndex);
-                if (currentTask == null) {
+                if (currentTask == null || !editDate.equals(currentDate) || !canEditTaskPlan() || !"pending".equals(currentTask.optString("status", "pending"))) {
                     dialog.dismiss();
                     return;
                 }
                 put(currentTask, "title", title);
+                put(currentTask, "estimatedMinutes", ESTIMATE_OPTIONS[estimate.getSelectedItemPosition()]);
                 saveTaskData();
                 renderAll();
                 dialog.dismiss();
@@ -4671,7 +4748,7 @@ public class MainActivity extends Activity {
         weekendTaskPlannerTitle.setText(isFriday ? "给每项作业安排完成日期"
                 : "今天按" + (currentDate.equals(saturday) ? "周六" : "周日") + "计划完成");
         weekendTaskPlannerHelp.setText(isFriday
-                ? "默认安排在周六；挑一部分放到今天完成，其余再分到周末。"
+                ? "先选周五、周六或周日，再添加作业；新作业会安排在所选日期。"
                 : "这份清单来自 " + formatShortDate(key) + "（周五），今天不需要重新录入。");
         weekendTaskPlanSummary.setText(planSaved
                 ? "周五 " + fridayCount + " 项 · 周六 " + saturdayCount + " 项 · 周日 " + sundayCount + " 项" : "尚未保存");

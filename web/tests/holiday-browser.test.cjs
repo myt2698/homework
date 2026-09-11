@@ -70,7 +70,7 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   assert.equal(await page.locator('#holidayTaskList [data-holiday-action=delete] svg').count(),2);
   for(const [width,height] of [[1024,768],[390,844],[320,740]]){
    await page.setViewportSize({width,height});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-   const estimateBox=await page.locator('.holiday-entry-estimate').boundingBox(),addBox=await page.locator('#holidayTaskForm button[type=submit]').boundingBox();
+   const estimateBox=await page.locator('#holidayTaskForm .task-entry-estimate').boundingBox(),addBox=await page.locator('#holidayTaskForm button[type=submit]').boundingBox();
    assert(estimateBox.x+estimateBox.width<=addBox.x&&Math.abs(estimateBox.y-addBox.y)<1,'estimate stays immediately left of the add button');
    await page.locator('#holidayRepeatDates summary').click();const popup=await page.locator('#holidayRepeatDateList').boundingBox();assert(popup.x>=0&&popup.x+popup.width<=width,'repeat date picker fits narrow screens');await page.locator('#holidayRepeatDates summary').click();
    await page.screenshot({path:path.join(output,`plan-${width}.png`),fullPage:true});

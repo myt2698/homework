@@ -397,7 +397,7 @@
             </div>
           </div>
           <textarea class="task-draft-input" id="holidayTaskTitle" rows="1" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required></textarea>
-          <label class="holiday-entry-estimate" for="holidayTaskMinutes"><select id="holidayTaskMinutes" aria-label="新增假期作业预计用时"></select></label>
+          <label class="task-entry-estimate" for="holidayTaskMinutes"><select id="holidayTaskMinutes" aria-label="新增假期作业预计用时"></select></label>
           <button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button>
         </div>
       </form>
@@ -414,7 +414,7 @@
         <button class="primary-button compact-button task-entry-confirm" id="taskEntryConfirmButton" type="button" disabled>确定</button>
       </div>
       <div class="task-entry" id="taskEntry">
-        <div class="task-plan-days" id="taskEntryDays" aria-label="查看日期" hidden></div>
+        <div class="task-plan-days" id="taskEntryDays" role="group" aria-label="查看日期" hidden></div>
         <div class="task-entry-empty" id="taskEntryEmpty" hidden>
           <img src="assets/homework-entry-empty.png" alt="小朋友坐在书桌前写作业">
           <strong>开始录入作业吧</strong>
@@ -449,6 +449,7 @@
               </div>
             </div>
             <textarea class="task-draft-input" id="taskDraft" rows="1" maxlength="500" aria-label="作业内容" aria-describedby="taskDraftError" aria-invalid="false" placeholder="请输入一项作业…"></textarea>
+            <label class="task-entry-estimate" for="taskEntryEstimate"><select id="taskEntryEstimate" aria-label="新增作业预计用时"></select></label>
             <button class="add-task-icon-button" id="addTasksButton" type="button" aria-label="加入语文作业" title="加入语文作业">＋</button>
           </div>
           <small class="task-draft-error" id="taskDraftError" role="alert" hidden>请先输入作业内容</small>

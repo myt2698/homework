@@ -53,12 +53,12 @@ for (const [, value] of html.matchAll(/aria-(?:describedby|labelledby)="([^"]+)"
   for (const id of value.split(/\s+/)) assert(ids.includes(id), `Missing accessibility element: ${id}`);
 }
 assert(!/voiceTaskButton|voiceStatus|SpeechRecognition|toggleVoiceInput/.test(html + source), 'homework speech entry is removed');
-assert(!/taskEntryEstimate/.test(html + source), 'ordinary entry estimates remain on task rows');
+assert(html.includes('id="taskEntryEstimate"'), 'ordinary entry supports choosing an estimate before adding');
 assert(html.includes('id="holidayTaskMinutes"'), 'holiday entry supports choosing an estimate before adding');
 assert(/\.task-entry-composer\s*\{[^}]*width: 100%/.test(styles), 'composer returns to full page width');
 assert(/\.task-keyword-suggestions\s*\{[^}]*overflow-x: auto/.test(styles), 'keywords return to a horizontal strip');
 assert(!androidSource.includes('Math.min(View.MeasureSpec.getSize(widthMeasureSpec), dp(640))'), 'native composer no longer has the compact width cap');
-assert(!androidSource.includes('taskEntryEstimateButton') && androidSource.includes('showTaskEstimatePicker(task, estimate, true)'), 'native estimate editing is on sorting rows');
+assert(androidSource.includes('taskEntryEstimate.setContentDescription("新增作业预计用时")') && androidSource.includes('showTaskEstimatePicker(task, estimate, true)'), 'native entry and sorting both support estimates');
 assert(androidSource.includes('new android.widget.HorizontalScrollView(this)') && androidSource.includes('dp(compactTaskEntry ? 80 : 112)'), 'native restores horizontal keywords and widens add on both phone and tablet');
 assert(androidSource.includes('IME_FLAG_NO_EXTRACT_UI'), 'native landscape keyboard keeps the entry page visible');
 assert(source.includes('function toggleDictationWordRecording('), 'dictation recordings remain available');
@@ -84,7 +84,7 @@ assert(!/taskOrderProgress|我的顺序/.test(html + source), 'sorting preview h
 const orderActions = html.match(/<div class="order-secondary-actions">([\s\S]*?)<\/div>/)?.[1];
 assert(orderActions?.includes('id="taskOrderCloseButton"'), 'return to entry is among the bottom actions');
 assert(html.indexOf('id="taskOrderCloseButton"') > html.indexOf('id="taskOrderChoices"'), 'return follows the task list');
-for (const selector of ['.task-item', '.pending-task-row', '.weekend-plan-row[data-subject]']) {
+for (const selector of ['.task-item', '.pending-task-row.task-plan-row', '.weekend-plan-row[data-subject]']) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const rule = styles.match(new RegExp('(?:^|\\n)' + escaped + ' \\{([^}]+)\\}'))?.[1];
   assert(rule, `Missing card style: ${selector}`);
@@ -93,7 +93,7 @@ for (const selector of ['.task-item', '.pending-task-row', '.weekend-plan-row[da
   assert(!/border-left|linear-gradient/.test(rule), `${selector} has no left accent or shaded gradient`);
 }
 assert.equal((androidSource.match(/addView\(taskSubjectLabel\(/g) || []).length, 4, 'all four native task-list renderers use the shared edge label');
-assert.equal((androidSource.match(/addView\(taskEstimateView\(/g) || []).length, 3, 'ordinary native task lists keep read-only estimates while sorting gets a picker');
+assert.equal((androidSource.match(/addView\(taskEstimateView\(/g) || []).length, 2, 'native home and weekend preview keep estimates; entry uses the editor');
 assert(!androidSource.includes('TextView subjectBadge'), 'native inline subject badges are removed');
 assert(!/\.order-choice-row\.is-picked\s*\{/.test(styles), 'selected task cards retain the same subject background and text styles');
 assert(androidSource.includes('card.setBackground(rounded(taskSubjectSoftColor(subject), 13, LINE, 1));'), 'native sorting always uses the original subject background');
@@ -281,7 +281,7 @@ function harness(seed, date = '2026-09-08', savedStorage, fixedNow) {
       renderDailyCheckins, currentRecord, pendingDailyRequirements, toggleSport, resultFor,
       restSession: () => breakSession,
       startSession: () => startPlanSession,
-      estimateOptions: ESTIMATE_OPTIONS, setTaskOrderEstimate, setTaskEntryEstimate,
+      estimateOptions: ESTIMATE_OPTIONS, setTaskOrderEstimate, beginPendingTaskEdit,
       setState(value, date) { if (value) state = value; elements.recordDate.value = date; },
       tasks: () => tasksForDate(), owner: () => taskOwnerForDate() };
   })();`, context);
@@ -302,6 +302,7 @@ function harness(seed, date = '2026-09-08', savedStorage, fixedNow) {
     estimate: (id, value) => delegate('taskOrderChoices', 'change', 'select[data-order-estimate]', { orderEstimate: id }, String(value)),
     pick: id => delegate('taskOrderChoices', 'click', 'button[data-order-pick]', { orderPick: id }),
     day: day => delegate('taskOrderDays', 'click', 'button[data-order-day]', { orderDay: day }),
+    entryDay: day => delegate('taskEntryDays', 'click', 'button[data-entry-day]', { entryDay: day }),
     cardIds: () => [...el('taskOrderChoices').innerHTML.matchAll(/data-order-pick="([^"]+)"/g)].map(match => match[1]),
     selected: () => Array.from(api.taskOrderDraft().selectedIds),
     original: () => Array.from(api.tasks(), task => task.id)
@@ -328,10 +329,10 @@ function assertOrderEstimateControls(markup) {
   }
 }
 
-function assertUnifiedTaskCards(markup, expectedCount) {
+function assertUnifiedTaskCards(markup, expectedCount, entry = false) {
   const labels = [...markup.matchAll(/<span class="task-subject-label"><span>([^<]*)<\/span><span>([^<]*)<\/span><\/span>/g)];
   assert.equal(labels.length, expectedCount, 'one two-row subject label per task');
-  assert.equal([...markup.matchAll(/class="(?:task-estimate|task-plan-estimate)"/g)].length, expectedCount, 'one separate estimate per task');
+  assert.equal([...markup.matchAll(/class="task-estimate"/g)].length, entry ? 0 : expectedCount, entry ? 'entry cards keep estimates in the editor' : 'one separate estimate per task');
   for (const match of labels) assert(match[1] && match[2], 'each subject uses two populated rows');
   assert(!markup.includes('class="subject-badge"'), 'old inline pill labels are removed');
 }
@@ -480,12 +481,13 @@ h = harness({ records: { '2026-09-08': owner(subjectTasks) }, weekends: {} });
 h.api.openTaskEntryPage();
 assert.deepEqual(Array.from(h.api.tasks(), item => item.subject), subjects);
 const entryMarkup = h.el('taskEntryPendingList').innerHTML;
-assertUnifiedTaskCards(entryMarkup, subjects.length);
-assert(/class="task-plan-actions"><div class="task-plan-schedule"><select class="task-plan-estimate"/.test(entryMarkup), 'entry estimate is editable in the right-side schedule row');
+assertUnifiedTaskCards(entryMarkup, subjects.length, true);
+assert(/class="task-plan-title"><strong[^>]*>[^<]*<\/strong><button[^>]*data-task-action="edit"/.test(entryMarkup), 'small edit icon follows the task title');
+assert(/class="task-plan-actions"><button[^>]*data-task-action="delete"/.test(entryMarkup), 'delete icon stays in the right-side controls');
 assert(!entryMarkup.includes('task-plan-number'), 'entry task titles have no redundant sequence numbers');
 const nativeEntryRow = androidSource.split('private void addPendingTaskRow(')[1].split('private void showPendingTaskEditDialog(')[0];
 assert(!nativeEntryRow.includes('String.valueOf(number)'), 'native entry has no sequence numbers');
-assert(nativeEntryRow.includes('showTaskEstimatePicker(task, estimate, false)') && nativeEntryRow.indexOf('schedule.addView(estimate,') < nativeEntryRow.indexOf('schedule.addView(day,'), 'native estimate is editable before the date on the same row');
+assert(!nativeEntryRow.includes('showTaskEstimatePicker'), 'native entry hides estimates on the card');
 for (const subject of subjects) assert(entryMarkup.includes('data-subject="' + subject + '"'));
 h.el('taskEntryOrderButton').click();
 assertOrderEstimateControls(h.el('taskOrderChoices').innerHTML);
@@ -522,7 +524,11 @@ const weekendTasks = [task('f1', 'friday'), task('s1', 'saturday'), task('u1', '
 h = harness({ records: { '2026-09-11': { ledgerConfirmed: true } }, weekends: { '2026-09-11': owner(weekendTasks) } }, '2026-09-11');
 h.api.openTaskEntryPage();
 assert.equal(h.el('taskEntryDays').hidden, false);
-assertUnifiedTaskCards(h.el('taskEntryPendingList').innerHTML, weekendTasks.length);
+assertUnifiedTaskCards(h.el('taskEntryPendingList').innerHTML, 2, true);
+assert(!h.el('taskEntryDays').innerHTML.includes('data-entry-day="all"'));
+assert(h.el('taskEntryDays').innerHTML.includes('aria-label="周五，2项作业"'));
+assert(h.el('taskEntryDays').innerHTML.includes('aria-label="周六，2项作业"'));
+assert(h.el('taskEntryDays').innerHTML.includes('aria-label="周日，1项作业"'));
 assert(h.el('taskEntryPendingList').innerHTML.includes('data-entry-plan-day='));
 h.api.selectWeekendTaskDay('s1', 'friday');
 assert.equal(h.api.tasks().find(item => item.id === 's1').plannedDay, 'friday');
@@ -559,11 +565,12 @@ h.api.openTaskEntryPage();
 assert.equal(h.el('taskEntryComposer').hidden, true, 'Saturday is read-only');
 assert.equal(h.el('taskEntryOrderButton').hidden, true);
 assert.equal(h.el('taskEntryConfirmButton').hidden, true, 'read-only plan has no confirmation action');
-assertUnifiedTaskCards(h.el('taskEntryPendingList').innerHTML, weekendTasks.length);
+assertUnifiedTaskCards(h.el('taskEntryPendingList').innerHTML, 2, true);
 assert(!h.el('taskEntryPendingList').innerHTML.includes('data-entry-plan-day='));
 assert(!h.el('taskEntryPendingList').innerHTML.includes('data-entry-estimate='));
 const lockedEstimates = Array.from(h.api.tasks(), item => item.estimatedMinutes);
-h.api.setTaskEntryEstimate('s1', 60);
+h.api.beginPendingTaskEdit('s1');
+assert.equal(h.el('taskEditModal').hidden, true, 'read-only weekend entries cannot open the editor');
 assert.deepEqual(Array.from(h.api.tasks(), item => item.estimatedMinutes), lockedEstimates, 'read-only weekend entries reject estimate changes');
 assert(!h.el('taskEntryPendingList').innerHTML.includes('data-task-action='));
 h.api.selectWeekendTaskDay('s1', 'sunday');
@@ -607,7 +614,7 @@ h.api.openTaskEntryPage(); h.el('taskEntryOrderButton').click(); h.pick('a');
 h.api.tasks().push(task('d'));
 assert.deepEqual(h.selected(), []);
 assert.deepEqual(h.original(), ['a', 'b', 'c', 'd']);
-// New entries use 15 minutes; only the sorting list changes their planned duration.
+// Entry estimates default to 15 minutes and remain editable in the sorting list.
 const emptyEntry = () => ({ records: { '2026-09-08': { ledgerConfirmed: true, tasks: [] } }, weekends: {} });
 h = harness(emptyEntry());
 assert.deepEqual(Array.from(h.api.estimateOptions), [5, 10, 15, 20, 30, 35, 40, 45, 50, 60]);
@@ -619,7 +626,11 @@ assert.equal(h.api.tasks()[0].estimatedMinutes, 15);
 assert.equal(h.el('taskDraft').value, '');
 assert.equal(h.el('taskDraftError').hidden, true);
 h.api.selectTaskSubject('数学');
+h.el('taskEntryEstimate').value = '30';
 h.add('课作本第8页');
+assert.equal(h.api.tasks()[1].estimatedMinutes, 30);
+assert.equal(h.api.tasks()[0].estimatedMinutes, 15, 'new estimate does not alter existing homework');
+assert.equal(h.el('taskEntryEstimate').value, '30', 'consecutive additions retain the selected estimate');
 const estimateIds = h.original();
 h.api.openTaskOrderModal();
 h.pick(estimateIds[1]);
@@ -643,12 +654,28 @@ const savedEstimates = Array.from(h.api.tasks(), item => [item.subject, item.tit
 h = harness(null, '2026-09-08', h.storage);
 assert.deepEqual(Array.from(h.api.tasks(), item => [item.subject, item.title, item.estimatedMinutes]), savedEstimates);
 h = harness({ records: { '2026-09-11': { ledgerConfirmed: true } }, weekends: {} }, '2026-09-11');
+h.api.openTaskEntryPage();
+assert.equal(h.el('taskEntryDays').hidden, false, 'empty weekend plans still allow choosing a day');
+h.entryDay('saturday');
+h.el('taskEntryEstimate').value = '45';
 h.add('1.作文。写一件事 2.小古文');
 assert.equal(h.api.tasks().length, 2, 'numbered entry still works without splitting sentences');
-assert(h.api.tasks().every(item => item.estimatedMinutes === 15 && item.plannedDay === 'saturday'));
+assert(h.api.tasks().every(item => item.estimatedMinutes === 45 && item.plannedDay === 'saturday'), 'each pasted task gets the selected duration and keeps the usual weekend date');
+assert(h.el('taskEntryDays').innerHTML.includes('data-entry-day="saturday" aria-pressed="true"'), 'adding retains the selected day');
+h.entryDay('friday'); h.add('周五的新作业');
+assert.equal(h.api.tasks().at(-1).plannedDay, 'friday');
+h.entryDay('sunday'); h.add('周日的新作业');
+assert.equal(h.api.tasks().at(-1).plannedDay, 'sunday');
+for (const [label, count] of [['周五', 1], ['周六', 2], ['周日', 1]]) {
+  assert(h.el('taskEntryDays').innerHTML.includes(`aria-label="${label}，${count}项作业"`));
+}
+h.el('taskEntryCloseButton').click(); h.api.openTaskEntryPage();
+assert(h.el('taskEntryDays').innerHTML.includes('data-entry-day="sunday" aria-pressed="true"'), 'returning to the same plan retains its chosen day');
 h = harness(null, '2026-09-12', h.storage);
 h.add('不能重复录入');
-assert.equal(h.api.tasks().length, 2, 'Saturday continues to use Friday entries');
+assert.equal(h.api.tasks().length, 4, 'Saturday continues to use Friday entries');
+h.api.openTaskEntryPage();
+assert(h.el('taskEntryDays').innerHTML.includes('data-entry-day="saturday" aria-pressed="true"'), 'a new viewing date selects its own weekday');
 // The single time picker still validates, saves, resumes and starts the chosen task.
 const planNow = new Date(2026, 8, 8, 18, 0, 0).getTime();
 const planState = dailyState();

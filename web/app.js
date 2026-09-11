@@ -198,6 +198,7 @@
     taskEditCancelButton: $("#taskEditCancelButton"), taskEditSaveButton: $("#taskEditSaveButton"),
     taskEntryOrderButton: $("#taskEntryOrderButton"), taskEntryDays: $("#taskEntryDays"),
     taskDraft: $("#taskDraft"), addTasksButton: $("#addTasksButton"),
+    taskEntryEstimate: $("#taskEntryEstimate"),
     taskSummary: $("#taskSummary"),
     taskPanel: $("#taskPanel"), taskPanelHeading: $("#taskPanelHeading"), taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
     taskOrderButton: $("#taskOrderButton"),
@@ -276,7 +277,7 @@
   let orderSelectionDay = "daily";
   let orderPreviewShowing = false;
   let editingPendingTaskId = null;
-  let taskEntryDay = "all";
+  let taskEntryDay = "daily", taskEntryDate = null;
   let lastDeletedTask = null;
   let undoDeleteTimer = null;
   let lastCompletedTask = null;
@@ -1544,6 +1545,16 @@
     document.body.classList.remove("modal-open");
   }
 
+  function selectedTaskEntryDay() {
+    const date = elements.recordDate.value;
+    if (taskEntryDate !== date) {
+      const key = weekendKeyFor(date);
+      taskEntryDay = !key ? "daily" : date === key ? "friday" : date === addDays(key, 1) ? "saturday" : "sunday";
+      taskEntryDate = date;
+    }
+    return taskEntryDay;
+  }
+
   function openTaskEntryPage() {
     hideSettingsDetailPages();
     const holiday = HolidayPlans.find(state, elements.recordDate.value);
@@ -1552,7 +1563,7 @@
     if (!elements.taskEntryPage.hidden) return;
     if (canEditTaskPlan()) invalidateTaskPlan();
     editingPendingTaskId = null;
-    taskEntryDay = "all";
+    selectedTaskEntryDay();
     setTaskDraftError(); setSubjectPickerOpen(false);
     elements.taskEntryPage.hidden = false;
     taskEntryReturnScroll = window.scrollY || 0;
@@ -1618,11 +1629,13 @@
     elements.taskDraft.setAttribute("aria-invalid", String(hasError));
   }
 
-  function openTaskEditor(id) {
+  function openTaskEditor(id, fromEntry = false) {
     const task = taskById(id);
-    if (!task || (task.status || "pending") !== "pending" || !taskOrderSaved()) {
+    if (fromEntry && (elements.taskEntryPage.hidden || !canEditTaskPlan())) return;
+    if (!task || (task.status || "pending") !== "pending" || (!fromEntry && !taskOrderSaved())) {
       return showToast("排好顺序后，才能从卡片修改作业");
     }
+    editingPendingTaskId = fromEntry ? String(id) : null;
     taskEditTaskId = String(id);
     elements.taskEditTitle.textContent = `修改${task.subject || ""}作业`;
     elements.taskEditInput.value = task.title || "";
@@ -1637,6 +1650,7 @@
     if (elements.taskEditModal.hidden) return;
     elements.taskEditModal.hidden = true;
     taskEditTaskId = null;
+    editingPendingTaskId = null;
     document.body.classList.remove("modal-open");
   }
 
@@ -2198,7 +2212,7 @@
     elements.weekendPlannerKicker.textContent = isFriday ? "周五安排与闯关" : "周五计划已自动带入";
     elements.weekendPlannerTitle.textContent = isFriday ? "给每项作业安排完成日期" : `今天按${date === saturday ? "周六" : "周日"}计划完成`;
     elements.weekendPlannerHelp.textContent = isFriday
-      ? "默认安排在周六；挑一部分放到今天完成，其余再分到周末。"
+      ? "先选周五、周六或周日，再添加作业；新作业会安排在所选日期。"
       : `这份清单来自 ${formatDate(key)}（周五），今天不需要重新录入。`;
     elements.weekendPlanSummary.textContent = weekend.planSaved
       ? `周五 ${fridayTasks.length} 项 · 周六 ${saturdayTasks.length} 项 · 周日 ${sundayTasks.length} 项` : "尚未保存";
@@ -2280,26 +2294,35 @@
     return [...groups.entries()];
   }
 
+  function pendingTaskIcon(action, task) {
+    const label = `${action === "edit" ? "修改" : "删除"}${task.title || "作业"}`;
+    const path = action === "edit"
+      ? '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5 M4 15l5 5"/>'
+      : '<path d="M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7"/>';
+    return `<button class="text-button task-plan-icon${action === "delete" ? " danger" : ""}" type="button" data-task-action="${action}" data-task-id="${escapeAttribute(String(task.id))}" aria-label="${escapeAttribute(label)}" title="${escapeAttribute(label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg></button>`;
+  }
+
   function pendingTaskRow(task) {
     const id = escapeAttribute(String(task.id)), editable = canEditTaskPlan();
     const weekend = Boolean(weekendKeyFor(elements.recordDate.value)), day = plannedDayForTask(task);
     const dayControl = weekend ? (editable
       ? `<select class="task-plan-day" data-entry-plan-day="${id}" aria-label="${escapeAttribute(task.title)}完成日期">${[["friday", "周五"], ["saturday", "周六"], ["sunday", "周日"]].map(([value, label]) => `<option value="${value}"${day === value ? " selected" : ""}>${label}</option>`).join("")}</select>`
       : `<small>${plannedDayLabel(task)}</small>`) : "";
-    const editing = editable && String(editingPendingTaskId || "") === String(task.id);
     return `<div class="pending-task-row task-plan-row" data-subject="${escapeAttribute(task.subject || "其他")}" data-pending-task-id="${id}">
       ${taskSubjectBadgeHtml(task.subject)}
-      <div class="task-plan-copy">${editing ? `<input class="pending-task-edit-input" data-pending-edit-id="${id}" maxlength="120" value="${escapeAttribute(task.title || "")}" aria-label="修改作业内容">` : `<strong class="pending-task-title">${escapeHtml(task.title || "未命名作业")}</strong>`}
+      <div class="task-plan-copy"><div class="task-plan-title"><strong class="pending-task-title">${escapeHtml(task.title || "未命名作业")}</strong>${editable ? pendingTaskIcon("edit", task) : ""}</div>
         ${!editable && task.status === "done" ? "<small>已完成</small>" : ""}</div>
-      <div class="task-plan-actions"><div class="task-plan-schedule">${editable ? entryTaskEstimateHtml(task) : taskEstimateHtml(task)}${dayControl}</div>${editable ? `<div class="pending-task-actions">${editing ? taskButton("保存", "save-edit", task.id) + taskButton("取消", "cancel-edit", task.id) : taskButton("修改", "edit", task.id) + taskButton("删除", "delete", task.id, "danger-task-action")}</div>` : ""}</div>
+      <div class="task-plan-actions">${dayControl}${editable ? pendingTaskIcon("delete", task) : ""}</div>
     </div>`;
   }
 
   function pendingTaskListHtml(tasks) {
     const weekend = Boolean(weekendKeyFor(elements.recordDate.value));
     const groups = weekend ? taskOrderGroups() : [{ day: "daily", label: "今天", tasks }];
-    return groups.filter(group => taskEntryDay === "all" || taskEntryDay === group.day)
-      .map(group => `<section class="pending-subject-group">${weekend ? `<h3 class="order-preview-heading">${group.label}</h3>` : ""}${group.tasks.map(task => pendingTaskRow(task)).join("")}</section>`).join("");
+    const day = selectedTaskEntryDay();
+    const visible = groups.filter(group => !weekend || day === group.day);
+    if (weekend && !visible.length) return `<p class="task-entry-day-empty">${day === "friday" ? "周五" : day === "saturday" ? "周六" : "周日"}还没有安排作业</p>`;
+    return visible.map(group => `<section class="pending-subject-group">${weekend ? `<h3 class="order-preview-heading">${group.label}</h3>` : ""}${group.tasks.map(task => pendingTaskRow(task)).join("")}</section>`).join("");
   }
 
   function renderTasks() {
@@ -2775,12 +2798,11 @@
       title: task.title,
       status: "pending",
       elapsedMs: 0,
-      estimatedMinutes: 15,
-      ...(key ? { plannedDay: "saturday" } : {})
+      estimatedMinutes: estimatedMinutes({ estimatedMinutes: Number(elements.taskEntryEstimate.value) }),
+      ...(key ? { plannedDay: selectedTaskEntryDay() } : {})
     }));
     owner.tasks = pendingTaskOrder(existing.concat(addedTasks));
     delete owner.orderDraft;
-    taskEntryDay = "all";
     if (key) {
       owner.confirmed = false;
       delete owner.confirmedAt;
@@ -2869,9 +2891,13 @@
     elements.taskEntry.hidden = false;
     elements.taskEntryOrderButton.hidden = !editable || !tasks.length || sorting;
     elements.taskEntryOrderButton.textContent = taskOwnerForDate()?.orderDraft ? "继续调整" : "调整顺序";
-    elements.taskEntryDays.hidden = !weekend || sorting || !tasks.length;
-    elements.taskEntryDays.innerHTML = [["all", "全部"], ["friday", "周五"], ["saturday", "周六"], ["sunday", "周日"]]
-      .map(([day, label]) => `<button type="button" data-entry-day="${day}" aria-pressed="${day === taskEntryDay}">${label}</button>`).join("");
+    const selectedDay = selectedTaskEntryDay();
+    elements.taskEntryDays.hidden = !weekend || sorting;
+    elements.taskEntryDays.innerHTML = [["friday", "周五"], ["saturday", "周六"], ["sunday", "周日"]]
+      .map(([day, label]) => {
+        const count = tasks.filter(task => plannedDayForTask(task) === day).length;
+        return `<button type="button" data-entry-day="${day}" aria-pressed="${day === selectedDay}" aria-label="${label}，${count}项作业"><span>${label}</span><small>${count}项</small></button>`;
+      }).join("");
     elements.taskEntryComposer.hidden = !editable || sorting;
     elements.taskEntry.classList.toggle("has-pending", tasks.length > 0 && !sorting);
     elements.taskEntryEmpty.hidden = tasks.length > 0 || !editable || sorting;
@@ -2941,18 +2967,6 @@
 
   function taskEstimateHtml(task) {
     return `<span class="task-estimate" aria-label="${escapeAttribute(task.title || "作业")}预计用时 ${estimatedMinutes(task)} 分钟">预计 ${estimatedMinutes(task)} 分钟</span>`;
-  }
-
-  function entryTaskEstimateHtml(task) {
-    return `<select class="task-plan-estimate" data-entry-estimate="${escapeAttribute(String(task.id))}" aria-label="${escapeAttribute(task.title || "作业")}预计用时">${ESTIMATE_OPTIONS.map(minutes => `<option value="${minutes}"${minutes === estimatedMinutes(task) ? " selected" : ""}>预计 ${minutes} 分钟</option>`).join("")}</select>`;
-  }
-
-  function setTaskEntryEstimate(id, value) {
-    if (elements.taskEntryPage.hidden || !elements.taskOrderModal.hidden || !canEditTaskPlan()) return;
-    const task = taskById(id), minutes = Number(value);
-    if (!task || (task.status || "pending") !== "pending" || !ESTIMATE_OPTIONS.includes(minutes)) return;
-    task.estimatedMinutes = minutes;
-    persist();
   }
 
   function taskOrderEstimateHtml(task) {
@@ -3045,7 +3059,7 @@
 
   function saveTaskEdit() {
     const task = taskById(taskEditTaskId);
-    if (!task || (task.status || "pending") !== "pending") {
+    if (!task || (task.status || "pending") !== "pending" || (editingPendingTaskId && !canEditTaskPlan())) {
       closeTaskEditor();
       return showToast("这项作业已经不能修改");
     }
@@ -3068,34 +3082,7 @@
   }
 
   function beginPendingTaskEdit(id) {
-    const task = taskById(id);
-    if (!task || taskListConfirmed()) return;
-    editingPendingTaskId = String(id);
-    renderTasks();
-    const input = [...elements.taskEntryPendingList.querySelectorAll("[data-pending-edit-id]")]
-      .find((item) => item.dataset.pendingEditId === String(id));
-    if (input) {
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
-    }
-  }
-
-  function savePendingTaskEdit(id) {
-    const task = taskById(id);
-    const input = [...elements.taskEntryPendingList.querySelectorAll("[data-pending-edit-id]")]
-      .find((item) => item.dataset.pendingEditId === String(id));
-    if (!task || !input) return;
-    const title = input.value.trim();
-    if (!title) {
-      input.setAttribute("aria-invalid", "true");
-      input.focus();
-      return showToast("作业内容不能留空");
-    }
-    task.title = title;
-    editingPendingTaskId = null;
-    persist();
-    render();
-    showToast("这项作业已经改好了");
+    openTaskEditor(id, true);
   }
 
   function rememberDeletedTask(task, date) {
@@ -3713,11 +3700,11 @@
   elements.taskEntryOrderButton.addEventListener("click", openTaskOrderModal);
   elements.taskEntryDays.addEventListener("click", event => {
     const button = event.target.closest("button[data-entry-day]");
-    if (button) { taskEntryDay = button.dataset.entryDay; renderTaskEntryPlan(); }
+    if (button && ["friday", "saturday", "sunday"].includes(button.dataset.entryDay)) {
+      selectedTaskEntryDay(); taskEntryDay = button.dataset.entryDay; renderTaskEntryPlan();
+    }
   });
   elements.taskEntryPendingList.addEventListener("change", event => {
-    const estimate = event.target.closest("select[data-entry-estimate]");
-    if (estimate) return setTaskEntryEstimate(estimate.dataset.entryEstimate, estimate.value);
     const select = event.target.closest("select[data-entry-plan-day]");
     if (select) selectWeekendTaskDay(select.dataset.entryPlanDay, select.value);
   });
@@ -3726,23 +3713,7 @@
     if (!button) return;
     const action = button.dataset.taskAction;
     if (action === "edit") beginPendingTaskEdit(button.dataset.taskId);
-    else if (action === "save-edit") savePendingTaskEdit(button.dataset.taskId);
-    else if (action === "cancel-edit") {
-      editingPendingTaskId = null;
-      renderTasks();
-    } else performTaskAction(action, button.dataset.taskId);
-  });
-  elements.taskEntryPendingList.addEventListener("keydown", (event) => {
-    const input = event.target.closest("input[data-pending-edit-id]");
-    if (!input) return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      savePendingTaskEdit(input.dataset.pendingEditId);
-    } else if (event.key === "Escape") {
-      event.stopPropagation();
-      editingPendingTaskId = null;
-      renderTasks();
-    }
+    else performTaskAction(action, button.dataset.taskId);
   });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
   elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
@@ -3916,6 +3887,8 @@
   });
 
   elements.recordDate.value = todayIso();
+  elements.taskEntryEstimate.innerHTML = ESTIMATE_OPTIONS.map(minutes => `<option value="${minutes}">${minutes} 分钟</option>`).join("");
+  elements.taskEntryEstimate.value = "15";
   elements.dictationLessonSelect.innerHTML = DICTATION_LESSONS
     .map((lesson) => `<option value="${lesson.id}">${lesson.label}</option>`).join("");
   selectTaskSubject(selectedTaskSubject);
