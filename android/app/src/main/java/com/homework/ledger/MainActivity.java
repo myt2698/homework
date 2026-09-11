@@ -424,7 +424,9 @@ public class MainActivity extends Activity {
     private TextView breakCountdownView;
     private TextView breakNextTaskView;
     private TextView breakPlannedReturnView;
+    private TextView breakTaskEstimateView;
     private Button extendBreakButton;
+    private Button breakStartButton;
     private TextView startPlanCountdownView;
     private TextView startPlanTaskLabelView;
     private TextView startPlanTaskView;
@@ -501,7 +503,10 @@ public class MainActivity extends Activity {
                 dismissTaskFocusDialog();
                 return;
             }
-            if (taskFocusElapsedView != null) taskFocusElapsedView.setText(taskClockLabel(taskFocusTask));
+            if (taskFocusElapsedView != null) {
+                taskFocusElapsedView.setText(taskClockLabel(taskFocusTask));
+                taskFocusElapsedView.setTextSize(taskElapsedMillis(taskFocusTask) >= 3600000L ? 28 : 48);
+            }
             if (taskFocusComparisonView != null) {
                 taskFocusComparisonView.setText(taskEstimateComparisonLabel(taskFocusTask));
             }
@@ -2348,7 +2353,10 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, dp(8), 0, 0);
         content.addView(title);
-        taskFocusElapsedView = text(taskClockLabel(task), 48, Color.rgb(196,93,20), true);
+        taskFocusElapsedView = text(taskClockLabel(task), 48, Color.rgb(36,59,83), true);
+        taskFocusElapsedView.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        taskFocusElapsedView.setFontFeatureSettings("'tnum'");
+        taskFocusElapsedView.setTextSize(taskElapsedMillis(task) >= 3600000L ? 28 : 48);
         taskFocusElapsedView.setGravity(Gravity.CENTER);
         taskFocusElapsedView.setPadding(0, dp(12), 0, dp(8));
         content.addView(taskFocusElapsedView);
@@ -3065,7 +3073,9 @@ public class MainActivity extends Activity {
         breakCountdownView = null;
         breakNextTaskView = null;
         breakPlannedReturnView = null;
+        breakTaskEstimateView = null;
         extendBreakButton = null;
+        breakStartButton = null;
     }
 
     private void updateBreakChoiceTask(TextView nextTaskView) {
@@ -3244,45 +3254,84 @@ public class MainActivity extends Activity {
         }
         if (breakTimerDialog != null && breakTimerDialog.isShowing()) return;
         LinearLayout content = vertical();
-        content.setPadding(dp(24), dp(8), dp(24), dp(4));
-        TextView label = text("距离回来还有", 10, Color.rgb(138, 99, 27), true);
-        label.setGravity(Gravity.CENTER);
-        content.addView(label);
-        breakCountdownView = text("05 : 00", 48, Color.rgb(183, 119, 18), true);
+        content.setPadding(dp(24), dp(26), dp(24), dp(14));
+        content.setContentDescription("休息倒计时");
+        GradientDrawable restBackground = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(238,249,241), Color.rgb(255,253,243)});
+        restBackground.setCornerRadius(dp(30));
+        content.setBackground(restBackground);
+        TextView pauseMark = text("Ⅱ", 24, Color.rgb(135,112,53), true);
+        pauseMark.setGravity(Gravity.CENTER);
+        pauseMark.setBackground(rounded(Color.rgb(250,233,185), 23, Color.TRANSPARENT, 0));
+        pauseMark.setRotation(-8f);
+        pauseMark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams pauseMarkParams = new LinearLayout.LayoutParams(dp(46), dp(46));
+        pauseMarkParams.gravity = Gravity.CENTER_HORIZONTAL;
+        pauseMarkParams.bottomMargin = dp(14);
+        content.addView(pauseMark, pauseMarkParams);
+        breakCountdownView = text("05 : 00", 48, Color.rgb(40,108,86), false);
         breakCountdownView.setGravity(Gravity.CENTER);
         breakCountdownView.setPadding(0, dp(3), 0, dp(10));
         content.addView(breakCountdownView);
-        breakPlannedReturnView = text("", 10, MUTED, true);
+        breakPlannedReturnView = text("", 12, Color.rgb(91,121,107), false);
         breakPlannedReturnView.setGravity(Gravity.CENTER);
-        breakPlannedReturnView.setPadding(0, 0, 0, dp(10));
+        breakPlannedReturnView.setPadding(0, 0, 0, dp(22));
         content.addView(breakPlannedReturnView);
+        breakTaskEstimateView = text("", 12, Color.rgb(65,109,90), true);
+        breakTaskEstimateView.setPadding(0, 0, 0, dp(8));
+        content.addView(breakTaskEstimateView, matchWrap());
         breakNextTaskView = text("", 12, INK, true);
-        breakNextTaskView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        breakNextTaskView.setPadding(dp(14), dp(14), dp(14), dp(14));
         content.addView(breakNextTaskView, matchWrap());
-        content.addView(createSupplementButton(), matchFixed(dp(44)));
+
+        LinearLayout actions = horizontal();
+        actions.setPadding(0, dp(20), 0, 0);
+        extendBreakButton = smallButton("再休息 3 分钟");
+        extendBreakButton.setTextSize(12); extendBreakButton.setSingleLine(true);
+        extendBreakButton.setMinWidth(0); extendBreakButton.setMinimumWidth(0);
+        extendBreakButton.setTextColor(Color.rgb(53,107,86));
+        extendBreakButton.setBackground(rounded(Color.WHITE, 24, Color.rgb(199,222,207), 1));
+        extendBreakButton.setOnClickListener(v -> extendBreakSession());
+        LinearLayout.LayoutParams extendParams = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        extendParams.rightMargin = dp(8);
+        actions.addView(extendBreakButton, extendParams);
+        breakStartButton = smallButton("现在开始");
+        breakStartButton.setMinWidth(0); breakStartButton.setMinimumWidth(0);
+        breakStartButton.setTextColor(Color.WHITE);
+        breakStartButton.setBackground(rounded(Color.rgb(53,118,90), 24, Color.TRANSPARENT, 0));
+        breakStartButton.setOnClickListener(v -> startTaskAfterBreak(
+                breakSession.optString("taskId"), breakSession.optString("date", currentDate)));
+        actions.addView(breakStartButton, new LinearLayout.LayoutParams(0, dp(48), 1.2f));
+        content.addView(actions, matchWrap());
+        Button cancel = smallButton("取消这次提醒");
+        cancel.setTextColor(Color.rgb(97,118,108));
+        cancel.setBackgroundColor(Color.TRANSPARENT);
+        cancel.setOnClickListener(v -> {
+            finishBreakLog("cancelled");
+            clearBreakSession();
+            toast("这次休息提醒已取消");
+        });
+        LinearLayout.LayoutParams cancelParams = matchFixed(dp(44));
+        cancelParams.topMargin = dp(8);
+        content.addView(cancel, cancelParams);
+        Button supplement = createSupplementButton();
+        supplement.setTextColor(Color.rgb(82,111,95));
+        content.addView(supplement, matchFixed(dp(44)));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.addView(content, matchWrap());
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("我的休息计划")
-                .setView(content)
-                .setNegativeButton("取消提醒", null)
-                .setNeutralButton("再休息 3 分钟", null)
-                .setPositiveButton("现在开始", null)
+                .setView(scroll)
                 .create();
         breakTimerDialog = dialog;
         dialog.setCanceledOnTouchOutside(false);
         dialog.setCancelable(false);
         dialog.setOnShowListener(ignored -> {
-            extendBreakButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-            extendBreakButton.setTextColor(GREEN);
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(GREEN);
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
-                finishBreakLog("cancelled");
-                clearBreakSession();
-                toast("这次休息提醒已取消");
-            });
-            extendBreakButton.setOnClickListener(v -> extendBreakSession());
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> startTaskAfterBreak(
-                    breakSession.optString("taskId"), breakSession.optString("date", currentDate)));
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+                dialog.getWindow().setLayout(Math.min(dp(460), getResources().getDisplayMetrics().widthPixels - dp(32)), ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
             timerHandler.removeCallbacks(breakTimerTick);
             timerHandler.post(breakTimerTick);
         });
@@ -3308,25 +3357,32 @@ public class MainActivity extends Activity {
         if (breakCountdownView != null) {
             breakCountdownView.setText(remaining > 0
                     ? String.format(Locale.CHINA, "%02d : %02d", seconds / 60L, seconds % 60L) : "时间到");
-            breakCountdownView.setTextColor(remaining > 0 ? Color.rgb(183, 119, 18) : AMBER);
+            breakCountdownView.setTextColor(remaining > 0 ? Color.rgb(40,108,86) : Color.rgb(152,104,32));
+            breakCountdownView.setTextSize(remaining > 0 ? 48 : 40);
+        }
+        if (breakTaskEstimateView != null) {
+            long difference = estimatedMinutes(task) * 60000L - Math.max(0L, task.optLong("elapsedMs", 0L));
+            long estimateSeconds = (Math.abs(difference) + 999L) / 1000L;
+            String duration = String.format(Locale.CHINA, "%d 分 %02d 秒", estimateSeconds / 60L, estimateSeconds % 60L);
+            breakTaskEstimateView.setText(difference == 0L ? "刚到预计时间"
+                    : (difference > 0L ? "距估时还剩 " : "已超时 ") + duration);
+            breakTaskEstimateView.setTextColor(difference < 0L ? Color.rgb(154,100,27) : Color.rgb(65,109,90));
         }
         if (breakNextTaskView != null) {
             String subject = task.optString("subject", "其他");
             breakNextTaskView.setText("回来后做\n" + subject + " · "
                     + task.optString("title", "下一项作业"));
             breakNextTaskView.setTextColor(INK);
-            breakNextTaskView.setBackground(rounded(taskSubjectSoftColor(subject), 13,
-                    taskSubjectColor(subject), 1));
+            breakNextTaskView.setBackground(rounded(Color.argb(190,255,255,255), 18,
+                    Color.rgb(214,231,218), 1));
         }
         if (breakPlannedReturnView != null) breakPlannedReturnView.setText(
-                "我计划 " + timeFromEpoch(breakSession.optLong("endAt")) + " 回来");
+                timeFromEpoch(breakSession.optLong("endAt")) + " 回来");
         if (extendBreakButton != null) {
             extendBreakButton.setEnabled(!breakSession.optBoolean("extended"));
             extendBreakButton.setVisibility(!breakSession.optBoolean("extended") ? View.VISIBLE : View.GONE);
         }
-        breakTimerDialog.setTitle(remaining > 0 ? "我正在休息" : "我计划的休息时间到了");
-        Button start = breakTimerDialog.getButton(AlertDialog.BUTTON_POSITIVE);
-        if (start != null) start.setText(remaining > 0 ? "现在开始" : "开始下一项");
+        if (breakStartButton != null) breakStartButton.setText(remaining > 0 ? "现在开始" : "开始下一项");
         if (remaining == 0L && !breakSession.optBoolean("alerted")) {
             put(breakSession, "alerted", true);
             put(breakSession, "nextAlertAt", now + BREAK_REMINDER_INTERVAL_MS);

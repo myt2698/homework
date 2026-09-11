@@ -252,6 +252,7 @@
     startNextTaskNowButton: $("#startNextTaskNowButton"), breakTimerModal: $("#breakTimerModal"),
     breakTimerTitle: $("#breakTimerTitle"), breakCountdown: $("#breakCountdown"),
     breakTimerTaskCard: $("#breakTimerTaskCard"),
+    breakTaskEstimate: $("#breakTaskEstimate"),
     breakPlannedReturn: $("#breakPlannedReturn"), breakTimerNextTask: $("#breakTimerNextTask"),
     extendBreakButton: $("#extendBreakButton"), startNextTaskButton: $("#startNextTaskButton"),
     cancelBreakButton: $("#cancelBreakButton"),
@@ -516,6 +517,7 @@
     elements.focusModalTitle.textContent = task.title || "当前作业";
     elements.focusModal.dataset.subject = task.subject || "其他";
     elements.focusModalElapsed.textContent = taskClockLabel(task);
+    elements.focusModalElapsed.dataset.longDuration = String(taskElapsedMs(task) >= 3600000);
     elements.focusModalEstimate.textContent = `${estimatedMinutes(task)} 分钟`;
     elements.focusModalComparison.textContent = taskEstimateComparisonLabel(task);
     elements.focusModalStartedAt.textContent = task.startedAt || "--:--";
@@ -1099,20 +1101,33 @@
     document.body.classList.remove("modal-open");
   }
 
+  function breakTaskEstimateStatus(task) {
+    const difference = estimatedMinutes(task) * 60000 - Math.max(0, taskElapsedMs(task, false));
+    const seconds = Math.ceil(Math.abs(difference) / 1000);
+    const duration = `${Math.floor(seconds / 60)} 分 ${String(seconds % 60).padStart(2, "0")} 秒`;
+    return {
+      label: difference === 0 ? "刚到预计时间" : `${difference > 0 ? "距估时还剩" : "已超时"} ${duration}`,
+      overtime: difference < 0
+    };
+  }
+
   function renderBreakTimer() {
     if (!breakSession) return closeBreakTimer();
     const task = tasksForDate(breakSession.date).find((item) => String(item.id) === String(breakSession.taskId));
     if (!task || task.status === "done") return cancelBreak(false);
     setScheduledTaskCard(elements.breakTimerTaskCard, task);
     elements.breakTimerNextTask.textContent = `${task.subject || "其他"} · ${task.title}`;
+    const estimateStatus = breakTaskEstimateStatus(task);
+    elements.breakTaskEstimate.textContent = estimateStatus.label;
+    elements.breakTaskEstimate.classList.toggle("is-overtime", estimateStatus.overtime);
     const now = Date.now();
     const remaining = Math.max(0, Number(breakSession.endAt) - now);
     const seconds = Math.ceil(remaining / 1000);
     elements.breakCountdown.textContent = remaining > 0
       ? `${String(Math.floor(seconds / 60)).padStart(2, "0")}\u2009:\u2009${String(seconds % 60).padStart(2, "0")}`
       : "时间到";
-    elements.breakTimerTitle.textContent = remaining > 0 ? "我正在休息" : "我计划的休息时间到了";
-    elements.breakPlannedReturn.textContent = `我计划 ${timeFromEpoch(breakSession.endAt)} 回来`;
+    elements.breakTimerTitle.textContent = remaining > 0 ? "休息倒计时" : "休息时间到";
+    elements.breakPlannedReturn.textContent = `${timeFromEpoch(breakSession.endAt)} 回来`;
     elements.breakTimerModal.querySelector(".break-timer-dialog").classList.toggle("time-up", remaining <= 0);
     elements.extendBreakButton.hidden = Boolean(breakSession.extended);
     elements.startNextTaskButton.textContent = remaining <= 0 ? "开始下一项" : "现在开始";

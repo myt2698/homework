@@ -53,7 +53,8 @@ for (const [, value] of html.matchAll(/aria-(?:describedby|labelledby)="([^"]+)"
   for (const id of value.split(/\s+/)) assert(ids.includes(id), `Missing accessibility element: ${id}`);
 }
 assert(!/voiceTaskButton|voiceStatus|SpeechRecognition|toggleVoiceInput/.test(html + source), 'homework speech entry is removed');
-assert(!/taskEntryEstimate|holidayTaskMinutes/.test(html + source), 'entry composers no longer have an estimate picker');
+assert(!/taskEntryEstimate/.test(html + source), 'ordinary entry estimates remain on task rows');
+assert(html.includes('id="holidayTaskMinutes"'), 'holiday entry supports choosing an estimate before adding');
 assert(/\.task-entry-composer\s*\{[^}]*width: 100%/.test(styles), 'composer returns to full page width');
 assert(/\.task-keyword-suggestions\s*\{[^}]*overflow-x: auto/.test(styles), 'keywords return to a horizontal strip');
 assert(!androidSource.includes('Math.min(View.MeasureSpec.getSize(widthMeasureSpec), dp(640))'), 'native composer no longer has the compact width cap');
@@ -190,8 +191,10 @@ assert(nativeBreakChoice.includes('confirmTime.setOnClickListener') && nativeBre
 assert(nativeBreakChoice.includes('timeButton.setTextSize(14)') && nativeBreakChoice.includes('matchFixed(dp(44))'), 'native compact time controls retain touch height');
 assert(!/我提前回来了，开始下一项|我回来了，开始下一项/.test(html + source + androidSource), 'the long rest-return button label is removed on both platforms');
 assert(/id="startNextTaskButton"[^>]*>现在开始<\/button>/.test(html), 'rest timer initially shows the short start label');
-assert(androidSource.includes('start.setText(remaining > 0 ? "现在开始" : "开始下一项")'), 'native countdown uses the same short early-start label');
-assert(html.includes('距离回来还有'), 'the rest countdown label is unaffected');
+assert(androidSource.includes('breakStartButton.setText(remaining > 0 ? "现在开始" : "开始下一项")'), 'native countdown uses the same short early-start label');
+const breakTimerMarkup = html.split('id="breakTimerModal"')[1].split('id="supplementModal"')[0];
+assert(!/我的休息计划|我正在休息|距离回来还有/.test(breakTimerMarkup), 'rest removes repeated headings');
+assert(breakTimerMarkup.indexOf('id="breakTaskEstimate"') < breakTimerMarkup.indexOf('id="breakTimerTaskCard"'), 'homework time comparison sits above the task card');
 assert(!/预计剩余/.test(source + androidSource), 'both platforms use the revised remaining-time wording');
 assert(androidSource.includes('String prefix = "预计还需 ";'), 'native overview uses the same wording');
 assert(/\.task-remaining-time strong\s*\{[^}]*color:\s*#345f9e;[^}]*font-weight:\s*800/.test(styles), 'remaining value and unit share a bold highlight');
@@ -208,8 +211,8 @@ assert(/#623b0b/.test(launchRule) && /#ffd16c, #ffb33c/.test(launchRule), 'launc
 assert(/\.task-launch-button:focus-visible\s*\{[^}]*outline:/.test(styles), 'keyboard focus remains visible');
 assert(/\.task-item\.has-launch-action > \.task-main-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;\s*align-items: center/.test(styles), 'home task content and estimate share a vertically centered row');
 assert(!styles.includes('.has-launch-action .task-card-aside { grid-row: 1; }'), 'estimate no longer occupies a separate upper row');
-assert(/#focusModal \.focus-clock\s*\{\s*color: #c45d14/.test(styles), 'focus timer uses the warm accent');
-assert(androidSource.includes('48, Color.rgb(196,93,20), true)'), 'native timer uses the same warm accent');
+assert(/#focusModal \.focus-clock\s*\{\s*color: #243b53/.test(styles), 'focus timer uses a restrained navy accent');
+assert(androidSource.includes('48, Color.rgb(36,59,83), true)'), 'native timer uses the same navy accent');
 const nativeLaunch = androidSource.split('private Button createTaskLaunchButton(')[1].split('private void addTaskCard(')[0];
 assert(nativeLaunch.includes('"▶\\n开始挑战"') && nativeLaunch.includes('button.setContentDescription("开始挑战："'), 'native launch has matching text and an accessible task name');
 assert(nativeLaunch.includes('button.setOnClickListener(v -> action.run())'), 'native launch keeps its own click action');
@@ -1066,6 +1069,7 @@ for (const minutes of [5, 10, 15]) {
     ? { dataset: { breakKind: 'break', breakMinutes: String(minutes) } } : null } });
   assert.equal(h.el('breakChoiceModal').hidden, true);
   assert.equal(h.el('breakTimerModal').hidden, false);
+  assert.equal(h.el('breakTaskEstimate').textContent, '距估时还剩 13 分 00 秒');
   assert.equal(h.el('startNextTaskButton').textContent, '现在开始');
   assert.equal(h.api.restSession().endAt, planNow + (minutes + 2) * 60000);
   assert.equal(h.api.restSession().taskId, 'rest');
@@ -1073,6 +1077,7 @@ for (const minutes of [5, 10, 15]) {
   assert.equal(h.api.owner().breaks[0].sourceTaskId, 'rest');
   assert.equal(h.api.owner().breaks[0].trigger, 'pause');
   h.setClock(planNow + (minutes + 2) * 60000); h.api.renderBreakTimer();
+  assert.equal(h.el('breakTaskEstimate').textContent, '距估时还剩 13 分 00 秒', 'rest does not consume the homework estimate');
   assert.equal(h.el('startNextTaskButton').textContent, '开始下一项', 'the time-up label remains unchanged');
   assert.deepEqual(h.signals.alarms, [2]);
   h.el('startNextTaskButton').click();
@@ -1080,6 +1085,14 @@ for (const minutes of [5, 10, 15]) {
   assert.equal(h.api.tasks()[0].elapsedMs, 120000, 'rest time is not added to homework');
   assert.equal(h.api.owner().breaks[0].actualMinutes, minutes);
   assert.equal(h.api.owner().breaks[0].status, 'returned');
+}
+for (const [spent, label] of [[0, '距估时还剩 5 分 00 秒'], [149500, '距估时还剩 2 分 31 秒'], [299999, '距估时还剩 0 分 01 秒'], [300000, '刚到预计时间'], [300001, '已超时 0 分 01 秒'], [435000, '已超时 2 分 15 秒']]) {
+  openRestChoice();
+  Object.assign(h.api.tasks()[0], { estimatedMinutes: 5, elapsedMs: spent });
+  h.el('breakReturnTime').value = '18:12'; h.el('startTimedBreakButton').click();
+  assert.equal(h.el('breakTaskEstimate').textContent, label);
+  h.setClock(planNow + 30 * 60000); h.api.renderBreakTimer();
+  assert.equal(h.el('breakTaskEstimate').textContent, label, 'overdue rest never changes recorded homework time');
 }
 openRestChoice();
 h.el('breakReturnTime').value = ''; h.el('startTimedBreakButton').click();

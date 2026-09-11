@@ -30,8 +30,8 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   await page.locator('#holidayRepeatDates summary').click();await page.locator('[data-holiday-repeat-date="2026-09-11"]').uncheck();await page.locator('#holidayRepeatDates summary').click();await page.locator('#holidayTaskForm button[type=submit]').click();
   await page.locator('[data-holiday-view="2026-09-10"]').focus();await page.keyboard.press('Space');
   assert.equal(await page.locator('[data-holiday-view="2026-09-10"]').evaluate(node=>node===document.activeElement),true,'day selection keeps keyboard focus');
-  assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*30 分钟/);
-  assert.equal(await page.locator('#holidayTaskMinutes').count(),0);
+  assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*30 分钟\s*9月10日/);
+  assert.equal(await page.locator('#holidayTaskMinutes').inputValue(),'15','new homework defaults to 15 minutes');
   await page.locator('#holidaySort').click();
   assert.equal(await page.locator('#holidayTaskList').getByText('选这项',{exact:true}).count(),0);
   assert.deepEqual(await page.locator('#holidayTaskList .order-number').allTextContents(),['','']);
@@ -70,6 +70,8 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   assert.equal(await page.locator('#holidayTaskList [data-holiday-action=delete] svg').count(),2);
   for(const [width,height] of [[1024,768],[390,844],[320,740]]){
    await page.setViewportSize({width,height});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   const estimateBox=await page.locator('.holiday-entry-estimate').boundingBox(),addBox=await page.locator('#holidayTaskForm button[type=submit]').boundingBox();
+   assert(estimateBox.x+estimateBox.width<=addBox.x&&Math.abs(estimateBox.y-addBox.y)<1,'estimate stays immediately left of the add button');
    await page.locator('#holidayRepeatDates summary').click();const popup=await page.locator('#holidayRepeatDateList').boundingBox();assert(popup.x>=0&&popup.x+popup.width<=width,'repeat date picker fits narrow screens');await page.locator('#holidayRepeatDates summary').click();
    await page.screenshot({path:path.join(output,`plan-${width}.png`),fullPage:true});
   }
@@ -98,12 +100,20 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   assert.equal(await page.locator('[data-holiday-view="2026-12-30"] strong').innerText(),'第一天');
   assert.equal(await page.locator('[data-holiday-view="2027-01-01"] strong').innerText(),'第三天','day numbering continues across the year boundary');
   assert.equal(await page.locator('[data-holiday-view="2027-02-01"] strong').innerText(),'第三十四天');
+  await page.locator('#holidayTaskMinutes').selectOption('10');
   await page.locator('#holidayRepeat').selectOption('daily');await page.locator('#holidayTaskTitle').fill('每天练字');await page.locator('#holidayTaskForm button[type=submit]').click();
+  saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('homework-ledger-v1')));
+  assert(Object.values(saved.records).flatMap(r=>r.tasks||[]).every(t=>t.estimatedMinutes===10),'every repeated instance uses the selected estimate');
+  assert.equal(await page.locator('#holidayTaskMinutes').inputValue(),'10','consecutive additions retain the chosen estimate');
   await page.setViewportSize({width:320,height:740});await page.locator('[data-holiday-view="2027-02-01"]').click();assert.match(await page.locator('#holidayTaskList').innerText(),/每天练字/);
   const count=await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('homework-ledger-v1')).records).reduce((n,r)=>n+(r.tasks||[]).length,0));assert.equal(count,34);
-  await page.locator('#holidayRepeat').selectOption('once');await page.locator('#holidayTaskTitle').fill('假期最后一天整理书包');await page.locator('#holidayTaskForm button[type=submit]').click();
+  await page.locator('#holidayTaskMinutes').selectOption('30');
+  await page.locator('#holidayRepeat').selectOption('once');await page.locator('#holidayTaskTitle').fill('假期最后一天整理书包');await page.locator('#holidayTaskTitle').press('Enter');
   saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('homework-ledger-v1')));
   assert(saved.records['2027-02-01'].tasks.some(t=>t.title==='假期最后一天整理书包'),'a one-time task is added to the day selected by its ordinal');
+  assert.equal(saved.records['2027-02-01'].tasks.find(t=>t.title==='假期最后一天整理书包').estimatedMinutes,30,'keyboard submission uses the selected estimate');
+  assert.equal(saved.records['2027-02-01'].tasks.find(t=>t.title==='每天练字').estimatedMinutes,10,'a new estimate leaves existing homework unchanged');
+  assert.match(await page.locator('#holidayDaySummary').innerText(),/2 项.*40 分钟/);
   assert.equal(saved.records['2026-12-30'].tasks.length,1);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   let activeDay=await page.locator('#holidayShortDays [aria-pressed=true]').boundingBox();assert(activeDay.x>=0&&activeDay.x+activeDay.width<=320,'the selected day stays visible after adding a task');
@@ -147,7 +157,9 @@ const {pathToFileURL}=require('node:url');const {chromium}=require('playwright')
   await page.clock.setFixedTime(new Date('2028-04-10T18:00:00+08:00'));await page.reload();await page.locator('#holidayPlanEntry').click();
   assert.equal(await page.locator('#holidayShortDays button').count(),366,'all supported days remain reachable');
   assert.equal(await page.locator('#holidayShortDays [aria-pressed=true] strong').innerText(),'今天');
-  assert.equal(await page.locator('#holidayShortDays [aria-pressed=true] small').innerText(),'第一百零一天 · 4月10日');
+  assert.equal(await page.locator('#holidayShortDays small').count(),0,'day chips show only the day label and task count');
+  assert.equal(await page.locator('#holidayDaySummary time').innerText(),'4月10日');
+  assert.equal(await page.locator('#holidayDaySummary time').getAttribute('datetime'),'2028-04-10');
   assert.equal(await page.locator('[data-holiday-view="2028-01-01"] strong').innerText(),'第一天');
   assert.equal(await page.locator('[data-holiday-view="2028-04-09"] strong').innerText(),'第一百天');
   assert.equal(await page.locator('[data-holiday-view="2028-04-19"] strong').innerText(),'第一百一十天');

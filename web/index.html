@@ -397,13 +397,14 @@
             </div>
           </div>
           <textarea class="task-draft-input" id="holidayTaskTitle" rows="1" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required></textarea>
+          <label class="holiday-entry-estimate" for="holidayTaskMinutes"><select id="holidayTaskMinutes" aria-label="新增假期作业预计用时"></select></label>
           <button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button>
         </div>
       </form>
     </div>
   </section>
   <div class="task-edit-modal" id="holidayTaskEdit" role="dialog" aria-modal="true" aria-labelledby="holidayEditTitle" hidden>
-    <form class="task-edit-dialog settings-card" id="holidayTaskEditForm"><h2 id="holidayEditTitle">修改作业</h2><input id="holidayEditContent" maxlength="120" aria-label="作业内容" required><label>预计用时<select id="holidayEditMinutes"></select></label><label id="holidayEditSeriesLabel"><input id="holidayEditSeries" type="checkbox" checked>同时修改之后未开始的同类作业</label><div class="holiday-actions"><button class="primary-button compact-button" type="submit">保存</button><button class="text-button" id="holidayEditCancel" type="button">取消</button></div></form>
+    <form class="task-edit-dialog settings-card" id="holidayTaskEditForm"><h2 id="holidayEditTitle">修改作业</h2><input id="holidayEditContent" maxlength="120" aria-label="作业内容" required><label class="holiday-edit-estimate" for="holidayEditMinutes"><span>预计用时</span><select id="holidayEditMinutes"></select></label><label id="holidayEditSeriesLabel"><input id="holidayEditSeries" type="checkbox" checked>同时修改之后未开始的同类作业</label><div class="holiday-actions"><button class="primary-button compact-button" type="submit">保存</button><button class="text-button" id="holidayEditCancel" type="button">取消</button></div></form>
   </div>
   <section class="task-entry-page" id="taskEntryPage" aria-label="录入作业" hidden>
     <div class="task-entry-layout" id="taskEntryLayout">
@@ -609,11 +610,13 @@
 
   <div class="focus-modal" id="breakTimerModal" role="dialog" aria-modal="true" aria-labelledby="breakTimerTitle" hidden>
     <div class="focus-dialog break-timer-dialog">
-      <p class="section-kicker">我的休息计划</p>
-      <h2 id="breakTimerTitle">休息一下，等我按时回来</h2>
-      <span class="focus-clock-label">距离回来还有</span>
-      <div class="focus-clock break-clock" id="breakCountdown">05 : 00</div>
-      <p class="break-planned-return" id="breakPlannedReturn">我计划 19:10 回来</p>
+      <h2 id="breakTimerTitle" hidden>休息倒计时</h2>
+      <div class="break-rest-dial">
+        <span class="break-pause-mark" aria-hidden="true"><i></i><i></i></span>
+        <div class="break-clock" id="breakCountdown" role="timer" aria-label="休息剩余时间">05 : 00</div>
+        <p class="break-planned-return" id="breakPlannedReturn">19:10 回来</p>
+      </div>
+      <p class="break-task-estimate" id="breakTaskEstimate"></p>
       <div class="break-next-task scheduled-task" id="breakTimerTaskCard" data-subject="语文"><span>回来后做</span><strong id="breakTimerNextTask"></strong></div>
       <div class="focus-dialog-actions break-timer-actions">
         <button class="secondary-button" id="extendBreakButton" type="button">再休息 3 分钟</button>

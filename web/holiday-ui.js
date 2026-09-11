@@ -11,10 +11,12 @@
     const ready = () => Boolean(state().records[currentHoliday()?.planDate]?.ledgerConfirmed);
     const minutesOptions = host.estimates.map(n => `<option value="${n}">${n} 分钟</option>`).join("");
     e.holidayEditMinutes.innerHTML = minutesOptions;
+    const taskMinutes = $("#holidayTaskMinutes");
+    taskMinutes.innerHTML = minutesOptions;
     const keywordSuggestions = $("#holidayKeywordSuggestions");
     const subjectPicker = $("#holidaySubjectPicker"), subjectOptions = $("#holidaySubjectOptions"), subjectLabel = $("#holidaySubjectLabel");
     function subjectMenu(open) { subjectOptions.hidden = !open; e.holidaySubject.setAttribute("aria-expanded", String(open)); }
-    function resizeDraft() { e.holidayTaskTitle.style.height = "48px"; e.holidayTaskTitle.style.height = `${Math.max(48, Math.min(e.holidayTaskTitle.scrollHeight, 72))}px`; }
+    function resizeDraft() { e.holidayTaskTitle.style.height = "48px"; e.holidayTaskTitle.style.height = `${Math.max(48, Math.min(e.holidayTaskTitle.scrollHeight + 2, 72))}px`; }
     function renderKeywords() {
       const subject = e.holidaySubject.value, keywords = host.keywords(subject).filter(k => k.visible !== false);
       keywordSuggestions.dataset.subject = subject; keywordSuggestions.hidden = !keywords.length;
@@ -41,7 +43,7 @@
       const h = state().holidays?.[id]; if (!h) return;
       planId = id; fromSettings = origin; sortIds = null;
       viewDate = host.date() >= h.planDate && host.date() <= h.end ? host.date() : h.planDate;
-      e.holidayRepeat.value = "once"; e.holidayRepeatDates.hidden = true; e.holidayTaskTitle.value = ""; repeatDates();
+      e.holidayRepeat.value = "once"; e.holidayRepeatDates.hidden = true; e.holidayTaskTitle.value = ""; taskMinutes.value = "15"; repeatDates();
       host.open(e.holidayPlanPage); renderPlan(true); renderKeywords(); resize(); resizeDraft();
     }
     function taskIcon(action, title) {
@@ -76,7 +78,8 @@
       return `<article class="holiday-task-row" data-subject="${esc(t.subject)}" data-holiday-task="${esc(t.id)}" data-holiday-date="${ref.date}"><span class="holiday-subject">${esc(t.subject)}</span><div class="holiday-task-copy"><div class="holiday-task-title"><strong>${esc(t.title)}</strong>${edit}</div><small>${esc(info)}</small></div>${estimate}<div class="holiday-task-actions">${actions}</div></article>`;
     }
     function renderDaySummary(list) {
-      e.holidayDaySummary.textContent = `${list.length} 项 · 预计 ${list.reduce((n, t) => n + Number(t.estimatedMinutes || 15), 0)} 分钟`;
+      const dateLabel = `${Number(viewDate.slice(5, 7))}月${Number(viewDate.slice(8))}日`;
+      e.holidayDaySummary.innerHTML = `<span>${list.length} 项 · 预计 ${list.reduce((n, t) => n + Number(t.estimatedMinutes || 15), 0)} 分钟</span><time class="holiday-summary-date" datetime="${viewDate}">${dateLabel}</time>`;
     }
     function dayNumber(n) {
       const digits = "零一二三四五六七八九";
@@ -98,9 +101,9 @@
     function renderDays(revealDay) {
       const strip = e.holidayShortDays, scrollLeft = strip.scrollLeft;
       const focusedDate = strip.contains(document.activeElement) ? document.activeElement.dataset.holidayView : null;
-      strip.innerHTML = holidayDays(currentHoliday()).map(({ date, ordinal, today, label, detail }) => {
+      strip.innerHTML = holidayDays(currentHoliday()).map(({ date, ordinal, today, label }) => {
         const count = H.tasks(state(), date).length;
-        return `<button class="text-button bordered" type="button" data-holiday-view="${date}" aria-pressed="${date === viewDate}" aria-label="${label}，${count}项作业，${today ? ordinal + "，" : ""}${date}"><span class="holiday-day-heading"><strong>${label}</strong><span class="holiday-day-count">${count}项</span></span><small>${detail}</small></button>`;
+        return `<button class="text-button bordered" type="button" data-holiday-view="${date}" aria-pressed="${date === viewDate}" aria-label="${label}，${count}项作业，${today ? ordinal + "，" : ""}${date}"><span class="holiday-day-heading"><strong>${label}</strong><span class="holiday-day-count">${count}项</span></span></button>`;
       }).join("");
       strip.scrollLeft = scrollLeft;
       if (focusedDate) strip.querySelector(`[data-holiday-view="${focusedDate}"]`)?.focus({ preventScroll: true });
@@ -227,7 +230,7 @@
       if (!ready()) throw Error("请先核对假期作业");
       const repeat = e.holidayRepeat.value === "daily";
       const dates = repeat ? [...e.holidayRepeatDateList.querySelectorAll("input:checked")].map(i => i.dataset.holidayRepeatDate) : [viewDate];
-      H.add(state(), currentHoliday(), { subject: e.holidaySubject.value, title: e.holidayTaskTitle.value, minutes: 15, repeat }, dates);
+      H.add(state(), currentHoliday(), { subject: e.holidaySubject.value, title: e.holidayTaskTitle.value, minutes: Number(taskMinutes.value), repeat }, dates);
       e.holidayTaskTitle.value = ""; resizeDraft(); save(); renderPlan(); e.holidayTaskList.scrollTop = e.holidayTaskList.scrollHeight; e.holidayTaskTitle.focus({ preventScroll: true }); host.toast(`已安排 ${dates.length} 天`);
     }); });
     e.holidaySort.addEventListener("click", () => attempt(() => { if (sortIds) { H.order(state(), viewDate, sortIds); sortIds = null; save(); } else sortIds = []; renderPlan(); }));
