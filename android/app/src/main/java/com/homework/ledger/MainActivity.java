@@ -144,9 +144,12 @@ public class MainActivity extends Activity {
     private static final int INK = Color.rgb(36, 50, 74);
     private static final int MUTED = Color.rgb(104, 119, 146);
     private static final int LINE = Color.rgb(220, 231, 245);
-    private static final int GREEN = Color.rgb(75, 130, 239);
-    private static final int GREEN_DARK = Color.rgb(52, 120, 229);
+    private static final int GREEN = Color.rgb(37, 99, 235);
+    private static final int GREEN_DARK = Color.rgb(29, 78, 216);
     private static final int GREEN_SOFT = Color.rgb(234, 242, 255);
+    private static final int HOME_LINE = Color.rgb(203, 220, 248);
+    private static final int HOME_SOFT = Color.rgb(239, 245, 255);
+    private static final int HOME_INK = Color.rgb(25, 54, 91);
     private static final int AMBER = Color.rgb(238, 155, 33);
     private static final int AMBER_SOFT = Color.rgb(255, 242, 207);
     private static final int RED = Color.rgb(221, 88, 104);
@@ -271,22 +274,13 @@ public class MainActivity extends Activity {
 
     private LinearLayout sportCard;
     private TextView sportCheckView;
-    private TextView sportStatusView;
-    private final List<Button> sportButtons = new ArrayList<>();
     private LinearLayout readingCard;
     private TextView readingCheckView;
-    private TextView readingStatusView;
     private LinearLayout mathThinkingCard;
     private TextView mathThinkingCheckView;
-    private TextView mathThinkingStatusView;
     private LinearLayout englishReadingCard;
     private TextView englishReadingCheckView;
-    private TextView englishReadingStatusView;
     private TextView dailyCheckinsSummaryView;
-    private LinearLayout sportOptionsPanel;
-    private TextView sportOptionsArrowView;
-    private boolean sportOptionsExpanded;
-    private String sportOptionsDate = "";
     private LinearLayout ledgerCard;
     private TextView ledgerCheckView;
     private TextView ledgerTitleView;
@@ -539,6 +533,8 @@ public class MainActivity extends Activity {
         taskKeywords = readTaskKeywords();
         breakSession = readJson(KEY_BREAK_SESSION);
         startPlanSession = readJson(KEY_START_PLAN_SESSION);
+        StudyPlans.migrate(holidayState(), todayIso(), breakSession, startPlanSession);
+        saveTaskData();
         String savedDictationLesson = preferences.getString(KEY_DICTATION_LESSON, DICTATION_LESSONS[0][0]);
         for (int index = 0; index < DICTATION_LESSONS.length; index++) {
             if (DICTATION_LESSONS[index][0].equals(savedDictationLesson)) {
@@ -673,12 +669,8 @@ public class MainActivity extends Activity {
     private JSONObject holidayState() {
         JSONObject state = new JSONObject();
         put(state, "records", records); put(state, "weekends", weekends); put(state, "holidays", holidays);
+        put(state, "planningVersion", 2);
         return state;
-    }
-
-    private boolean holidayDay(String date) {
-        JSONObject r = records.optJSONObject(date);
-        return HolidayPlans.find(holidayState(), date) != null || r != null && r.optBoolean("holidayDaily");
     }
 
     private void hideHolidayPage() {
@@ -697,6 +689,7 @@ public class MainActivity extends Activity {
             public int subjectColor(String subject) { return taskSubjectColor(subject); }
             public int subjectSoftColor(String subject) { return taskSubjectSoftColor(subject); }
             public JSONArray keywords(String subject) { return taskKeywordArray(subject); }
+            public List<JSONObject> parseDraft(String value, String subject) { return parseTaskDraft(value, subject); }
             public void confirmed() { int first = nextTaskIndexForToday(); if (first >= 0 && !hasActiveStartPlanSession() && !hasActiveBreakSession()) showTaskStartChoice(first, false); }
             public void changed() { saveTaskData(); renderAll(); }
             public void goDate(String date) { selectDate(date); }
@@ -758,7 +751,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         taskEntryNoticeView = text("", 12, Color.WHITE, false);
         taskEntryNoticeView.setPadding(dp(14), dp(10), dp(14), dp(10));
-        taskEntryNoticeView.setBackground(rounded(Color.rgb(41, 79, 150), 12, Color.rgb(41, 79, 150), 0));
+        taskEntryNoticeView.setBackground(rounded(GREEN_DARK, 12, GREEN_DARK, 0));
         taskEntryNoticeView.setMaxWidth(getResources().getDisplayMetrics().widthPixels - dp(32));
         taskEntryNoticeView.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         taskEntryNoticeView.setVisibility(View.GONE);
@@ -777,26 +770,45 @@ public class MainActivity extends Activity {
     }
 
     private View buildHeader() {
-        LinearLayout row = horizontal();
+        boolean compact = getResources().getConfiguration().screenWidthDp < 600;
+        LinearLayout row = compact ? vertical() : horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(16), dp(14), dp(16), dp(14));
+        row.setBackground(rounded(GREEN, 18, GREEN, 0));
         LinearLayout titles = vertical();
-        TextView eyebrow = text("每天进步一点点", 10, GREEN, true);
+        TextView eyebrow = text("每天进步一点点", 10, Color.WHITE, false);
         eyebrow.setLetterSpacing(0.12f);
         titles.addView(eyebrow);
-        titles.addView(text("🌟 作业小计划", 24, GREEN_DARK, true));
-        row.addView(titles, weightedWrap(1));
+        titles.addView(text("🌟 作业小计划", compact ? 22 : 24, Color.WHITE, true));
+        row.addView(titles, compact ? matchWrap() : weightedWrap(1));
+        LinearLayout actions = horizontal();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
         Button history = smallButton("足迹");
         history.setOnClickListener(v -> showHistoryPage());
-        row.addView(history);
-        row.addView(spaceHorizontal(6));
+        styleHomeHeaderAction(history);
+        actions.addView(history, compact ? weightedWrap(1) : fixed(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        actions.addView(spaceHorizontal(6));
         Button dictation = smallButton("🔊 听写");
         dictation.setOnClickListener(v -> showDictationPage());
-        row.addView(dictation);
-        row.addView(spaceHorizontal(6));
+        styleHomeHeaderAction(dictation);
+        actions.addView(dictation, compact ? weightedWrap(1) : fixed(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        actions.addView(spaceHorizontal(6));
         Button settings = smallButton("设置");
         settings.setOnClickListener(v -> showSettingsPage());
-        row.addView(settings);
+        styleHomeHeaderAction(settings);
+        actions.addView(settings, compact ? weightedWrap(1) : fixed(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        if (compact) row.addView(space(10));
+        row.addView(actions, compact ? matchWrap() : fixed(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         return row;
+    }
+
+    private void styleHomeHeaderAction(Button button) {
+        button.setTextColor(Color.WHITE);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        button.setMinHeight(dp(44));
+        button.setPadding(dp(10), 0, dp(10), 0);
+        button.setBackground(rounded(GREEN_DARK, 12, Color.rgb(87, 135, 239), 1));
     }
 
     private Button createHanziLookupButton(boolean focus) {
@@ -806,7 +818,8 @@ public class MainActivity extends Activity {
         if (!focus) {
             button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
             button.setPadding(dp(14), 0, dp(14), 0);
-            button.setBackground(rounded(Color.WHITE, 16, LINE, 1));
+            button.setTextColor(GREEN_DARK);
+            button.setBackground(rounded(Color.WHITE, 16, HOME_LINE, 1));
         }
         button.setOnClickListener(v -> {
             if (hanziLookupDialog != null && hanziLookupDialog.isShowing()) return;
@@ -1076,10 +1089,11 @@ public class MainActivity extends Activity {
     private View buildProcessCard() {
         LinearLayout card = card();
         card.setPadding(dp(12), dp(14), dp(12), dp(14));
+        card.setBackground(rounded(Color.WHITE, 18, HOME_LINE, 1));
         recordHeadingView = text("今天进行到哪里了？", 21, INK, true);
 
-        ledgerCard = prepCard("核对钉钉，补全成长记录册", "把钉钉里新增的作业补充进去");
-        card.addView(ledgerCard, matchFixed(dp(72)));
+        ledgerCard = prepCard("核对钉钉，补全成长记录册", "");
+        card.addView(ledgerCard, matchFixed(dp(64)));
         card.addView(space(10));
         card.addView(buildDailyCheckins(), matchWrap());
         card.addView(space(12));
@@ -1510,8 +1524,9 @@ public class MainActivity extends Activity {
     }
 
     private void showTaskEntryPage() {
+        if (holidayState().optInt("planningVersion") >= 2) { holidayScreen.openCurrent(); return; }
         hideSettingsDetailPage();
-        JSONObject holiday = HolidayPlans.find(holidayState(), currentDate);
+        JSONObject holiday = StudyPlans.find(holidayState(), currentDate);
         if (holiday != null) { holidayScreen.openPlan(holiday.optString("id"), false); return; }
         if (taskEntryPanel == null || (!canEditTaskPlan() && weekendKeyFor(currentDate) == null)) return;
         if (taskEntryPageView == null || taskEntryPageView.getVisibility() == View.VISIBLE) return;
@@ -1871,12 +1886,16 @@ public class MainActivity extends Activity {
     }
 
     private List<JSONObject> parseTaskDraft(String value) {
+        return parseTaskDraft(value, selectedTaskSubject);
+    }
+
+    private List<JSONObject> parseTaskDraft(String value, String defaultSubject) {
         List<JSONObject> parsed = new ArrayList<>();
         List<String> numbered = numberedTaskParts(value);
         String normalized = numbered == null
                 ? SUBJECT_ANYWHERE_PATTERN.matcher(value).replaceAll("\n$1：") : null;
         String[] taskParts = numbered == null ? normalized.split("[\\n；;]+") : numbered.toArray(new String[0]);
-        String currentSubject = selectedTaskSubject;
+        String currentSubject = defaultSubject;
         for (String rawPart : taskParts) {
             String part = rawPart.trim().replaceAll("[，,\\s]+$", "");
             if (part.isEmpty()) continue;
@@ -2018,7 +2037,7 @@ public class MainActivity extends Activity {
         put(task, "title", title); put(task, "subject", subject); put(task, "estimatedMinutes", minutes);
         put(task, "status", "pending"); put(task, "elapsedMs", 0L); put(task, "supplemental", true);
         if (key != null) put(task, "plannedDay", date.equals(key) ? "friday" : date.equals(addDays(key, 1)) ? "saturday" : "sunday");
-        JSONObject holiday = HolidayPlans.find(holidayState(), date);
+        JSONObject holiday = StudyPlans.find(holidayState(), date);
         if (holiday != null) {
             put(task, "holidayId", holiday.optString("id")); put(task, "holidaySeriesId", "");
             put(task, "holidayOriginalDate", date);
@@ -2029,8 +2048,8 @@ public class MainActivity extends Activity {
         updated.remove("tasksFinishedAt");
         if (key != null) {
             updated.remove("allDoneDate"); updated.remove("allDoneTime"); updated.remove("penaltyConfirmed");
-        } else if (!updated.optBoolean("holidayDaily")) {
-            updated.remove("finishTime"); updated.remove("ruleId");
+        } else {
+            updated.remove("finishTime"); updated.remove("ruleId"); updated.remove("legacyWeekendSettlement");
         }
         JSONObject group = copyObjectReferences(key == null ? records : weekends);
         put(group, key == null ? date : key, updated);
@@ -2295,7 +2314,7 @@ public class MainActivity extends Activity {
     }
 
     private SpannableString remainingTimeLabel(int minutes) {
-        return remainingTimeLabel(minutes, Color.rgb(52,95,158));
+        return remainingTimeLabel(minutes, GREEN_DARK);
     }
 
     private SpannableString remainingTimeLabel(int minutes, int color) {
@@ -4039,7 +4058,7 @@ public class MainActivity extends Activity {
 
     private void renderTasks() {
         if (holidayScreen != null) holidayScreen.renderHome();
-        JSONObject holiday = HolidayPlans.find(holidayState(), currentDate);
+        JSONObject holiday = StudyPlans.find(holidayState(), currentDate);
         if (taskListContainer == null) return;
         String weekendKey = weekendKeyFor(currentDate);
         boolean weekendMode = weekendKey != null;
@@ -4048,12 +4067,11 @@ public class MainActivity extends Activity {
         JSONObject weekend = weekendMode ? weekendForDate(currentDate, false) : null;
         boolean planSaved = weekend != null && weekend.optBoolean("planSaved");
         JSONObject dailyRecord = currentRecord(false);
-        boolean ledgerReady = holidayDay(currentDate) || weekendMode && !isFriday
-                || dailyRecord != null && dailyRecord.optBoolean("ledgerConfirmed");
+        boolean ledgerReady = true;
         JSONArray tasks = taskArray(false);
         boolean confirmed = taskListConfirmed();
         taskPanel.setVisibility(!ledgerReady && !confirmed && tasks.length() == 0 ? View.GONE : View.VISIBLE);
-        if (!confirmed && canEditList && tasks.length() > 1) {
+        if (holidayState().optInt("planningVersion") < 2 && !confirmed && canEditList && tasks.length() > 1) {
             tasks = sortedPendingTasks(tasks);
             put(taskOwner(true), "tasks", tasks);
         }
@@ -4100,7 +4118,7 @@ public class MainActivity extends Activity {
         taskPanelTitleView.setVisibility(questMode || sortingMode || (!confirmed && ledgerReady) ? View.GONE : View.VISIBLE);
         taskPanelHelpView.setVisibility(questMode || taskPanelHelpView.getText().length() == 0 ? View.GONE : View.VISIBLE);
         boolean canEnterTasks = !confirmed && canEditList && ledgerReady;
-        taskEntryLauncher.setVisibility(canEnterTasks && holiday == null ? View.VISIBLE : View.GONE);
+        taskEntryLauncher.setVisibility(View.GONE);
         supplementTaskButton.setVisibility(canSupplementTasks() ? View.VISIBLE : View.GONE);
         taskEntryPanel.setVisibility(canEnterTasks ? View.VISIBLE : View.GONE);
         String entryStatus = tasks.length() > 0
@@ -4119,7 +4137,7 @@ public class MainActivity extends Activity {
                 ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
                 : ledgerReady ? "还没有作业，点击“录入作业”开始。"
                 : "核对钉钉并补全成长记录册后，再录入作业。");
-        taskConfirmButton.setVisibility(holiday == null && confirmed && canEditList && allPending ? View.VISIBLE : View.GONE);
+        taskConfirmButton.setVisibility(View.GONE);
         taskConfirmButton.setText("修改计划");
         taskOrderButton.setVisibility(canReorderPendingTasks() ? View.VISIBLE : View.GONE);
         taskOrderButton.setText("调整未开始顺序");
@@ -4127,8 +4145,8 @@ public class MainActivity extends Activity {
         taskOrderButton.setTextColor(sortingMode ? Color.WHITE : GREEN);
         taskOrderButton.setBackground(rounded(sortingMode ? GREEN : GREEN_SOFT, 13,
                 sortingMode ? GREEN : Color.rgb(156, 188, 245), sortingMode ? 0 : 1));
-        if (holiday != null) emptyTaskView.setText("这一天还没有安排作业，可以打开假期计划查看。");
-        String taskConfirmHint = holidayDay(currentDate) ? "" : sortingMode
+        emptyTaskView.setText("这一天还没有作业，打开作业计划添加吧。");
+        String taskConfirmHint = holidayState().optInt("planningVersion") >= 2 ? "" : sortingMode
                 ? ""
                 : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
                 : weekendMode && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
@@ -4761,10 +4779,15 @@ public class MainActivity extends Activity {
         int subjectColor = taskSubjectColor(subjectName);
         int fill = taskSubjectSoftColor(subjectName);
         int stroke = current || "active".equals(status) ? GREEN : plannedToday ? AMBER : subjectColor;
+        if (target != taskEntryPendingList) {
+            fill = current ? Color.rgb(245, 248, 255) : Color.WHITE;
+            stroke = "active".equals(status) ? GREEN : current ? Color.rgb(145, 180, 249) : HOME_LINE;
+        }
         item.setBackground(rounded(fill, current ? 15 : 13, stroke, 1));
         item.addView(taskSubjectLabel(subjectName), fixed(dp(28), LinearLayout.LayoutParams.MATCH_PARENT));
         String planLabel = weekendMode && planSaved ? "  [" + plannedDayLabel(task) + "]" : "";
-        LinearLayout mainRow = horizontal();
+        boolean compactLaunch = hasLaunchAction && getResources().getConfiguration().screenWidthDp <= 380;
+        LinearLayout mainRow = compactLaunch ? vertical() : horizontal();
         mainRow.setGravity(Gravity.CENTER_VERTICAL);
         mainRow.setMinimumHeight(dp(hasLaunchAction ? 84 : 60));
         mainRow.setPadding(dp(10), dp(compact ? 9 : 10), dp(10), dp(compact ? 9 : 10));
@@ -4785,9 +4808,9 @@ public class MainActivity extends Activity {
         TextView metaView = text(meta, compact ? 9 : 10, MUTED, false);
         metaView.setPadding(0, dp(compact ? 3 : 4), 0, 0);
         if (!meta.isEmpty()) taskCopy.addView(metaView);
-        mainRow.addView(taskCopy, weightedWrap(1));
+        mainRow.addView(taskCopy, compactLaunch ? matchWrap() : weightedWrap(1));
         LinearLayout aside = vertical();
-        aside.setGravity(Gravity.END);
+        aside.setGravity(compactLaunch ? Gravity.START : Gravity.END);
         aside.addView(taskEstimateView(task), matchWrap());
         LinearLayout actions = horizontal();
         if (!confirmed && canEditList) {
@@ -4811,7 +4834,7 @@ public class MainActivity extends Activity {
             aside.addView(actions, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }
-        mainRow.addView(spaceHorizontal(8));
+        mainRow.addView(compactLaunch ? space(4) : spaceHorizontal(8));
         mainRow.addView(aside);
         item.addView(mainRow, weightedWrap(1));
         if (hasLaunchAction) {
@@ -5191,7 +5214,7 @@ public class MainActivity extends Activity {
             return;
         }
         JSONObject record = currentRecord(true);
-        if (weekendKey == null && hasText(record, "finishTime") && !record.optBoolean("holidayDaily") && !"undo".equals(action)) {
+        if (weekendKey == null && hasText(record, "finishTime") && !record.optBoolean("legacyWeekendSettlement") && !"undo".equals(action)) {
             toast("当天已经结算，如需修改可先撤销一项完成");
             return;
         }
@@ -5219,6 +5242,7 @@ public class MainActivity extends Activity {
             JSONObject taskToStart = tasks.optJSONObject(startIndex);
             put(taskToStart, "status", "active");
             put(taskToStart, "activeSince", System.currentTimeMillis());
+            put(taskToStart, "lastWorkedDate", currentDate);
             if (!hasText(taskToStart, "startedAt")) put(taskToStart, "startedAt", currentTime());
             if (!hasText(record, "startTime")) put(record, "startTime", currentTime());
             focusAfterRenderTaskIndex = startIndex;
@@ -5235,23 +5259,16 @@ public class MainActivity extends Activity {
             stopTaskClock(task, "done");
             dismissTaskFocusDialog();
             put(task, "completedAt", currentTime());
-            if (weekendKey != null || !task.optString("holidayId").isEmpty()) put(task, "completedDate", currentDate);
+            put(task, "completedDate", currentDate);
             boolean completedAll = allTasksDone();
-            if (completedAll && record.optBoolean("holidayDaily")) {
-                put(record, "tasksFinishedAt", task.optString("completedAt"));
-                toast("我完成今天安排的作业啦！");
-            } else if (completedAll && weekendKey == null) {
+            if (completedAll && weekendKey == null) {
                 put(record, "tasksFinishedAt", task.optString("completedAt"));
                 record.remove("ruleId");
-                if (record.optBoolean("ledgerConfirmed")) {
-                    put(record, "finishTime", record.optString("tasksFinishedAt"));
-                    Result result = resultFor(record);
-                    String kind = result.amount < 0 ? "扣款" : result.amount == 0 ? "结算" : "奖励";
-                    toast("已全部完成，自动" + kind + " " + amountText(result.amount));
-                } else {
-                    record.remove("finishTime");
-                    toast("作业已全部完成，补全成长记录册后自动结算");
-                }
+                record.remove("legacyWeekendSettlement");
+                put(record, "finishTime", record.optString("tasksFinishedAt"));
+                Result result = resultFor(record);
+                String kind = result.amount < 0 ? "扣款" : result.amount == 0 ? "结算" : "奖励";
+                toast("已全部完成，自动" + kind + " " + amountText(result.amount));
             } else if (completedAll) {
                 put(weekend, "allDoneDate", currentDate);
                 put(weekend, "allDoneTime", task.optString("completedAt"));
@@ -5295,7 +5312,7 @@ public class MainActivity extends Activity {
             task.remove("completedDate");
             if (weekendKey == null) {
                 record.remove("tasksFinishedAt");
-                if (task.optString("holidayId").isEmpty()) { record.remove("finishTime"); record.remove("ruleId"); }
+                record.remove("finishTime"); record.remove("ruleId");
             } else {
                 weekend.remove("allDoneDate");
                 weekend.remove("allDoneTime");
@@ -5315,17 +5332,20 @@ public class MainActivity extends Activity {
     }
 
     private void saveTaskData() {
-        saveRecords();
-        saveWeekends();
-        preferences.edit().putString(KEY_HOLIDAYS, holidays.toString()).apply();
+        preferences.edit().putString(KEY_RECORDS, records.toString()).putString(KEY_WEEKENDS, weekends.toString())
+                .putString(KEY_HOLIDAYS, holidays.toString()).apply();
     }
 
     private LinearLayout buildDailyCheckins() {
         LinearLayout section = vertical();
+        section.setPadding(dp(12), dp(12), dp(12), dp(12));
+        section.setBackground(rounded(PAGE, 16, PAGE, 0));
         LinearLayout heading = horizontal();
         heading.setGravity(Gravity.CENTER_VERTICAL);
-        heading.addView(text("习惯打卡", 13, INK, true), weightedWrap(1));
-        dailyCheckinsSummaryView = text("已完成 0 / 4", 11, MUTED, false);
+        heading.addView(text("习惯打卡", 13, HOME_INK, true), weightedWrap(1));
+        dailyCheckinsSummaryView = text("已完成 0 / 4", 11, GREEN_DARK, false);
+        dailyCheckinsSummaryView.setPadding(dp(8), dp(4), dp(8), dp(4));
+        dailyCheckinsSummaryView.setBackground(rounded(Color.rgb(228, 237, 255), 8, 0, 0));
         heading.addView(dailyCheckinsSummaryView);
         section.addView(heading, matchWrap());
         section.addView(space(8));
@@ -5344,9 +5364,6 @@ public class MainActivity extends Activity {
         secondRow.addView(spaceHorizontal(8));
         secondRow.addView(englishReadingCard, weightedWrap(1));
         section.addView(secondRow, matchWrap());
-        LinearLayout.LayoutParams optionsParams = matchWrap();
-        optionsParams.topMargin = dp(8);
-        section.addView(sportOptionsPanel, optionsParams);
         return section;
     }
 
@@ -5364,45 +5381,8 @@ public class MainActivity extends Activity {
         item.addView(spaceHorizontal(8));
         LinearLayout copy = vertical();
         copy.addView(text("运动打卡", 12, INK, true));
-        sportStatusView = text("待完成", 10, MUTED, false);
-        sportStatusView.setPadding(0, dp(3), 0, 0);
-        copy.addView(sportStatusView);
         item.addView(copy, weightedWrap(1));
-        sportOptionsArrowView = text("⌄", 14, MUTED, false);
-        item.addView(sportOptionsArrowView);
-        item.setOnClickListener(v -> {
-            sportOptionsExpanded = !sportOptionsExpanded;
-            renderDailyCheckins(currentRecord(false));
-        });
-
-        sportOptionsPanel = vertical();
-        sportOptionsPanel.setPadding(dp(10), dp(10), dp(10), dp(10));
-        sportOptionsPanel.setBackground(rounded(PAGE, 12, PAGE, 0));
-        sportOptionsPanel.addView(text("选择已完成的运动", 10, MUTED, false));
-        sportOptionsPanel.setVisibility(View.GONE);
-        sportButtons.clear();
-        LinearLayout currentRow = null;
-        for (int index = 0; index < SPORTS.length; index++) {
-            if (index == 0 || index == 3) {
-                currentRow = horizontal();
-                LinearLayout.LayoutParams rowParams = matchWrap();
-                rowParams.topMargin = dp(8);
-                sportOptionsPanel.addView(currentRow, rowParams);
-            }
-            final String activity = SPORTS[index];
-            Button button = new Button(this);
-            button.setText(activity);
-            button.setTextSize(10);
-            button.setAllCaps(false);
-            button.setMinHeight(dp(44));
-            button.setMinimumHeight(dp(44));
-            button.setPadding(dp(3), 0, dp(3), 0);
-            button.setOnClickListener(v -> toggleSport(activity));
-            LinearLayout.LayoutParams params = weightedWrap(1);
-            if (currentRow.getChildCount() > 0) params.leftMargin = dp(6);
-            currentRow.addView(button, params);
-            sportButtons.add(button);
-        }
+        item.setOnClickListener(v -> toggleSport());
         return item;
     }
 
@@ -5422,6 +5402,7 @@ public class MainActivity extends Activity {
         copy.addView(titleView);
         TextView status = text(subtitle, 11, MUTED, false);
         status.setPadding(0, dp(3), 0, 0);
+        status.setVisibility(subtitle.isEmpty() ? View.GONE : View.VISIBLE);
         copy.addView(status);
         item.addView(copy, weightedWrap(1));
         ledgerCheckView = check;
@@ -5445,19 +5426,13 @@ public class MainActivity extends Activity {
         item.addView(spaceHorizontal(8));
         LinearLayout copy = vertical();
         copy.addView(text(title, 12, INK, true));
-        TextView status = text("待完成", 10, MUTED, false);
-        status.setPadding(0, dp(2), 0, 0);
-        copy.addView(status);
         item.addView(copy, weightedWrap(1));
         if ("readingDone".equals(field)) {
             readingCheckView = check;
-            readingStatusView = status;
         } else if ("mathThinkingDone".equals(field)) {
             mathThinkingCheckView = check;
-            mathThinkingStatusView = status;
         } else if ("englishReadingDone".equals(field)) {
             englishReadingCheckView = check;
-            englishReadingStatusView = status;
         }
         item.setOnClickListener(v -> togglePrep(field, timeField, title + "状态已更新"));
         return item;
@@ -6607,25 +6582,15 @@ public class MainActivity extends Activity {
         boolean checked = !record.optBoolean(field, false);
         put(record, field, checked);
         if (checked) put(record, timeField, currentTime()); else record.remove(timeField);
-        if ("ledgerConfirmed".equals(field) && !holidayDay(currentDate) && taskArray(false).length() > 0 && allTasksDone()) {
-            if (checked) {
-                put(record, "finishTime", hasText(record, "tasksFinishedAt")
-                        ? record.optString("tasksFinishedAt") : currentTime());
-                Result result = resultFor(record);
-                String kind = result.amount < 0 ? "扣款" : result.amount == 0 ? "结算" : "奖励";
-                message = "成长记录册已补全，自动" + kind + " " + amountText(result.amount);
-            } else {
-                record.remove("finishTime");
-            }
-        }
         cleanupCurrentRecord();
         saveRecords();
         renderAll();
         toast(message);
     }
 
-    private List<String> sportActivities(JSONObject record) {
-        List<String> selected = new ArrayList<>();
+    private boolean isSportDone(JSONObject record) {
+        // Preserve legacy activity details; an explicit check-in takes precedence.
+        if (record != null && record.has("sportDone")) return record.optBoolean("sportDone");
         JSONArray stored = record == null ? null : record.optJSONArray("sportActivities");
         if (stored != null) {
             for (String activity : SPORTS) {
@@ -6633,37 +6598,24 @@ public class MainActivity extends Activity {
                     String savedActivity = stored.optString(index);
                     if (activity.equals(savedActivity)
                             || ("50米".equals(activity) && "50米跑".equals(savedActivity))) {
-                        selected.add(activity);
-                        break;
+                        return true;
                     }
                 }
             }
-        } else if (record != null && record.optBoolean("ropeDone", false)) {
-            selected.add("跳绳");
+            return false;
         }
-        return selected;
+        return record != null && record.optBoolean("ropeDone", false);
     }
 
-    private void toggleSport(String activity) {
+    private void toggleSport() {
         JSONObject record = currentRecord(true);
-        List<String> selected = sportActivities(record);
-        boolean removing = selected.remove(activity);
-        if (!removing) selected.add(activity);
-        JSONArray stored = new JSONArray();
-        for (String sport : SPORTS) if (selected.contains(sport)) stored.put(sport);
-        if (stored.length() > 0) {
-            put(record, "sportActivities", stored);
-            if (!hasText(record, "sportAt")) put(record, "sportAt", currentTime());
-        } else {
-            record.remove("sportActivities");
-            record.remove("sportAt");
-        }
-        record.remove("ropeDone");
-        record.remove("ropeAt");
+        boolean checked = !isSportDone(record);
+        put(record, "sportDone", checked);
+        if (checked) put(record, "sportAt", currentTime()); else record.remove("sportAt");
         cleanupCurrentRecord();
         saveRecords();
         renderAll();
-        toast(removing ? "已取消" + activity : activity + "已打卡");
+        toast(checked ? "运动已打卡" : "已取消运动打卡");
     }
 
     private void performAction(String action) {
@@ -6705,10 +6657,6 @@ public class MainActivity extends Activity {
                 toast("请先确认作业并保存周末计划");
                 return;
             }
-            if (!weekendMode && !record.optBoolean("ledgerConfirmed", false)) {
-                toast("请先核对钉钉，并补全成长记录册");
-                return;
-            }
             put(record, "finishTime", now);
             record.remove("ruleId");
             if (weekendMode) {
@@ -6741,54 +6689,32 @@ public class MainActivity extends Activity {
     private List<String> pendingDailyRequirements(JSONObject record) {
         if (record == null) record = new JSONObject();
         List<String> pending = new ArrayList<>();
-        if (sportActivities(record).isEmpty()) pending.add("运动打卡");
+        if (!isSportDone(record)) pending.add("运动打卡");
         if (!record.optBoolean("readingDone")) pending.add("中文阅读");
         if (!record.optBoolean("mathThinkingDone")) pending.add("数学思维");
         if (!record.optBoolean("englishReadingDone")) pending.add("英文阅读");
         return pending;
     }
 
-    private void styleDailyRequiredCard(LinearLayout item, TextView check, TextView status,
+    private void styleDailyRequiredCard(LinearLayout item, TextView check,
                                         String title, boolean done) {
         int doneColor = Color.rgb(50, 113, 94);
-        item.setBackground(rounded(done ? Color.rgb(238, 248, 242) : Color.rgb(247, 250, 255),
-                12, done ? Color.rgb(181, 217, 200) : Color.rgb(212, 224, 242), 1));
+        item.setBackground(rounded(done ? Color.rgb(238, 248, 242) : Color.WHITE,
+                12, done ? Color.rgb(181, 217, 200) : HOME_LINE, 1));
         item.setSelected(done);
         item.setContentDescription(title + (done ? "，已完成，点击撤销打卡" : "，待完成，点击打卡"));
         check.setTextColor(done ? Color.WHITE : Color.TRANSPARENT);
-        check.setBackground(rounded(done ? doneColor : PAGE, 20, done ? doneColor : LINE, 1));
-        status.setText(done ? "已完成" : "待完成");
-        status.setTextColor(done ? doneColor : MUTED);
+        check.setBackground(rounded(done ? doneColor : Color.WHITE, 20, done ? doneColor : Color.rgb(107, 145, 218), 1));
     }
 
     private void renderDailyCheckins(JSONObject record) {
         if (record == null) record = new JSONObject();
-        if (!currentDate.equals(sportOptionsDate)) {
-            sportOptionsDate = currentDate;
-            sportOptionsExpanded = false;
-        }
-        List<String> selectedSports = sportActivities(record);
-        boolean sportDone = !selectedSports.isEmpty();
-        styleDailyRequiredCard(sportCard, sportCheckView, sportStatusView, "运动打卡", sportDone);
-        sportCard.setContentDescription("运动打卡，" + (sportDone
-                ? "已完成：" + android.text.TextUtils.join("、", selectedSports) : "待完成")
-                + (sportOptionsExpanded ? "，收起运动项目" : "，展开运动项目"));
-        sportOptionsPanel.setVisibility(sportOptionsExpanded ? View.VISIBLE : View.GONE);
-        sportOptionsArrowView.setText(sportOptionsExpanded ? "⌃" : "⌄");
-        for (int index = 0; index < sportButtons.size(); index++) {
-            Button button = sportButtons.get(index);
-            boolean selected = selectedSports.contains(SPORTS[index]);
-            button.setSelected(selected);
-            button.setContentDescription(SPORTS[index] + (selected ? "，已打卡，点击取消" : "，未打卡，点击打卡"));
-            button.setTextColor(selected ? Color.WHITE : MUTED);
-            button.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
-            button.setBackground(rounded(selected ? GREEN : Color.WHITE, 18, selected ? GREEN : LINE, 1));
-        }
-        styleDailyRequiredCard(readingCard, readingCheckView, readingStatusView,
+        styleDailyRequiredCard(sportCard, sportCheckView, "运动打卡", isSportDone(record));
+        styleDailyRequiredCard(readingCard, readingCheckView,
                 "中文阅读", record.optBoolean("readingDone"));
-        styleDailyRequiredCard(mathThinkingCard, mathThinkingCheckView, mathThinkingStatusView,
+        styleDailyRequiredCard(mathThinkingCard, mathThinkingCheckView,
                 "数学思维", record.optBoolean("mathThinkingDone"));
-        styleDailyRequiredCard(englishReadingCard, englishReadingCheckView, englishReadingStatusView,
+        styleDailyRequiredCard(englishReadingCard, englishReadingCheckView,
                 "英文阅读", record.optBoolean("englishReadingDone"));
         dailyCheckinsSummaryView.setText("已完成 " + (4 - pendingDailyRequirements(record).size()) + " / 4");
     }
@@ -6814,11 +6740,10 @@ public class MainActivity extends Activity {
         stylePrep(ledgerCard, ledgerCheckView, ledgerConfirmed);
         String weekendKey = weekendKeyFor(currentDate);
         ledgerCard.setVisibility(weekendKey != null && !currentDate.equals(weekendKey) ? View.GONE : View.VISIBLE);
-        JSONObject holiday = HolidayPlans.find(holidayState(), currentDate);
-        if (holiday != null && !currentDate.equals(holiday.optString("planDate"))) ledgerCard.setVisibility(View.GONE);
         ledgerTitleView.setText(ledgerConfirmed ? "我已核对钉钉，也补全了成长记录册" : "核对钉钉，补全成长记录册");
         ledgerStatusView.setText(ledgerConfirmed
-                ? fallbackTime(record, "ledgerAt") + " 完成" : "把钉钉里新增的作业补充进去");
+                ? fallbackTime(record, "ledgerAt") + " 完成" : "");
+        ledgerStatusView.setVisibility(ledgerConfirmed ? View.VISIBLE : View.GONE);
         ViewGroup.LayoutParams ledgerParams = ledgerCard.getLayoutParams();
         if (ledgerParams != null) {
             ledgerParams.height = dp(ledgerConfirmed ? 56 : 72);
@@ -7138,7 +7063,7 @@ public class MainActivity extends Activity {
         if (hasText(record, "startTime")) return record.optString("startTime") + " 开始，进行中";
         if (record.optBoolean("ledgerConfirmed")) return "成长记录册已补全";
         List<String> dailyCheckins = new ArrayList<>();
-        if (!sportActivities(record).isEmpty()) dailyCheckins.add("运动");
+        if (isSportDone(record)) dailyCheckins.add("运动");
         if (record.optBoolean("readingDone")) dailyCheckins.add("中文阅读");
         if (record.optBoolean("mathThinkingDone")) dailyCheckins.add("数学思维");
         if (record.optBoolean("englishReadingDone")) dailyCheckins.add("英文阅读");
@@ -7206,10 +7131,6 @@ public class MainActivity extends Activity {
                     && (weekend == null || !weekend.optBoolean("confirmed", false)
                     || !weekend.optBoolean("planSaved", false))) {
                 toast("请先确认作业并保存周末计划");
-                return;
-            }
-            if (!values[3].isEmpty() && !weekendMode && !current.optBoolean("ledgerConfirmed", false)) {
-                toast("请先核对钉钉，并补全成长记录册");
                 return;
             }
             boolean any = false;
@@ -7360,7 +7281,7 @@ public class MainActivity extends Activity {
         content.addView(space(14));
         Button holidayEntry = smallButton("假期设置  ›");
         holidayEntry.setOnClickListener(v -> holidayScreen.openSettings());
-        content.addView(holidayEntry, matchFixed(dp(60)));
+        holidayEntry.setVisibility(View.GONE);
         content.addView(space(14));
 
         alarmSettingsEntryView = buildSettingsDetailEntry("休息结束提醒", () -> showSettingsDetailPage(true));
@@ -7965,6 +7886,7 @@ public class MainActivity extends Activity {
         put(state, "records", records);
         put(state, "weekends", weekends);
         put(state, "holidays", holidays);
+        put(state, "planningVersion", 2);
         put(state, "dictationCustom", dictationCustomWords);
         put(state, "taskKeywords", taskKeywords);
         put(state, "dictationLesson", selectedDictationLessonId());
@@ -8055,6 +7977,7 @@ public class MainActivity extends Activity {
         for (String[] item : DICTATION_LESSONS)
             if (item[0].equals(restored.optString("dictationLesson"))) lesson = item[0];
         put(restored, "dictationLesson", lesson);
+        StudyPlans.migrate(restored, todayIso());
         pauseSavedClocks(restored, capturedAt);
         return restored;
     }
@@ -8194,11 +8117,11 @@ public class MainActivity extends Activity {
     }
 
     private String weekendKeyFor(String date) {
-        if (holidayDay(date)) return null;
+        if (holidayState().optInt("planningVersion") >= 2) return null;
         Calendar calendar = calendarFromIso(date);
         int day = calendar.get(Calendar.DAY_OF_WEEK);
         String friday = day == Calendar.SATURDAY ? addDays(date, -1) : day == Calendar.SUNDAY ? addDays(date, -2) : date;
-        if ((day == Calendar.SATURDAY || day == Calendar.SUNDAY) && HolidayPlans.find(holidayState(), friday) != null) return null;
+        if ((day == Calendar.SATURDAY || day == Calendar.SUNDAY) && StudyPlans.find(holidayState(), friday) != null) return null;
         if (day == Calendar.FRIDAY) return date;
         if (day == Calendar.SATURDAY) return addDays(date, -1);
         if (day == Calendar.SUNDAY) return addDays(date, -2);
@@ -8226,6 +8149,10 @@ public class MainActivity extends Activity {
     }
 
     private boolean includeDailyInLedger(String date, JSONObject record) {
+        int day = calendarFromIso(date).get(Calendar.DAY_OF_WEEK);
+        String archivedKey = day == Calendar.FRIDAY ? date : day == Calendar.SATURDAY ? addDays(date, -1) : day == Calendar.SUNDAY ? addDays(date, -2) : null;
+        JSONObject archive = archivedKey == null ? null : weekends.optJSONObject(archivedKey);
+        if (archive != null && archive.optBoolean("datedTasksMigrated") && isWeekendMeaningful(archive)) return record == null || !record.optBoolean("legacyWeekendSettlement");
         String key = weekendKeyFor(date);
         if (key == null) return true;
         return hasText(record, "ruleId") && !isWeekendMeaningful(weekends.optJSONObject(key));
@@ -8289,7 +8216,7 @@ public class MainActivity extends Activity {
             long total = 0L;
             for (int index = 0; index < tasks.length(); index++) {
                 JSONObject task = tasks.optJSONObject(index);
-                if (task != null) total += taskElapsedMillis(task);
+                if (task != null) total += weekend.optBoolean("datedTasksMigrated") ? task.optLong("elapsedMs") : taskElapsedMillis(task);
             }
             return (int) (total / 60000L);
         }
@@ -8304,7 +8231,7 @@ public class MainActivity extends Activity {
 
     private boolean isMeaningful(JSONObject record) {
         if (record == null) return false;
-        if (record.optBoolean("ropeDone")
+        if (record.optBoolean("sportDone") || record.optBoolean("ropeDone")
                 || (record.optJSONArray("sportActivities") != null && record.optJSONArray("sportActivities").length() > 0)
                 || record.optBoolean("ledgerConfirmed") || record.optBoolean("readingDone")
                 || record.optBoolean("mathThinkingDone") || record.optBoolean("englishReadingDone")
@@ -8446,9 +8373,9 @@ public class MainActivity extends Activity {
     }
 
     private void stylePrep(LinearLayout card, TextView check, boolean selected) {
-        card.setBackground(rounded(selected ? GREEN_SOFT : Color.WHITE, 17, selected ? Color.rgb(156, 188, 245) : LINE, 1));
+        card.setBackground(rounded(selected ? Color.rgb(232, 240, 255) : HOME_SOFT, 14, selected ? Color.rgb(145, 180, 249) : HOME_LINE, 1));
         check.setTextColor(selected ? Color.WHITE : Color.TRANSPARENT);
-        check.setBackground(rounded(selected ? GREEN : PAGE, 20, selected ? GREEN : LINE, 1));
+        check.setBackground(rounded(selected ? GREEN : Color.WHITE, 20, selected ? GREEN : Color.rgb(107, 145, 218), 1));
     }
 
     private void styleDot(TextView dot, boolean done, boolean active) {

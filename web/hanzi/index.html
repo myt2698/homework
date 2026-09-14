@@ -11,25 +11,23 @@
   <main class="lookup-shell">
     <header class="lookup-header">
       <button id="lookupBack" class="back-button" type="button" aria-label="返回作业">‹ <span>返回</span></button>
-      <div><h1>查字</h1><p>看清每一笔，跟着写一写</p></div>
+      <h1>查字</h1>
       <span class="header-mark" aria-hidden="true">字</span>
     </header>
-    <p id="lookupTimerNote" class="timer-note" hidden>专注计时继续中，查完就回去写作业</p>
-    <form id="lookupForm" class="lookup-search">
+    <form id="lookupForm" class="lookup-search" role="search" aria-label="查字">
       <label class="sr-only" for="lookupInput">要查的汉字或词语</label>
-      <input id="lookupInput" type="text" maxlength="48" placeholder="输入汉字或词语，如：学习" autocomplete="off" enterkeyhint="search" aria-describedby="lookupSearchHint">
-      <button class="primary" type="submit">查字</button>
+      <input id="lookupInput" type="text" maxlength="48" placeholder="输入文字" autocomplete="off" enterkeyhint="search">
+      <button class="primary" type="submit">搜索</button>
     </form>
-    <p id="lookupSearchHint" class="search-hint">也可以用键盘上的手写输入。</p>
     <div id="lookupCharacters" class="character-choices" role="group" aria-label="选择要看的字" hidden></div>
     <section class="writing-card" aria-label="汉字笔顺和跟写">
-      <div class="character-heading"><h2 id="lookupCharacter">来查一个字吧</h2><span id="lookupStrokeCount"></span></div>
+      <div class="character-heading" hidden><h2 id="lookupCharacter"></h2><span id="lookupStrokeCount"></span></div>
       <div id="lookupBoard" class="writing-board">
         <svg class="grid-lines" viewBox="0 0 300 300" aria-hidden="true"><path d="M150 0V300M0 150H300"/><path class="diagonal" d="M0 0L300 300M300 0L0 300"/></svg>
         <div id="lookupCanvas" role="img" aria-label="汉字书写区域"></div>
         <span id="lookupPlaceholder" class="board-placeholder" aria-hidden="true">字</span>
       </div>
-      <p id="lookupStatus" class="lookup-status" role="status" aria-live="polite">输入一个字，看看它是怎么写的</p>
+      <p id="lookupStatus" class="lookup-status" role="status" aria-live="polite"></p>
       <progress id="lookupPracticeProgress" value="0" max="1" aria-label="跟写进度" hidden></progress>
       <div class="writing-actions">
         <button id="lookupAnimate" class="primary" type="button" disabled>▶ 看笔顺</button>
@@ -40,7 +38,7 @@
         <button id="lookupHint" type="button" disabled>提示下一笔</button>
       </div>
     </section>
-    <div id="lookupExamples" class="example-characters" aria-label="试着查一个字"><span>试一试</span><button type="button" data-character="永">永</button><button type="button" data-character="学">学</button><button type="button" data-character="写">写</button></div>
+    <div id="lookupExamples" class="example-characters" aria-label="常用字"><button type="button" data-character="永">永</button><button type="button" data-character="学">学</button><button type="button" data-character="写">写</button></div>
     <details class="lookup-credits">
       <summary>字库与使用说明</summary>
       <p id="lookupCoverage"></p>

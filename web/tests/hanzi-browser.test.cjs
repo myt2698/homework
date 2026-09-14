@@ -34,7 +34,7 @@ const { chromium } = require('playwright');
     await lookup.locator('#lookupInput').waitFor();
     const frame = page.frames().find(f => f.url().includes('/hanzi/index.html'));
     assert.equal(await page.locator('#mainPage').evaluate(node => node.inert), true);
-    assert.equal(await lookup.locator('#lookupTimerNote').isVisible(), false);
+    assert.equal(await lookup.locator('#lookupTimerNote').count(), 0);
     const search = async value => {
       await lookup.locator('#lookupInput').fill(value);
       await lookup.locator('#lookupForm button').click();
@@ -125,7 +125,7 @@ const { chromium } = require('playwright');
     const active = await snapshot();
     await page.locator('#focusLookupButton').click();
     await lookup.locator('#lookupInput').waitFor();
-    assert.equal(await lookup.locator('#lookupTimerNote').isVisible(), true);
+    assert.equal(await lookup.locator('#lookupTimerNote').count(), 0);
     await page.clock.setFixedTime(new Date('2026-09-10T18:02:00+08:00'));
     await page.waitForFunction(() => document.getElementById('focusModalElapsed').textContent.includes('02'));
     await lookup.locator('#lookupBack').click();

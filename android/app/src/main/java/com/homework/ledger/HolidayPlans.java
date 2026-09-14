@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 /** Shared-format holiday configuration and dated task instances; no automatic regeneration. */
-final class HolidayPlans {
+class HolidayPlans {
     static final class Ref {
         final String date;
         final JSONObject task;

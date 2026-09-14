@@ -9,7 +9,6 @@
   window.HanziStrokeData = Object.create(null);
   let writer = null, selected = '', selectedData = null, operation = 0, mode = 'empty', nextStroke = 0;
   const params = new URLSearchParams(location.search);
-  el('lookupTimerNote').hidden = params.get('focus') !== '1';
   el('lookupBack').setAttribute('aria-label', params.get('focus') === '1' ? '返回专注计时' : '返回首页');
   el('lookupCoverage').textContent = `内置 ${window.HanziCatalog.count.toLocaleString('zh-CN')} 个汉字，断网也能查。本页提供笔顺和跟写，暂不提供拼音、释义或组词。`;
 
@@ -20,6 +19,7 @@
 
   function controls(nextMode) {
     mode = nextMode;
+    el('lookupCharacter').parentElement.hidden = !selected;
     const ready = Boolean(selectedData) && !['loading', 'empty', 'error'].includes(mode);
     animateButton.disabled = practiceButton.disabled = !ready;
     pauseButton.disabled = !['animation', 'paused'].includes(mode);
@@ -67,7 +67,7 @@
       writer = new HanziWriter(canvas, {
         width: size, height: size, padding: 22,
         charDataLoader: char => window.HanziStrokeData[char],
-        strokeColor: '#365f9a', outlineColor: '#dce6f2', drawingColor: '#347e6b',
+        strokeColor: '#1d4ed8', outlineColor: '#dce6f2', drawingColor: '#347e6b',
         highlightColor: '#65bca2', strokeAnimationSpeed: .8, delayBetweenStrokes: 280,
         showHintAfterMisses: 2, showOutline: true, drawingWidth: 10
       });
@@ -79,13 +79,13 @@
     if (!selectedData) return;
     const ticket = ++operation;
     controls('animation');
-    tell('仔细看，一笔一笔慢慢写');
+    tell('笔顺演示中');
     await prepareWriter(selected);
     if (ticket !== operation) return;
     await writer.animateCharacter();
     if (ticket !== operation) return;
     controls('ready');
-    tell(`共 ${selectedData.strokes.length} 笔，试试跟着写吧`);
+    tell('');
   }
 
   async function practice() {
@@ -95,7 +95,7 @@
     nextStroke = 0;
     progress.max = selectedData.strokes.length;
     progress.value = 0;
-    tell('沿着浅色轮廓，从第一笔开始写');
+    tell('');
     await prepareWriter(selected);
     if (ticket !== operation) return;
     writer.quiz({
@@ -103,16 +103,16 @@
         if (ticket !== operation) return;
         nextStroke = data.strokeNum + 1;
         progress.value = nextStroke;
-        tell(`写对啦！已写 ${nextStroke} / ${selectedData.strokes.length} 笔`);
+        tell(`已写 ${nextStroke} / ${selectedData.strokes.length} 笔`);
       },
       onMistake: () => {
-        if (ticket === operation) tell('再试一次，留意这一笔的方向和顺序');
+        if (ticket === operation) tell('再试一次');
       },
       onComplete: () => {
         if (ticket !== operation) return;
         controls('complete');
         progress.value = selectedData.strokes.length;
-        tell(`写好啦！你完成了“${selected}”，可以再练一次`);
+        tell('写好啦！');
       }
     });
   }
@@ -130,10 +130,10 @@
     controls('loading');
     if (!catalog.has(character)) {
       controls('error');
-      tell(`暂时还没有“${character}”的笔顺，换个字试试`, true);
+      tell(`未收录“${character}”的笔顺`, true);
       return;
     }
-    tell('正在找这个字的笔顺…');
+    tell('加载中…');
     try {
       const data = await loadData(character);
       if (ticket !== operation) return;
@@ -145,7 +145,7 @@
       selectedData = null;
       canvas.style.visibility = 'hidden';
       controls('error');
-      tell('这个字的资料没有读到，请再查一次', true);
+      tell('加载失败，请重试', true);
     }
   }
 
@@ -164,11 +164,11 @@
       selected = '';
       canvas.style.visibility = 'hidden';
       el('lookupPlaceholder').hidden = false;
-      el('lookupCharacter').textContent = '来查一个字吧';
+      el('lookupCharacter').textContent = '';
       el('lookupStrokeCount').textContent = '';
       el('lookupCharacters').hidden = true;
       controls('error');
-      tell(characters.length ? '一次最多查 12 个不同的字，分开查一查吧' : '先输入一个汉字，也可以输入词语', true);
+      tell(characters.length ? '一次最多查询 12 个字' : '请输入汉字', true);
       input.setAttribute('aria-invalid', 'true');
       input.focus();
       return;
@@ -203,8 +203,8 @@
   animateButton.addEventListener('click', play);
   practiceButton.addEventListener('click', practice);
   pauseButton.addEventListener('click', () => {
-    if (mode === 'animation') { writer.pauseAnimation(); controls('paused'); tell('已暂停，看清这一笔再继续'); }
-    else if (mode === 'paused') { writer.resumeAnimation(); controls('animation'); tell('仔细看，一笔一笔慢慢写'); }
+    if (mode === 'animation') { writer.pauseAnimation(); controls('paused'); tell('已暂停'); }
+    else if (mode === 'paused') { writer.resumeAnimation(); controls('animation'); tell('笔顺演示中'); }
   });
   hintButton.addEventListener('click', () => {
     if (mode === 'practice') writer.highlightStroke(nextStroke);
@@ -219,7 +219,7 @@
     }
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && mode === 'animation') { writer.pauseAnimation(); controls('paused'); tell('已暂停，回来后可以继续看'); }
+    if (document.hidden && mode === 'animation') { writer.pauseAnimation(); controls('paused'); tell('已暂停'); }
   });
   const resize = () => {
     if (writer) writer.updateDimensions({ width: canvas.clientWidth, height: canvas.clientWidth, padding: 22 });

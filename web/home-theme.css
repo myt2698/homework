@@ -1,0 +1,104 @@
+/* Home uses one primary blue; subject strips and completed habits retain their meaning. */
+body { background: var(--page); }
+body:has(#mainPage:not([hidden])) { min-width: 0; }
+#mainPage {
+  --home-line: #cbdcf8;
+  --home-soft: #eff5ff;
+  --home-ink: #19365b;
+  padding-top: 24px;
+}
+#mainPage .topbar {
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 18px 22px;
+  border-radius: 22px;
+  background: var(--blue);
+  box-shadow: 0 8px 24px rgba(var(--blue-rgb), .14);
+}
+#mainPage .brand h1 { color: #fff; font-size: clamp(1.5rem, 3.6vw, 2rem); letter-spacing: -.03em; }
+#mainPage .brand .eyebrow { color: #fff; font-weight: 600; }
+#mainPage .brand-mascot { box-shadow: none; transform: none; }
+#mainPage .topbar .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  border-color: #5787ef;
+  border-radius: 12px;
+  color: #fff;
+  background: var(--blue-dark);
+  box-shadow: none;
+}
+#mainPage .topbar .icon-button:hover { background: #1742b6; border-color: #cbdcff; }
+#mainPage .topbar .icon-button > span:first-child { filter: grayscale(1) brightness(0) invert(1); }
+#mainPage .topbar .icon-button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+#mainPage .home-lookup-entry {
+  min-height: 56px;
+  margin-bottom: 16px;
+  border-color: var(--home-line);
+  border-radius: 16px;
+  color: var(--blue-dark);
+  box-shadow: none;
+}
+#mainPage .home-lookup-entry:hover { background: var(--home-soft); border-color: #8baef7; }
+#mainPage .home-lookup-entry:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+#mainPage .lookup-entry-mark { color: var(--blue-dark); background: #e8f0ff; }
+#mainPage .record-card { padding: 20px; border-color: var(--home-line); background: #fff; box-shadow: 0 6px 20px rgba(29, 78, 216, .04); }
+#mainPage .prep-check {
+  min-height: 64px;
+  padding: 12px 14px;
+  border-color: var(--home-line);
+  border-radius: 14px;
+  color: var(--home-ink);
+  background: var(--home-soft);
+  box-shadow: none;
+}
+#mainPage .prep-check:hover { transform: none; border-color: #8baef7; }
+#mainPage .prep-check:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+#mainPage .prep-check[aria-pressed="true"] { background: #e8f0ff; border-color: #91b4f9; }
+#mainPage .check-mark { background: #fff; border-color: #6b91da; }
+#mainPage .prep-check[aria-pressed="true"] .check-mark { color: #fff; background: var(--blue); border-color: var(--blue); }
+#mainPage .daily-checkins { margin-top: 16px; padding: 14px; border-radius: 16px; background: #f4f8ff; }
+#mainPage .daily-checkins-heading { margin-bottom: 12px; }
+#mainPage .daily-checkins-heading h2 { color: var(--home-ink); }
+#mainPage .daily-checkins-heading small { padding: 4px 8px; border-radius: 8px; color: var(--blue-dark); background: #e4edff; }
+#mainPage .daily-checkins-grid { gap: 10px; }
+#mainPage .daily-required-card { background: #fff; border-color: var(--home-line); color: var(--home-ink); }
+#mainPage .daily-required-card:hover { border-color: #8baef7; }
+#mainPage .daily-required-card[aria-pressed="true"] { border-color: #b5d9c8; background: #eef8f2; }
+#mainPage .daily-required-card[aria-pressed="true"] .check-mark { color: #fff; background: #32715e; border-color: #32715e; }
+#mainPage .holiday-home-entry { margin: 16px 0; padding: 14px 18px; border-radius: 16px; }
+#mainPage .holiday-home-entry small { color: #fff; }
+#mainPage .task-panel { margin-top: 0; padding-top: 12px; border-color: var(--home-line); }
+#mainPage .task-overview { align-items: center; padding: 4px 2px 8px; }
+#mainPage .task-completed-count b, #mainPage .task-remaining-time strong { color: var(--blue-dark); }
+#mainPage .task-item { border-color: var(--home-line); background: #fff; }
+#mainPage .task-item.quest-current-card { border-color: #91b4f9; background: #f5f8ff; }
+#mainPage .task-item.active { border-color: var(--blue); }
+#mainPage .quest-section-title span { color: var(--blue-dark); }
+#mainPage .quest-section-title.compact span { color: var(--muted); }
+#mainPage .task-list-footer .text-button { min-height: 44px; border-radius: 12px; padding: 9px 12px; color: var(--blue-dark); background: var(--home-soft); }
+#mainPage .task-list-footer .text-button:hover { background: #e4edff; }
+
+@media (max-width: 600px) {
+  #mainPage { padding-top: 12px; }
+  #mainPage .topbar { padding: 14px; gap: 10px; border-radius: 18px; }
+  #mainPage .brand { gap: 8px; }
+  #mainPage .brand-mascot { width: 36px; height: 36px; border-radius: 12px; font-size: 1.15rem; }
+  #mainPage .brand h1 { font-size: 1.3rem; }
+  #mainPage .brand .eyebrow { font-size: .58rem; letter-spacing: .06em; }
+  #mainPage .topbar-actions { gap: 4px; }
+  #mainPage .topbar .icon-button { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+  #mainPage .topbar .icon-button > span:last-child { display: none; }
+  #mainPage .record-card { padding: 14px 12px; border-radius: 18px; }
+  #mainPage .daily-checkins { padding: 12px; }
+  #mainPage .daily-checkins-grid { gap: 8px; }
+  #mainPage .holiday-home-entry { padding: 13px 14px; }
+}
+@media (max-width: 360px) {
+  #mainPage .brand-mascot { display: none; }
+  #mainPage .daily-checkins { padding: 10px; }
+  #mainPage .daily-required-card { padding: 8px; gap: 6px; }
+}
+@media (max-width: 380px) {
+  #mainPage .task-item.has-launch-action > .task-main-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  #mainPage .has-launch-action .task-card-aside { align-items: flex-start; }
+}

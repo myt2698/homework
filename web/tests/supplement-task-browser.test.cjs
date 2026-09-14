@@ -137,19 +137,20 @@ const daily = tasks => ({ records: { [today]: owner(tasks) }, weekends: {}, holi
     assert((await read()).records[today].finishTime);
     assert.equal(await page.locator('.daily-task-review').count(), 1);
 
-    // Each weekend day appends to today while preserving the entire three-day plan.
+    // Migrated weekend dates append only to today's daily list, preserving the archive.
     for (const [date, plannedDay] of [['2026-09-11', 'friday'], ['2026-09-12', 'saturday'], ['2026-09-13', 'sunday']]) {
       const tasks = [task('current', { plannedDay, status: 'active', activeSince: time(date), startedAt: '18:00' }),
         task('other', { plannedDay: plannedDay === 'sunday' ? 'friday' : 'sunday', ...(plannedDay === 'sunday' ? { status: 'done', completedDate: '2026-09-11' } : {}) })];
       const weekend = { records: {}, holidays: {}, weekends: { '2026-09-11': { ...owner(tasks), confirmed: true, confirmedAt: '17:30', planSaved: true, planSavedAt: '17:35' } } };
       await seed(weekend, date);
+      const migrated = await read();
       await add('#focusSupplementButton');
-      const updated = (await read()).weekends['2026-09-11'];
-      assert.deepEqual(updated.tasks.slice(0, 2), tasks);
-      assert.equal(updated.tasks[2].plannedDay, plannedDay);
-      assert.equal(updated.planSavedAt, '17:35');
+      const updated = (await read()).records[date];
+      assert.deepEqual(updated.tasks[0], migrated.records[date].tasks[0]);
+      assert.equal(updated.tasks.length, 2);
+      assert.deepEqual((await read()).weekends['2026-09-11'], migrated.weekends['2026-09-11']);
       await page.locator('#focusSkipButton').click();
-      assert.equal((await read()).weekends['2026-09-11'].tasks[2].status, 'active', 'new task runs today despite future items before it');
+      assert.equal((await read()).records[date].tasks[1].status, 'active', 'new task runs today independently of future dates');
     }
 
     // Holiday supplements are one-off daily instances visible to the existing holiday plan.
@@ -158,12 +159,13 @@ const daily = tasks => ({ records: { [today]: owner(tasks) }, weekends: {}, holi
     holiday.records[today].holidayDaily = true;
     holiday.records['2026-09-11'] = { tasks: [task('tomorrow', { holidayId: 'h' })], holidayDaily: true, tasksConfirmed: true, orderSaved: true };
     await seed(holiday);
+    const migratedHoliday = await read();
     await add('#focusSupplementButton');
     const holidayState = await read();
     assert.equal(holidayState.records[today].tasks[1].holidayId, 'h');
     assert.equal(holidayState.records[today].tasks[1].holidayOriginalDate, today);
     assert.equal(holidayState.records[today].tasks[1].holidaySeriesId, '');
-    assert.deepEqual(holidayState.records['2026-09-11'], holiday.records['2026-09-11']);
+    assert.deepEqual(holidayState.records['2026-09-11'], migratedHoliday.records['2026-09-11']);
     assert.equal(holidayState.holidays.h.confirmed, true);
 
     // A form left open across midnight cannot accidentally append to yesterday.

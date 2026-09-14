@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#f4f8ff">
   <title>作业小计划</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="home-theme.css?v=20260914-warm-launch">
 </head>
 <body>
   <main class="app-shell" id="mainPage">
@@ -56,7 +57,7 @@
           <span class="check-mark" aria-hidden="true">✓</span>
           <span>
             <strong id="ledgerTitle">核对钉钉，补全成长记录册</strong>
-            <small id="ledgerStatus">把钉钉里新增的作业补充进去</small>
+            <small id="ledgerStatus" hidden></small>
           </span>
         </button>
       </div>
@@ -67,31 +68,22 @@
           <small id="dailyCheckinsSummary">已完成 0 / 4</small>
         </div>
         <div class="daily-checkins-grid">
-          <button class="daily-required-card" id="sportCard" type="button" aria-expanded="false" aria-controls="sportOptions">
+          <button class="daily-required-card" id="sportCard" type="button" aria-pressed="false">
             <span class="check-mark" aria-hidden="true">✓</span>
-            <span class="daily-required-copy"><strong>运动打卡</strong><small id="sportStatus">待完成</small></span>
-            <span class="sport-options-arrow" aria-hidden="true">⌄</span>
+            <span class="daily-required-copy"><strong>运动打卡</strong></span>
           </button>
           <button class="daily-required-card" id="readingButton" type="button" aria-pressed="false">
             <span class="check-mark" aria-hidden="true">✓</span>
-            <span class="daily-required-copy"><strong>中文阅读</strong><small id="readingStatus">待完成</small></span>
+            <span class="daily-required-copy"><strong>中文阅读</strong></span>
           </button>
           <button class="daily-required-card" id="mathThinkingButton" type="button" aria-pressed="false">
             <span class="check-mark" aria-hidden="true">✓</span>
-            <span class="daily-required-copy"><strong>数学思维</strong><small id="mathThinkingStatus">待完成</small></span>
+            <span class="daily-required-copy"><strong>数学思维</strong></span>
           </button>
           <button class="daily-required-card" id="englishReadingButton" type="button" aria-pressed="false">
             <span class="check-mark" aria-hidden="true">✓</span>
-            <span class="daily-required-copy"><strong>英文阅读</strong><small id="englishReadingStatus">待完成</small></span>
+            <span class="daily-required-copy"><strong>英文阅读</strong></span>
           </button>
-        </div>
-        <div class="sport-options" id="sportOptions" role="group" aria-label="选择已完成的运动" hidden>
-          <small>选择已完成的运动</small>
-          <button type="button" data-sport="跳绳" aria-pressed="false">跳绳</button>
-          <button type="button" data-sport="踢毽子" aria-pressed="false">踢毽子</button>
-          <button type="button" data-sport="坐位体前屈" aria-pressed="false">坐位体前屈</button>
-          <button type="button" data-sport="50米" aria-pressed="false">50米</button>
-          <button type="button" data-sport="仰卧起坐" aria-pressed="false">仰卧起坐</button>
         </div>
       </section>
 
@@ -378,9 +370,24 @@
   </section>
   <section class="task-entry-page" id="holidayPlanPage" aria-labelledby="holidayPlanTitle" hidden>
     <div class="task-entry-layout">
-      <header class="holiday-plan-header"><button class="history-back-button" id="holidayPlanBack" type="button" aria-label="返回">‹</button><h1 id="holidayPlanTitle">假期计划</h1><button class="primary-button compact-button" id="holidayConfirm" type="button">确定</button></header>
-      <div class="holiday-short-days" id="holidayShortDays" role="group" aria-label="选择假期天数"></div>
-      <div class="holiday-day-toolbar"><span id="holidayDaySummary"></span><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
+      <header class="holiday-plan-header">
+        <button class="history-back-button" id="holidayPlanBack" type="button" aria-label="返回">‹</button><h1 id="holidayPlanTitle">作业计划</h1>
+        <details class="plan-range-options" id="planRangeOptions">
+          <summary id="planRangeSummary">只安排今天</summary>
+          <div class="plan-range-content">
+            <label id="planRangeStart" for="planDayCount">从今天起</label>
+            <div class="plan-day-stepper">
+              <button type="button" id="planDayDecrease" aria-label="减少一天">−</button>
+              <input id="planDayCount" type="number" min="1" max="366" step="1" value="1" inputmode="numeric" aria-label="安排天数，包含开始这一天" required><span>天</span>
+              <button type="button" id="planDayIncrease" aria-label="增加一天">＋</button>
+            </div>
+            <button type="button" id="planApplyRange" class="primary-button compact-button">确定</button>
+          </div>
+        </details>
+        <button class="primary-button compact-button" id="holidayConfirm" type="button">确定</button>
+      </header>
+      <div class="holiday-short-days" id="holidayShortDays" role="group" aria-label="选择计划天数"></div>
+      <div class="holiday-day-toolbar"><span id="holidayDaySummary"></span><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortUndo" type="button" hidden>撤销一步</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
       <div class="holiday-ledger-hint" id="holidayLedgerHint" hidden><span id="holidayLedgerText"></span><button class="text-button bordered" id="holidayCheckLedger" type="button">去核对</button></div>
       <div class="holiday-task-list" id="holidayTaskList"></div>
       <form class="task-entry-composer holiday-composer" id="holidayTaskForm">
@@ -397,7 +404,7 @@
             </div>
           </div>
           <textarea class="task-draft-input" id="holidayTaskTitle" rows="1" maxlength="120" placeholder="请输入一项作业…" aria-label="作业内容" required></textarea>
-          <label class="task-entry-estimate" for="holidayTaskMinutes"><select id="holidayTaskMinutes" aria-label="新增假期作业预计用时"></select></label>
+          <label class="task-entry-estimate" for="holidayTaskMinutes"><select id="holidayTaskMinutes" aria-label="新增作业预计用时"></select></label>
           <button class="add-task-icon-button" type="submit" aria-label="添加假期作业">＋</button>
         </div>
       </form>
@@ -674,6 +681,7 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="holiday-plans.js"></script>
+  <script src="study-plans.js"></script>
   <script src="holiday-ui.js"></script>
   <script src="app.js"></script>
   <script src="hanzi-entry.js"></script>

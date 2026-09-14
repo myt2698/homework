@@ -32,12 +32,13 @@ import java.util.UUID;
 final class HolidayScreen {
     interface Host {
         JSONObject state(); String date(); String today(); int subjectColor(String subject); int subjectSoftColor(String subject); JSONArray keywords(String subject);
+        List<JSONObject> parseDraft(String value, String subject);
         void changed(); void show(View page); void back(boolean settings); void goDate(String date); void confirmed();
     }
-    private static final int BLUE = Color.rgb(75,130,239), INK = Color.rgb(36,50,74), MUTED = Color.rgb(104,119,146);
+    private static final int BLUE = Color.rgb(37,99,235), INK = Color.rgb(36,50,74), MUTED = Color.rgb(104,119,146);
     private static final int[] MINUTES = {5,10,15,20,30,35,40,45,50,60};
     private final Activity activity; private final Host host;
-    private LinearLayout home, taskList, composer, shortDays; private Button sortButton, resetButton; private TextView summary;
+    private LinearLayout home, taskList, composer, shortDays; private Button sortButton, resetButton, undoButton, rangeButton; private TextView summary;
     private HorizontalScrollView dayScroll;
     private EditText taskInput; private Spinner repeat, taskMinutes;
     private Button subject; private String selectedSubject = "语文";
@@ -74,10 +75,10 @@ final class HolidayScreen {
     private void hideKeyboard() { InputMethodManager k=(InputMethodManager)activity.getSystemService(Activity.INPUT_METHOD_SERVICE); View focus=activity.getCurrentFocus();if(k!=null&&focus!=null)k.hideSoftInputFromWindow(focus.getWindowToken(),0); }
     View home() { home = col(); return home; }
     void renderHome() {
-        if(home==null)return;home.removeAllViews(); JSONObject h=HolidayPlans.find(host.state(),host.date());
-        if(h!=null){ Button entry=button(h.optString("name")+" · "+(host.date().equals(h.optString("planDate"))?"安排假期作业":"查看与调整计划")+"  ›",()->openPlan(h.optString("id"),false)); home.addView(entry,wrap());space(home); }
-        List<HolidayPlans.Ref> overdue=new ArrayList<>();for(HolidayPlans.Ref r:HolidayPlans.refs(host.state(),null))if(r.date.compareTo(host.date())<0&&!"done".equals(r.task.optString("status")))overdue.add(r);
-        if(!overdue.isEmpty()){ home.addView(button("之前未完成 · "+overdue.size()+" 项",()->{overdueExpanded=!overdueExpanded;renderHome();}),wrap());if(overdueExpanded)for(HolidayPlans.Ref r:overdue)home.addView(taskRow(r,true),wrap()); }
+        if(home==null)return;home.removeAllViews(); JSONObject h=StudyPlans.find(host.state(),host.date());
+        Button entry=button("作业计划 · 安排今天和后面几天  ›",()->openCurrent());entry.setTextColor(Color.WHITE);entry.setBackground(bg(BLUE));entry.setMinimumHeight(dp(60));home.addView(entry,wrap());space(home);
+        List<StudyPlans.Ref> overdue=new ArrayList<>();for(StudyPlans.Ref r:StudyPlans.refs(host.state(),null))if(r.date.compareTo(host.date())<0&&!"done".equals(r.task.optString("status")))overdue.add(r);
+        if(!overdue.isEmpty()){ home.addView(button("之前未完成 · "+overdue.size()+" 项",()->{overdueExpanded=!overdueExpanded;renderHome();}),wrap());if(overdueExpanded)for(StudyPlans.Ref r:overdue)home.addView(taskRow(r,true),wrap()); }
     }
     private LinearLayout header(String title,Runnable back,Runnable confirm) {
         LinearLayout h=row();h.addView(button("返回",back));TextView t=text(title,20,INK);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setSingleLine(true);t.setEllipsize(android.text.TextUtils.TruncateAt.END);h.addView(t,weight());if(confirm!=null)h.addView(button("确定",confirm));return h;
@@ -87,36 +88,65 @@ final class HolidayScreen {
         hideKeyboard();settingsOpen=true;planId=null;orderIds=null;
         ScrollView scroll=new ScrollView(activity);LinearLayout content=col();content.setPadding(dp(16),dp(16),dp(16),dp(24));scroll.addView(content,wrap());
         content.addView(header("假期设置",()->back(),null));space(content);
-        for(JSONObject h:HolidayPlans.configs(host.state())){
+        for(JSONObject h:StudyPlans.configs(host.state())){
             LinearLayout item=col();item.setPadding(dp(12),dp(12),dp(12),dp(12));item.setBackground(bg(Color.WHITE));item.addView(text(h.optString("name"),18,INK));item.addView(text(h.optString("start")+" — "+h.optString("end")+"\n"+h.optString("planDate")+" 安排",12,MUTED));
             LinearLayout actions=row();actions.addView(button("安排作业",()->openPlan(h.optString("id"),true)),weight());actions.addView(button("修改",()->openSettings(h)),weight());
-            if(HolidayPlans.refs(host.state(),h.optString("id")).isEmpty())actions.addView(button("删除",()->new AlertDialog.Builder(activity).setMessage("删除这个尚未录入作业的假期吗？").setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->attempt(()->{HolidayPlans.removeHoliday(host.state(),h.optString("id"));persist();openSettings();})).show()),weight());
+            if(StudyPlans.refs(host.state(),h.optString("id")).isEmpty())actions.addView(button("删除",()->new AlertDialog.Builder(activity).setMessage("删除这个尚未录入作业的假期吗？").setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->attempt(()->{StudyPlans.removeHoliday(host.state(),h.optString("id"));persist();openSettings();})).show()),weight());
             item.addView(actions);content.addView(item,wrap());space(content);
         }
         content.addView(text(editing==null?"添加假期":"修改假期",18,INK));space(content);
         EditText name=input("例如：寒假",30);name.setText(editing==null?"":editing.optString("name"));content.addView(name,wrap());
-        String[] dates={editing==null?HolidayPlans.plus(host.today(),1):editing.optString("start"),editing==null?HolidayPlans.plus(host.today(),7):editing.optString("end"),editing==null?host.today():editing.optString("planDate")};
+        String[] dates={editing==null?StudyPlans.plus(host.today(),1):editing.optString("start"),editing==null?StudyPlans.plus(host.today(),7):editing.optString("end"),editing==null?host.today():editing.optString("planDate")};
         String[] labels={"开始日期", "结束日期", "安排日期"};Button[] dateButtons=new Button[3];
-        for(int i=0;i<3;i++){final int index=i;dateButtons[i]=button(labels[i]+"  "+dates[i],()->pickDate(dates[index],null,null,date->{dates[index]=date;dateButtons[index].setText(labels[index]+"  "+date);if(index==0){dates[2]=HolidayPlans.plus(date,-1);dateButtons[2].setText(labels[2]+"  "+dates[2]);}}));space(content);content.addView(dateButtons[i],wrap());}
+        for(int i=0;i<3;i++){final int index=i;dateButtons[i]=button(labels[i]+"  "+dates[i],()->pickDate(dates[index],null,null,date->{dates[index]=date;dateButtons[index].setText(labels[index]+"  "+date);if(index==0){dates[2]=StudyPlans.plus(date,-1);dateButtons[2].setText(labels[2]+"  "+dates[2]);}}));space(content);content.addView(dateButtons[i],wrap());}
         space(content);content.addView(text("安排日期默认为前一天；已有作业后保留假期日期，具体任务仍可改期。",12,MUTED));space(content);
-        content.addView(button("保存",()->{JSONObject h=new JSONObject();HolidayPlans.put(h,"id",editing==null?"holiday-"+UUID.randomUUID():editing.optString("id"));HolidayPlans.put(h,"name",name.getText().toString());HolidayPlans.put(h,"start",dates[0]);HolidayPlans.put(h,"end",dates[1]);HolidayPlans.put(h,"planDate",dates[2]);HolidayPlans.put(h,"confirmed",editing!=null&&editing.optBoolean("confirmed"));HolidayPlans.save(host.state(),h);persist();openSettings();toast("假期已保存");}),wrap());
+        content.addView(button("保存",()->{JSONObject h=new JSONObject();StudyPlans.put(h,"id",editing==null?"holiday-"+UUID.randomUUID():editing.optString("id"));StudyPlans.put(h,"name",name.getText().toString());StudyPlans.put(h,"start",dates[0]);StudyPlans.put(h,"end",dates[1]);StudyPlans.put(h,"planDate",dates[2]);StudyPlans.put(h,"confirmed",editing!=null&&editing.optBoolean("confirmed"));StudyPlans.save(host.state(),h);persist();openSettings();toast("假期已保存");}),wrap());
         if(editing!=null)content.addView(button("取消修改",()->openSettings()),wrap());host.show(scroll);
     }
-    private JSONObject holiday() { return HolidayPlans.object(host.state(),"holidays").optJSONObject(planId); }
-    private boolean ready() { JSONObject h=holiday();JSONObject r=h==null?null:HolidayPlans.object(host.state(),"records").optJSONObject(h.optString("planDate"));return r!=null&&r.optBoolean("ledgerConfirmed"); }
+    private JSONObject holiday() { return StudyPlans.object(host.state(),"holidays").optJSONObject(planId); }
+    private boolean ready() { return true; }
+    void openCurrent() { JSONObject h=StudyPlans.ensure(host.state(),host.date());persist();openPlan(h.optString("id"),false); }
+    private void rangeOptions() {
+        JSONObject h=holiday();if(h==null)return;
+        LinearLayout content=row();content.setPadding(dp(12),dp(12),dp(12),dp(12));
+        String start=h.optString("planDate"),startLabel=start.equals(host.today())?"从今天起":Integer.parseInt(start.substring(5,7))+"/"+Integer.parseInt(start.substring(8))+"起";
+        TextView rangeLabel=text(startLabel,12,INK);rangeLabel.setSingleLine(true);LinearLayout.LayoutParams labelParams=new LinearLayout.LayoutParams(-2,-2);labelParams.rightMargin=dp(6);content.addView(rangeLabel,labelParams);
+        EditText count=input("",3);count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);count.setText(String.valueOf(StudyPlans.days(start,h.optString("end")).size()));count.setTextSize(13);count.setPadding(0,0,0,0);count.setGravity(Gravity.CENTER);count.setBackgroundColor(Color.TRANSPARENT);count.setContentDescription("安排天数，包含开始这一天");
+        LinearLayout stepper=row();stepper.setBackground(bg(Color.WHITE));content.addView(stepper);
+        Button decrease=button("−",()->stepRangeCount(count,-1)),increase=button("＋",()->stepRangeCount(count,1));
+        for(Button control:Arrays.asList(decrease,increase)){control.setMinWidth(0);control.setMinimumWidth(0);control.setPadding(0,0,0,0);control.setTextSize(18);control.setBackgroundColor(Color.TRANSPARENT);}
+        decrease.setContentDescription("减少一天");increase.setContentDescription("增加一天");stepper.addView(decrease,new LinearLayout.LayoutParams(dp(40),dp(44)));stepper.addView(count,new LinearLayout.LayoutParams(dp(32),dp(44)));stepper.addView(text("天",12,INK));stepper.addView(increase,new LinearLayout.LayoutParams(dp(40),dp(44)));
+        Runnable updateButtons=()->{int n;try{n=Integer.parseInt(count.getText().toString());}catch(NumberFormatException error){n=0;}decrease.setEnabled(n>1);increase.setEnabled(n<366);decrease.setAlpha(n>1?1f:.35f);increase.setAlpha(n<366?1f:.35f);};
+        count.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int before,int after){}public void onTextChanged(CharSequence s,int start,int before,int after){}public void afterTextChanged(android.text.Editable value){updateButtons.run();}});updateButtons.run();
+        Button apply=button("确定",()->{});apply.setMinWidth(0);apply.setMinimumWidth(0);apply.setPadding(0,0,0,0);apply.setTextColor(Color.WHITE);apply.setBackground(bg(BLUE));LinearLayout.LayoutParams applyParams=new LinearLayout.LayoutParams(dp(48),dp(44));applyParams.leftMargin=dp(6);content.addView(apply,applyParams);
+        AlertDialog dialog=new AlertDialog.Builder(activity).setView(content).create();dialog.show();
+        apply.setOnClickListener(v->attempt(()->{
+            int n;try{n=Integer.parseInt(count.getText().toString());}catch(NumberFormatException error){throw new IllegalArgumentException("请输入 1 到 366 天");}
+            if(n<1||n>366)throw new IllegalArgumentException("请输入 1 到 366 天");
+            StudyPlans.setRange(host.state(),h,n);if(viewDate.compareTo(h.optString("end"))>0)viewDate=h.optString("planDate");orderIds=null;
+            repeatDates=new ArrayList<>(StudyPlans.days(h.optString("planDate"),h.optString("end")));persist();renderPlan(true);dialog.dismiss();toast("安排天数已更新，已有作业都保留");
+        }));
+    }
+    private void stepRangeCount(EditText count,int delta) {
+        int value;try{value=Integer.parseInt(count.getText().toString());}catch(NumberFormatException error){value=1;}
+        count.setText(String.valueOf(Math.min(366,Math.max(1,value+delta))));count.setSelection(count.length());
+    }
     void openPlan(String id,boolean origin) {
-        JSONObject h=HolidayPlans.object(host.state(),"holidays").optJSONObject(id);if(h==null)return;
+        JSONObject h=StudyPlans.object(host.state(),"holidays").optJSONObject(id);if(h==null)return;
         hideKeyboard();planId=id;fromSettings=origin;settingsOpen=false;orderIds=null;
-        viewDate=host.date().compareTo(h.optString("planDate"))>=0&&host.date().compareTo(h.optString("end"))<=0?host.date():h.optString("planDate");repeatDates=new ArrayList<>(HolidayPlans.days(h.optString("start"),h.optString("end")));
+        viewDate=host.date().compareTo(h.optString("planDate"))>=0&&host.date().compareTo(h.optString("end"))<=0?host.date():h.optString("planDate");repeatDates=new ArrayList<>(StudyPlans.days(h.optString("start"),h.optString("end")));
         LinearLayout page=col();page.setPadding(dp(12),dp(12),dp(12),dp(12));page.setBackgroundColor(Color.WHITE);
-        page.addView(header(h.optString("name"),()->back(),()->{if(!ready())throw new IllegalArgumentException("请先核对假期作业");if(!taskInput.getText().toString().trim().isEmpty())throw new IllegalArgumentException("还有未添加的作业，请先点加号");if(orderIds!=null)HolidayPlans.order(host.state(),viewDate,orderIds);boolean firstConfirmation=!holiday().optBoolean("confirmed")&&!fromSettings;HolidayPlans.confirm(host.state(),holiday());persist();back();toast("假期计划已保存，每天按当天清单完成");if(firstConfirmation)host.confirmed();}));space(page);
-        shortDays=row();dayScroll=new HorizontalScrollView(activity);dayScroll.addView(shortDays);dayScroll.setContentDescription("选择假期天数");page.addView(dayScroll,wrap());space(page);
+        LinearLayout planHeader=header("作业计划",()->back(),()->{if(!taskInput.getText().toString().trim().isEmpty())throw new IllegalArgumentException("还有未添加的作业，请先点加号");if(orderIds!=null)StudyPlans.order(host.state(),viewDate,orderIds);boolean firstConfirmation=!holiday().optBoolean("confirmed")&&!fromSettings;StudyPlans.confirm(host.state(),holiday());persist();back();toast("作业计划已保存，每天按当天清单完成");if(firstConfirmation)host.confirmed();});
+        rangeButton=button("只安排今天  ▾",()->rangeOptions());rangeButton.setSingleLine(true);rangeButton.setMinWidth(0);rangeButton.setMinimumWidth(0);rangeButton.setMinHeight(dp(44));rangeButton.setPadding(dp(6),dp(6),dp(6),dp(6));rangeButton.setBackgroundColor(Color.TRANSPARENT);
+        planHeader.addView(rangeButton,planHeader.getChildCount()-1,new LinearLayout.LayoutParams(-2,-2));page.addView(planHeader);space(page);
+        shortDays=row();dayScroll=new HorizontalScrollView(activity);dayScroll.addView(shortDays);dayScroll.setContentDescription("选择计划天数");page.addView(dayScroll,wrap());space(page);
         LinearLayout toolbar=row();
-        sortButton=button("调整当天顺序",()->{if(orderIds==null)orderIds=new ArrayList<>();else{HolidayPlans.order(host.state(),viewDate,orderIds);orderIds=null;persist();}renderPlan();});toolbar.addView(sortButton,weight());resetButton=button("清空重选",()->{orderIds=new ArrayList<>();renderPlan();});toolbar.addView(resetButton);page.addView(toolbar);
+        sortButton=button("调整当天顺序",()->{if(orderIds==null)orderIds=new ArrayList<>();else{StudyPlans.order(host.state(),viewDate,orderIds);orderIds=null;persist();}renderPlan();});toolbar.addView(sortButton,weight());resetButton=button("清空重选",()->{orderIds=new ArrayList<>();renderPlan();});toolbar.addView(resetButton);page.addView(toolbar);
+        undoButton=button("撤销一步",()->{if(orderIds!=null&&!orderIds.isEmpty()){orderIds.remove(orderIds.size()-1);renderPlan();}});toolbar.addView(undoButton);
         summary=text("",13,INK);page.addView(summary);
         if(!ready()){page.addView(text("先在 "+h.optString("planDate")+" 核对钉钉，补全成长记录册。",13,MUTED));page.addView(button("去核对",()->{host.back(false);host.goDate(h.optString("planDate"));}));}
         ScrollView listScroll=new ScrollView(activity);taskList=col();listScroll.addView(taskList,wrap());page.addView(listScroll,new LinearLayout.LayoutParams(-1,0,1));
-        composer=col();LinearLayout options=row();repeat=spinner(new String[]{"只做一次","每天都做"});options.addView(repeat,weight());Button dateOptions=button("选择重复日期",()->{List<String> dates=HolidayPlans.days(h.optString("start"),h.optString("end"));boolean[] selected=new boolean[dates.size()];for(int i=0;i<dates.size();i++)selected[i]=repeatDates.contains(dates.get(i));new AlertDialog.Builder(activity).setTitle("选择重复日期").setMultiChoiceItems(dates.toArray(new String[0]),selected,(d,i,checked)->selected[i]=checked).setNegativeButton("取消",null).setPositiveButton("确定",(d,w)->{repeatDates=new ArrayList<>();for(int i=0;i<dates.size();i++)if(selected[i])repeatDates.add(dates.get(i));}).show();});dateOptions.setVisibility(View.GONE);options.addView(dateOptions,weight());repeat.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long itemId){dateOptions.setVisibility(position==1?View.VISIBLE:View.GONE);}});composer.addView(options);
+        composer=col();LinearLayout options=row();repeat=spinner(new String[]{"只做一次","每天都做"});options.addView(repeat,weight());Button dateOptions=button("选择重复日期",()->{List<String> dates=StudyPlans.days(h.optString("start"),h.optString("end"));boolean[] selected=new boolean[dates.size()];for(int i=0;i<dates.size();i++)selected[i]=repeatDates.contains(dates.get(i));new AlertDialog.Builder(activity).setTitle("选择重复日期").setMultiChoiceItems(dates.toArray(new String[0]),selected,(d,i,checked)->selected[i]=checked).setNegativeButton("取消",null).setPositiveButton("确定",(d,w)->{repeatDates=new ArrayList<>();for(int i=0;i<dates.size();i++)if(selected[i])repeatDates.add(dates.get(i));}).show();});dateOptions.setVisibility(View.GONE);options.addView(dateOptions,weight());repeat.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long itemId){dateOptions.setVisibility(position==1?View.VISIBLE:View.GONE);}});composer.addView(options);
         keywordRow=row();keywordScroll=new HorizontalScrollView(activity);keywordScroll.setHorizontalScrollBarEnabled(false);keywordScroll.addView(keywordRow);
         LinearLayout.LayoutParams keywordParams=new LinearLayout.LayoutParams(-1,dp(36));keywordParams.bottomMargin=dp(7);composer.addView(keywordScroll,keywordParams);
         LinearLayout entry=row();entry.setGravity(Gravity.BOTTOM);
@@ -124,11 +154,11 @@ final class HolidayScreen {
         subject.setTypeface(Typeface.DEFAULT,Typeface.BOLD);subject.setPadding(dp(6),0,dp(6),0);entry.addView(subject,new LinearLayout.LayoutParams(dp(76),dp(48)));renderSubject();
         View subjectGap=new View(activity);entry.addView(subjectGap,new LinearLayout.LayoutParams(dp(6),1));
         taskInput=input("请输入一项作业…",120);taskInput.setSingleLine(false);taskInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);taskInput.setHorizontallyScrolling(false);taskInput.setMinLines(1);taskInput.setMaxLines(2);taskInput.setMinHeight(dp(48));taskInput.setMaxHeight(dp(78));taskInput.setPadding(dp(11),dp(9),dp(11),dp(9));taskInput.setGravity(Gravity.CENTER_VERTICAL|Gravity.START);entry.addView(taskInput,weight());composer.addView(entry,wrap());
-        Button add=button("＋",()->addTask(listScroll));add.setContentDescription("添加假期作业");add.setTextSize(20);add.setTypeface(Typeface.DEFAULT,Typeface.BOLD);add.setPadding(0,0,0,0);add.setTextColor(Color.WHITE);add.setBackground(bg(BLUE));
+        Button add=button("＋",()->addTask(listScroll));add.setContentDescription("添加作业");add.setTextSize(20);add.setTypeface(Typeface.DEFAULT,Typeface.BOLD);add.setPadding(0,0,0,0);add.setTextColor(Color.WHITE);add.setBackground(bg(BLUE));
         boolean compact=activity.getResources().getConfiguration().screenWidthDp<=420;LinearLayout actions=compact?row():entry;actions.setGravity(Gravity.BOTTOM|Gravity.END);
         if(!compact){View gap=new View(activity);actions.addView(gap,new LinearLayout.LayoutParams(dp(6),1));}
         LinearLayout estimate=col();estimate.setBackground(bg(Color.WHITE));estimate.setPadding(dp(6),dp(2),dp(4),dp(2));
-        taskMinutes=minutes(15);taskMinutes.setContentDescription("新增假期作业预计用时");estimate.addView(taskMinutes,new LinearLayout.LayoutParams(-1,0,1));estimate.setOnClickListener(v->taskMinutes.performClick());
+        taskMinutes=minutes(15);taskMinutes.setContentDescription("新增作业预计用时");estimate.addView(taskMinutes,new LinearLayout.LayoutParams(-1,0,1));estimate.setOnClickListener(v->taskMinutes.performClick());
         LinearLayout.LayoutParams estimateParams=new LinearLayout.LayoutParams(dp(112),dp(48));estimateParams.rightMargin=dp(6);actions.addView(estimate,estimateParams);
         actions.addView(add,new LinearLayout.LayoutParams(dp(compact?80:112),dp(48)));
         if(compact){LinearLayout.LayoutParams params=wrap();params.topMargin=dp(8);composer.addView(actions,params);}
@@ -136,7 +166,8 @@ final class HolidayScreen {
     }
     private void addTask(ScrollView scroll) {
         if(!ready())throw new IllegalArgumentException("请先核对假期作业");boolean daily=repeat.getSelectedItemPosition()==1;
-        HolidayPlans.add(host.state(),holiday(),selectedSubject,taskInput.getText().toString(),MINUTES[taskMinutes.getSelectedItemPosition()],daily,daily?repeatDates:Arrays.asList(viewDate));taskInput.setText("");persist();renderPlan();scroll.post(()->{scroll.fullScroll(View.FOCUS_DOWN);taskInput.requestFocus();});toast("作业已安排");
+        List<JSONObject> drafts=host.parseDraft(taskInput.getText().toString().trim(),selectedSubject);if(drafts.isEmpty())throw new IllegalArgumentException("请填写作业内容");
+        for(JSONObject draft:drafts)StudyPlans.add(host.state(),holiday(),draft.optString("subject"),draft.optString("title"),MINUTES[taskMinutes.getSelectedItemPosition()],daily,daily?repeatDates:Arrays.asList(viewDate));persist();taskInput.setText("");renderPlan();scroll.post(()->{scroll.fullScroll(View.FOCUS_DOWN);taskInput.requestFocus();});toast("作业已安排");
     }
     private void renderSubject() { subject.setText(selectedSubject+"  ▾");subject.setTextColor(Color.WHITE);subject.setBackground(bg(host.subjectColor(selectedSubject)));subject.setContentDescription("选择作业科目，当前"+selectedSubject); }
     private void renderKeywords() {
@@ -156,23 +187,25 @@ final class HolidayScreen {
         int rest=n%100;
         return digits.substring(n/100,n/100+1)+"百"+(rest>0?(rest<10?"零":rest<20?"一":"")+dayNumber(rest):"");
     }
-    private String dayOrdinal(int index,int startIndex) { return index>=startIndex?"第"+dayNumber(index-startIndex+1)+"天":index==0?"安排日":"假期前"+dayNumber(startIndex-index)+"天"; }
+    private String dayOrdinal(int index,int startIndex) { return "第"+dayNumber(index+1)+"天"; }
     private String dayDetail(String date,String ordinal) { return (date.equals(host.today())?ordinal+" · ":"")+Integer.parseInt(date.substring(5,7))+"月"+Integer.parseInt(date.substring(8))+"日"; }
     private void renderDays(boolean revealDay) {
-        JSONObject h=holiday();List<String> dates=HolidayPlans.days(h.optString("planDate"),h.optString("end"));int startIndex=dates.indexOf(h.optString("start"));
+        JSONObject h=holiday();List<String> dates=StudyPlans.days(h.optString("planDate"),h.optString("end"));
         HorizontalScrollView strip=dayScroll;int scrollX=strip.getScrollX();View focused=strip.findFocus();Object focusedDate=focused==null?null:focused.getTag();shortDays.removeAllViews();
         for(int i=0;i<dates.size();i++){
-            String date=dates.get(i),ordinal=dayOrdinal(i,startIndex);
-            boolean today=date.equals(host.today()),selected=date.equals(viewDate);String label=today?"今天":ordinal;
+            String date=dates.get(i);int month=Integer.parseInt(date.substring(5,7)),dayOfMonth=Integer.parseInt(date.substring(8));
+            java.util.Calendar calendar=java.util.Calendar.getInstance();calendar.clear();calendar.set(Integer.parseInt(date.substring(0,4)),month-1,dayOfMonth,12,0,0);
+            boolean today=date.equals(host.today()),selected=date.equals(viewDate);String label="周"+"日一二三四五六".charAt(calendar.get(java.util.Calendar.DAY_OF_WEEK)-1);
             Button day=button(label,()->{if(date.equals(viewDate))return;viewDate=date;orderIds=null;renderPlan(true);});
-            int count=HolidayPlans.tasks(host.state(),date).length();String heading=label+" "+count+"项";day.setTextSize(11);
-            android.text.SpannableString caption=new android.text.SpannableString(heading);
+            int count=StudyPlans.tasks(host.state(),date).length();String heading=label+"/"+count+"项";day.setTextSize(12);
+            android.text.SpannableString caption=new android.text.SpannableString(heading+"\n"+month+"月"+dayOfMonth+"日");
             caption.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),0,label.length(),0);
-            caption.setSpan(new android.text.style.RelativeSizeSpan(10f/11f),label.length()+1,heading.length(),0);
-            day.setText(caption);
+            caption.setSpan(new android.text.style.RelativeSizeSpan(11f/12f),label.length(),caption.length(),0);
+            caption.setSpan(new android.text.style.ForegroundColorSpan(selected?Color.WHITE:MUTED),label.length(),caption.length(),0);
+            day.setText(caption);day.setSingleLine(false);day.setMaxLines(2);day.setLineSpacing(dp(4),1f);
             day.setTag(date);day.setSelected(selected);day.setGravity(Gravity.CENTER);day.setTextColor(selected?Color.WHITE:BLUE);day.setBackground(bg(selected?BLUE:Color.WHITE));
-            day.setContentDescription(label+"，"+count+"项作业，"+(today?ordinal+"，":"")+date);day.setMinWidth(dp(80));day.setMinimumWidth(dp(80));
-            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,dp(44));params.rightMargin=dp(6);shortDays.addView(day,params);
+            day.setContentDescription(label+"，"+count+"项作业，"+(today?"今天，":"")+date);day.setMinWidth(dp(80));day.setMinimumWidth(dp(80));
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,dp(56));params.rightMargin=dp(6);shortDays.addView(day,params);
             if(date.equals(focusedDate))day.requestFocus();
         }
         View active=shortDays.findViewWithTag(viewDate);
@@ -180,68 +213,71 @@ final class HolidayScreen {
     }
     private void renderPlan() { renderPlan(false); }
     private void renderPlan(boolean revealDay) {
-        JSONObject h=holiday();if(h==null||taskList==null)return;JSONArray list=HolidayPlans.tasks(host.state(),viewDate);int total=0,pending=0;taskList.removeAllViews();
-        for(int i=0;i<list.length();i++){JSONObject t=list.optJSONObject(i);if(t==null)continue;total+=t.optInt("estimatedMinutes",15);if(HolidayPlans.pending(t))pending++;taskList.addView(taskRow(new HolidayPlans.Ref(viewDate,t),false),wrap());}
+        JSONObject h=holiday();if(h==null||taskList==null)return;JSONArray list=StudyPlans.tasks(host.state(),viewDate);int total=0,pending=0;taskList.removeAllViews();
+        int dayCount=StudyPlans.days(h.optString("planDate"),h.optString("end")).size();rangeButton.setText((dayCount==1?(h.optString("planDate").equals(host.today())?"只安排今天":"只安排这一天"):"安排 "+dayCount+" 天")+"  ▾");
+        for(int i=0;i<list.length();i++){JSONObject t=list.optJSONObject(i);if(t==null)continue;total+=t.optInt("estimatedMinutes",15);if(StudyPlans.pending(t))pending++;taskList.addView(taskRow(new StudyPlans.Ref(viewDate,t),false),wrap());}
         if(list.length()==0)taskList.addView(text("这一天还没有安排作业",14,MUTED));
         String summaryText=list.length()+" 项 · 预计 "+total+" 分钟",dateLabel=Integer.parseInt(viewDate.substring(5,7))+"月"+Integer.parseInt(viewDate.substring(8))+"日";
         android.text.SpannableString summaryCaption=new android.text.SpannableString(summaryText+"  "+dateLabel);int dateStart=summaryText.length()+2;
         summaryCaption.setSpan(new android.text.style.RelativeSizeSpan(11f/13f),dateStart,summaryCaption.length(),0);
         summaryCaption.setSpan(new android.text.style.ForegroundColorSpan(MUTED),dateStart,summaryCaption.length(),0);summary.setText(summaryCaption);
         sortButton.setText(orderIds==null?"调整当天顺序":"确定顺序 "+orderIds.size()+"/"+pending);sortButton.setEnabled(pending>0);resetButton.setVisibility(orderIds==null?View.GONE:View.VISIBLE);composer.setVisibility(orderIds==null&&ready()?View.VISIBLE:View.GONE);
+        undoButton.setVisibility(orderIds==null?View.GONE:View.VISIBLE);undoButton.setEnabled(orderIds!=null&&!orderIds.isEmpty());
         renderDays(revealDay);
     }
-    private View taskRow(HolidayPlans.Ref ref,boolean overdue) {
-        if(orderIds!=null&&!overdue&&HolidayPlans.pending(ref.task))return orderTaskRow(ref);
+    private View taskRow(StudyPlans.Ref ref,boolean overdue) {
+        if(orderIds!=null&&!overdue&&StudyPlans.pending(ref.task))return orderTaskRow(ref);
         JSONObject t=ref.task;String subjectName=t.optString("subject");LinearLayout shell=row();shell.setBackground(bg(host.subjectSoftColor(subjectName)));shell.setClipToOutline(true);
         TextView badge=text(subjectName.length()==2?subjectName.substring(0,1)+"\n"+subjectName.substring(1):subjectName,12,Color.WHITE);badge.setGravity(Gravity.CENTER);badge.setBackgroundColor(host.subjectColor(subjectName));shell.addView(badge,new LinearLayout.LayoutParams(dp(30),-1));
-        boolean editable=orderIds==null&&HolidayPlans.pending(t)&&!overdue;
-        LinearLayout outer=col();outer.setPadding(dp(10),dp(10),dp(10),dp(10));shell.addView(outer,weight());LinearLayout title=row();TextView copy=text(t.optString("title"),15,INK);copy.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.addView(copy,editable?new LinearLayout.LayoutParams(-2,-2,1):weight());
+        boolean editable=orderIds==null&&StudyPlans.pending(t)&&!overdue;
+        LinearLayout outer=row();outer.setPadding(dp(8),dp(8),dp(4),dp(8));shell.addView(outer,weight());LinearLayout copyColumn=col();outer.addView(copyColumn,weight());LinearLayout title=row();TextView copy=text(t.optString("title"),15,INK);copy.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.addView(copy,editable?new LinearLayout.LayoutParams(-2,-2,1):weight());
         if(overdue)title.addView(text("预计 "+t.optInt("estimatedMinutes",15)+" 分钟",11,MUTED));
         if(editable){
             ImageButton edit=taskIcon(R.drawable.ic_holiday_edit,"修改"+t.optString("title"),BLUE,()->edit(ref));edit.setPadding(dp(9),dp(9),dp(9),dp(9));
             LinearLayout.LayoutParams editParams=new LinearLayout.LayoutParams(dp(32),dp(32));editParams.leftMargin=dp(2);title.addView(edit,editParams);
         }
-        outer.addView(title,editable?new LinearLayout.LayoutParams(-2,-2):wrap());
-        List<String> details=new ArrayList<>();if(overdue)details.add(ref.date);if(!t.optString("holidaySeriesId").isEmpty())details.add("每天");String status=t.optString("status","pending");if(!"pending".equals(status))details.add("done".equals(status)?"已完成":"active".equals(status)?"进行中":"已暂停");if(!details.isEmpty())outer.addView(text(android.text.TextUtils.join(" · ",details),11,MUTED));
+        copyColumn.addView(title,editable?new LinearLayout.LayoutParams(-2,-2):wrap());
+        List<String> details=new ArrayList<>();if(overdue)details.add(ref.date);if(!t.optString("holidaySeriesId").isEmpty())details.add("每天");String status=t.optString("status","pending");if(!"pending".equals(status))details.add("done".equals(status)?"已完成":"active".equals(status)?"进行中":"已暂停");if(!details.isEmpty())copyColumn.addView(text(android.text.TextUtils.join(" · ",details),11,MUTED));
         LinearLayout actions=row();if(orderIds==null||overdue){
             if(!"done".equals(status)&&!"active".equals(status)){
-                if(overdue)actions.addView(button("安排补做",()->pickDate(host.date(),host.date(),null,date->{HolidayPlans.move(host.state(),ref,date);persist();renderPlan();toast("计划已更新");})),weight());
-                else actions.addView(moveControls(ref),weight());
+                if(overdue)actions.addView(button("移到今天",()->{StudyPlans.move(host.state(),ref,host.today());persist();renderPlan();toast("计划已更新");}));
+                else if(!holiday().optString("planDate").equals(holiday().optString("end")))actions.addView(moveControls(ref));
             }
         }
         outer.addView(actions);
+        if(!overdue)actions.addView(text(t.optInt("estimatedMinutes",15)+" 分钟",11,MUTED));
         if(editable){
             LinearLayout icons=actions;icons.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
             LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(44),dp(44));iconParams.leftMargin=dp(6);
-            icons.addView(taskIcon(R.drawable.ic_holiday_delete,"删除"+t.optString("title")+"（仅当天）",Color.rgb(221,88,104),()->new AlertDialog.Builder(activity).setMessage("只删除当天这一项作业，确定吗？").setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->attempt(()->{HolidayPlans.removeTask(host.state(),ref);persist();renderPlan();})).show()),iconParams);
+            icons.addView(taskIcon(R.drawable.ic_holiday_delete,"删除"+t.optString("title")+"（仅当天）",Color.rgb(221,88,104),()->new AlertDialog.Builder(activity).setMessage("只删除当天这一项作业，确定吗？").setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->attempt(()->{StudyPlans.removeTask(host.state(),ref);persist();renderPlan();})).show()),iconParams);
         }
         LinearLayout wrapper=col();wrapper.addView(shell,wrap());space(wrapper);return wrapper;
     }
-    private View moveControls(HolidayPlans.Ref ref) {
-        JSONObject h=holiday();List<String> days=HolidayPlans.days(h.optString("planDate"),h.optString("end"));int startIndex=days.indexOf(h.optString("start"));
+    private View moveControls(StudyPlans.Ref ref) {
+        JSONObject h=holiday();List<String> days=StudyPlans.days(h.optString("planDate"),h.optString("end"));int startIndex=days.indexOf(h.optString("start"));
         List<String> dates=new ArrayList<>(),labels=new ArrayList<>();dates.add("");labels.add("选择第几天");
         for(int i=0;i<days.size();i++){
-            String date=days.get(i);if(date.compareTo(host.date())<0)continue;String ordinal=dayOrdinal(i,startIndex);
-            dates.add(date);labels.add((date.equals(host.today())?"今天":ordinal)+" · "+dayDetail(date,ordinal));
+            String date=days.get(i);if(date.compareTo(host.today())<0)continue;String ordinal=dayOrdinal(i,startIndex);
+            dates.add(date);labels.add(date.equals(host.today())?"今天":date.equals(StudyPlans.plus(host.today(),1))?"明天":ordinal);
         }
-        if(dates.size()==1)labels.set(0,"假期已结束");
-        LinearLayout controls=row();controls.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);controls.setPadding(0,dp(6),0,0);Spinner target=spinner(labels.toArray(new String[0]));
+        if(dates.size()==1)labels.set(0,"计划已结束");
+        LinearLayout controls=row();controls.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);controls.setPadding(0,0,dp(3),0);Spinner target=spinner(labels.toArray(new String[0]));
         int initialPosition=Math.max(0,dates.indexOf(ref.date));
-        target.setContentDescription(ref.task.optString("title")+"改到第几天");target.setEnabled(dates.size()>1);target.setMinimumHeight(dp(44));target.setSelection(initialPosition);controls.addView(target,new LinearLayout.LayoutParams(-2,-2));
+        target.setContentDescription(ref.task.optString("title")+"改到第几天");target.setEnabled(dates.size()>1);target.setMinimumHeight(dp(44));target.setSelection(initialPosition);controls.addView(target,new LinearLayout.LayoutParams(dp(86),-2));
         target.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(android.widget.AdapterView<?> parent){}
             public void onItemSelected(android.widget.AdapterView<?> parent,View v,int position,long id){
                 if(position<=0||position>=dates.size()||!target.isAttachedToWindow()||orderIds!=null||!ref.date.equals(viewDate))return;
                 String date=dates.get(position);if(date.equals(ref.date))return;
                 try {
-                    if(date.compareTo(host.date())<0)throw new IllegalArgumentException("补做或改期请选择当前查看日期或之后的日期");
-                    HolidayPlans.move(host.state(),ref,date);
+                    if(date.compareTo(host.today())<0)throw new IllegalArgumentException("补做或改期请选择今天或之后的日期");
+                    StudyPlans.move(host.state(),ref,date);
                 } catch(IllegalArgumentException error){target.setSelection(initialPosition);toast(error.getMessage());return;}
                 persist();renderPlan();toast("已改到"+labels.get(position));
             }
         });return controls;
     }
-    private View orderTaskRow(HolidayPlans.Ref ref) {
+    private View orderTaskRow(StudyPlans.Ref ref) {
         JSONObject task=ref.task;String id=task.optString("id"),name=task.optString("subject","其他");
         int color=host.subjectColor(name),index=orderIds.indexOf(id);
         LinearLayout shell=row();shell.setBackground(bg(host.subjectSoftColor(name)));shell.setClipToOutline(true);shell.setPadding(0,0,dp(10),0);
@@ -255,11 +291,12 @@ final class HolidayScreen {
         if(!task.optString("holidaySeriesId").isEmpty())copy.addView(text("每天",11,MUTED));pick.addView(copy,weight());
         pick.setSelected(index>=0);pick.setContentDescription((index>=0?"第 "+(index+1)+" 项：":"选择：")+name+"，"+task.optString("title"));
         pick.setOnClickListener(v->{
-            if(orderIds==null||!viewDate.equals(ref.date)||!HolidayPlans.pending(task)||orderIds.contains(id))return;
+            if(orderIds==null||!viewDate.equals(ref.date)||!StudyPlans.pending(task)||orderIds.contains(id))return;
             orderIds.add(id);number.setText(String.valueOf(orderIds.size()));circle.setColor(color);pick.setSelected(true);
             pick.setContentDescription("第 "+orderIds.size()+" 项："+name+"，"+task.optString("title"));
-            JSONArray list=HolidayPlans.tasks(host.state(),viewDate);int pending=0;for(int i=0;i<list.length();i++)if(HolidayPlans.pending(list.optJSONObject(i)))pending++;
+            JSONArray list=StudyPlans.tasks(host.state(),viewDate);int pending=0;for(int i=0;i<list.length();i++)if(StudyPlans.pending(list.optJSONObject(i)))pending++;
             sortButton.setText("确定顺序 "+orderIds.size()+"/"+pending);
+            undoButton.setEnabled(true);
         });
         shell.addView(pick,weight());
         Button estimate=button("预计用时\n"+task.optInt("estimatedMinutes",15)+" 分钟 ▾",()->showOrderEstimatePicker(ref));
@@ -268,26 +305,26 @@ final class HolidayScreen {
         LinearLayout wrapper=col();wrapper.addView(shell,wrap());space(wrapper);return wrapper;
     }
 
-    private void showOrderEstimatePicker(HolidayPlans.Ref ref) {
-        if(orderIds==null||!viewDate.equals(ref.date)||!HolidayPlans.pending(ref.task))return;
+    private void showOrderEstimatePicker(StudyPlans.Ref ref) {
+        if(orderIds==null||!viewDate.equals(ref.date)||!StudyPlans.pending(ref.task))return;
         String[] labels=new String[MINUTES.length];int checked=2;
         for(int i=0;i<MINUTES.length;i++){labels[i]=MINUTES[i]+" 分钟";if(MINUTES[i]==ref.task.optInt("estimatedMinutes",15))checked=i;}
         new AlertDialog.Builder(activity).setTitle("预计用时").setSingleChoiceItems(labels,checked,(dialog,which)->attempt(()->{
-            if(orderIds!=null&&viewDate.equals(ref.date)&&HolidayPlans.pending(ref.task)) {
-                HolidayPlans.edit(host.state(),ref,ref.task.optString("title"),MINUTES[which],false,host.today());
+            if(orderIds!=null&&viewDate.equals(ref.date)&&StudyPlans.pending(ref.task)) {
+                StudyPlans.edit(host.state(),ref,ref.task.optString("title"),MINUTES[which],false,host.today());
                 persist();renderPlan();
             }
             dialog.dismiss();
         })).setNegativeButton("取消",null).show();
     }
 
-    private void edit(HolidayPlans.Ref ref) {
+    private void edit(StudyPlans.Ref ref) {
         LinearLayout content=col();content.setPadding(dp(18),dp(12),dp(18),dp(12));EditText name=input("作业内容",120);name.setText(ref.task.optString("title"));content.addView(name,wrap());
         LinearLayout estimateRow=row();estimateRow.addView(text("预计用时",14,INK));Spinner mins=minutes(ref.task.optInt("estimatedMinutes",15));mins.setContentDescription("预计用时");mins.setMinimumHeight(dp(44));
         LinearLayout.LayoutParams estimateParams=new LinearLayout.LayoutParams(-2,-2);estimateParams.leftMargin=dp(12);estimateRow.addView(mins,estimateParams);
         LinearLayout.LayoutParams estimateRowParams=wrap();estimateRowParams.topMargin=dp(12);content.addView(estimateRow,estimateRowParams);
         CheckBox series=new CheckBox(activity);series.setText("同时修改之后未开始的同类作业");boolean repeated=!ref.task.optString("holidaySeriesId").isEmpty();series.setChecked(repeated);series.setVisibility(repeated?View.VISIBLE:View.GONE);content.addView(series);
-        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle("修改作业").setView(content).setNegativeButton("取消",null).setPositiveButton("保存",null).create();dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->attempt(()->{HolidayPlans.edit(host.state(),ref,name.getText().toString(),MINUTES[mins.getSelectedItemPosition()],repeated&&series.isChecked(),host.today());persist();renderPlan();dialog.dismiss();}));
+        AlertDialog dialog=new AlertDialog.Builder(activity).setTitle("修改作业").setView(content).setNegativeButton("取消",null).setPositiveButton("保存",null).create();dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->attempt(()->{StudyPlans.edit(host.state(),ref,name.getText().toString(),MINUTES[mins.getSelectedItemPosition()],repeated&&series.isChecked(),host.today());persist();renderPlan();dialog.dismiss();}));
     }
     void back() { hideKeyboard();if(settingsOpen){settingsOpen=false;host.back(true);}else if(fromSettings)openSettings();else{planId=null;host.back(false);} }
 }

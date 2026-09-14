@@ -124,6 +124,7 @@
         records: parsed.records && typeof parsed.records === "object" ? parsed.records : {},
         weekends: parsed.weekends && typeof parsed.weekends === "object" ? parsed.weekends : {},
         holidays: parsed.holidays && typeof parsed.holidays === "object" ? parsed.holidays : {},
+        planningVersion: Number(parsed.planningVersion || 0),
         dictationCustom: parsed.dictationCustom && typeof parsed.dictationCustom === "object" ? parsed.dictationCustom : {},
         taskKeywords: normalizeTaskKeywords(parsed.taskKeywords),
         dictationLesson: typeof parsed.dictationLesson === "string"
@@ -176,10 +177,10 @@
     weekendPenaltyButton: $("#weekendPenaltyButton"), weekendResult: $("#weekendResult"),
     weekendResultLabel: $("#weekendResultLabel"), weekendResultAmount: $("#weekendResultAmount"),
     dailyCheckinsSummary: $("#dailyCheckinsSummary"),
-    sportCard: $("#sportCard"), sportStatus: $("#sportStatus"), sportOptions: $("#sportOptions"),
-    readingButton: $("#readingButton"), readingStatus: $("#readingStatus"),
-    mathThinkingButton: $("#mathThinkingButton"), mathThinkingStatus: $("#mathThinkingStatus"),
-    englishReadingButton: $("#englishReadingButton"), englishReadingStatus: $("#englishReadingStatus"),
+    sportCard: $("#sportCard"),
+    readingButton: $("#readingButton"),
+    mathThinkingButton: $("#mathThinkingButton"),
+    englishReadingButton: $("#englishReadingButton"),
     ledgerButton: $("#ledgerButton"), ledgerTitle: $("#ledgerTitle"), ledgerStatus: $("#ledgerStatus"),
     taskEntryLauncher: $("#taskEntryLauncher"), taskEntryLauncherStatus: $("#taskEntryLauncherStatus"),
     taskEntryPage: $("#taskEntryPage"), taskEntryLayout: $("#taskEntryLayout"), taskEntryCloseButton: $("#taskEntryCloseButton"),
@@ -287,8 +288,6 @@
   let undoDeleteTimer = null;
   let lastCompletedTask = null;
   let undoCompletionTimer = null;
-  let sportOptionsExpanded = false;
-  let sportOptionsDate = null;
   let taskEntryReturnScroll = 0;
   let holidayUI = null;
   let historyManageMode = false;
@@ -313,6 +312,9 @@
   let breakSession = loadBreakSession();
   let startPlanTimer = null;
   let startPlanSession = loadStartPlanSession();
+  HolidayPlans.migrate(state, todayIso(), [breakSession, startPlanSession]);
+  // Persist the idempotent migration before any new planning operations.
+  try { persist(); } catch (_) { console.warn("计划迁移尚未保存，请检查本机存储空间。"); }
   let alarmRecorder = null;
   let alarmRecordingRequestId = 0;
   let alarmPermissionPending = false;
@@ -351,6 +353,7 @@
     return { start, end: addDays(start, 6) };
   }
   function weekendKeyFor(date) {
+    if (state.planningVersion >= 2) return null;
     if (HolidayPlans.find(state, date) || recordFor(date)?.holidayDaily) return null;
     const day = parseIsoDate(date).getDay();
     const friday = day === 6 ? addDays(date, -1) : day === 0 ? addDays(date, -2) : date;
@@ -375,24 +378,30 @@
       || record.allDoneDate || record.penaltyConfirmed || (Array.isArray(record.tasks) && record.tasks.length)));
   }
   function includeDailyInLedger(date, record) {
+    // Preserve how pre-migration weekend settlements and daily entries were counted.
+    const weekday = parseIsoDate(date).getDay();
+    const archivedKey = weekday === 5 ? date : weekday === 6 ? addDays(date, -1) : weekday === 0 ? addDays(date, -2) : null;
+    if (archivedKey && state.weekends[archivedKey]?.datedTasksMigrated && isWeekendMeaningful(state.weekends[archivedKey])) return !record?.legacyWeekendSettlement;
     const key = weekendKeyFor(date);
     if (!key) return true;
     return Boolean(record?.ruleId && !isWeekendMeaningful(state.weekends[key]));
   }
   function isMeaningful(record) {
-    return Boolean(record && (record.ropeDone || (Array.isArray(record.sportActivities) && record.sportActivities.length)
+    return Boolean(record && (record.sportDone || record.ropeDone || (Array.isArray(record.sportActivities) && record.sportActivities.length)
       || record.ledgerConfirmed || record.readingDone || record.mathThinkingDone || record.englishReadingDone
       || record.choresDone || record.note || record.ruleId
       || record.tasksConfirmed || (Array.isArray(record.tasks) && record.tasks.length)
       || TIME_FIELDS.some((field) => record[field])));
   }
 
-  function sportsForRecord(record) {
+  function isSportDone(record) {
+    // Explicit check-ins override legacy activity lists without discarding them.
+    if (Object.prototype.hasOwnProperty.call(record || {}, "sportDone")) return Boolean(record.sportDone);
     if (Array.isArray(record?.sportActivities)) {
-      return SPORTS.filter((activity) => record.sportActivities.includes(activity)
+      return SPORTS.some((activity) => record.sportActivities.includes(activity)
         || (activity === "50米" && record.sportActivities.includes("50米跑")));
     }
-    return record?.ropeDone ? ["跳绳"] : [];
+    return Boolean(record?.ropeDone);
   }
   function cleanupCurrentRecord() {
     const date = elements.recordDate.value;
@@ -1295,7 +1304,7 @@
   function weekendActualMinutes(key) {
     const weekendTasks = Array.isArray(state.weekends[key]?.tasks) ? state.weekends[key].tasks : [];
     if (weekendTasks.length) {
-      const totalMs = weekendTasks.reduce((sum, task) => sum + taskElapsedMs(task, true), 0);
+      const totalMs = weekendTasks.reduce((sum, task) => sum + taskElapsedMs(task, !state.weekends[key].datedTasksMigrated), 0);
       return Math.floor(totalMs / 60000);
     }
     return [key, addDays(key, 1), addDays(key, 2)].reduce((sum, date) => {
@@ -1435,7 +1444,7 @@
     if (record?.startTime) return `${record.startTime} 开始，进行中`;
     if (record?.ledgerConfirmed) return "成长记录册已补全";
     const dailyCheckins = [];
-    if (sportsForRecord(record).length) dailyCheckins.push("运动");
+    if (isSportDone(record)) dailyCheckins.push("运动");
     if (record?.readingDone) dailyCheckins.push("中文阅读");
     if (record?.mathThinkingDone) dailyCheckins.push("数学思维");
     if (record?.englishReadingDone) dailyCheckins.push("英文阅读");
@@ -1505,7 +1514,7 @@
 
   function pendingDailyRequirements(record = currentRecord() || {}) {
     return [
-      ["运动打卡", sportsForRecord(record).length > 0],
+      ["运动打卡", isSportDone(record)],
       ["中文阅读", record.readingDone],
       ["数学思维", record.mathThinkingDone],
       ["英文阅读", record.englishReadingDone]
@@ -1514,27 +1523,14 @@
 
   function renderDailyCheckins() {
     const record = currentRecord() || {};
-    if (sportOptionsDate !== elements.recordDate.value) {
-      sportOptionsExpanded = false;
-      sportOptionsDate = elements.recordDate.value;
-    }
-    const sports = sportsForRecord(record);
-    elements.sportCard.classList.toggle("completed", sports.length > 0);
-    elements.sportCard.setAttribute("aria-expanded", String(sportOptionsExpanded));
-    elements.sportCard.setAttribute("aria-label", `运动打卡，${sports.length ? `已完成：${sports.join("、")}` : "待完成"}，${sportOptionsExpanded ? "收起" : "展开"}运动项目`);
-    elements.sportStatus.textContent = sports.length ? "已完成" : "待完成";
-    elements.sportOptions.hidden = !sportOptionsExpanded;
-    elements.sportOptions.querySelectorAll("button[data-sport]").forEach((button) => {
-      button.setAttribute("aria-pressed", String(sports.includes(button.dataset.sport)));
-    });
-    for (const [title, field, button, status] of [
-      ["中文阅读", "readingDone", elements.readingButton, elements.readingStatus],
-      ["数学思维", "mathThinkingDone", elements.mathThinkingButton, elements.mathThinkingStatus],
-      ["英文阅读", "englishReadingDone", elements.englishReadingButton, elements.englishReadingStatus]
+    for (const [title, field, button] of [
+      ["运动打卡", "sportDone", elements.sportCard],
+      ["中文阅读", "readingDone", elements.readingButton],
+      ["数学思维", "mathThinkingDone", elements.mathThinkingButton],
+      ["英文阅读", "englishReadingDone", elements.englishReadingButton]
     ]) {
-      const done = Boolean(record[field]);
+      const done = field === "sportDone" ? isSportDone(record) : Boolean(record[field]);
       setPrepState(button, done);
-      status.textContent = done ? "已完成" : "待完成";
       button.setAttribute("aria-label", `${title}，${done ? "已完成，点击撤销打卡" : "待完成，点击打卡"}`);
     }
     elements.dailyCheckinsSummary.textContent = `已完成 ${4 - pendingDailyRequirements(record).length} / 4`;
@@ -1561,6 +1557,7 @@
   }
 
   function openTaskEntryPage() {
+    if (state.planningVersion >= 2) { holidayUI?.openCurrent(); return; }
     hideSettingsDetailPages();
     const holiday = HolidayPlans.find(state, elements.recordDate.value);
     if (holiday) { holidayUI?.openPlan(holiday.id); return; }
@@ -2339,7 +2336,7 @@
     const weekend = key ? weekendForDate(date) || {} : null;
     const isFriday = Boolean(key && date === key);
     const canEditList = !key || isFriday;
-    const ledgerReady = holiday || recordFor(date)?.holidayDaily || (key && !isFriday) ? true : Boolean(recordFor(date)?.ledgerConfirmed);
+    const ledgerReady = true;
     const tasks = tasksForDate(date);
     const confirmed = taskListConfirmed(date);
     const doneCount = tasks.filter((task) => task.status === "done").length;
@@ -2351,7 +2348,7 @@
     const orderPendingWeekend = confirmed && Boolean(key && !isFriday && weekend.planSaved && !orderSaved);
     const canEnterTasks = !confirmed && canEditList && ledgerReady;
     elements.taskPanel.hidden = !ledgerReady && !confirmed && tasks.length === 0;
-    elements.taskEntryLauncher.hidden = !canEnterTasks || Boolean(holiday);
+    elements.taskEntryLauncher.hidden = true;
     elements.taskEntry.hidden = !canEnterTasks;
     const entryStatus = tasks.length
       ? `已录入 ${tasks.length} 项，可继续补充其他科目`
@@ -2362,15 +2359,15 @@
       ? "周五还没有录入作业清单，请回到周五完成录入和安排。"
       : ledgerReady ? "还没有作业，点击“录入作业”开始。" : "核对钉钉并补全成长记录册后，再录入作业。";
     elements.taskListFooter.hidden = !confirmed;
-    if (holiday) elements.emptyTaskList.textContent = "这一天还没有安排作业，可以打开假期计划查看。";
-    elements.confirmTaskListButton.hidden = Boolean(holiday) || !confirmed || !canEditList || !allPending;
+    elements.emptyTaskList.textContent = "这一天还没有作业，打开作业计划添加吧。";
+    elements.confirmTaskListButton.hidden = true;
     elements.confirmTaskListButton.textContent = "修改计划";
     elements.taskOrderButton.hidden = !canReorderPendingTasks();
     elements.taskOrderButton.textContent = "调整未开始顺序";
     elements.taskOrderButton.className = sortingMode
       ? "primary-button compact-button" : "text-button bordered compact-order-button";
     const currentRecordData = recordFor(date) || {};
-    const taskConfirmHint = holiday || currentRecordData.holidayDaily ? "" : sortingMode
+    const taskConfirmHint = state.planningVersion >= 2 || holiday || currentRecordData.holidayDaily ? "" : sortingMode
       ? ""
       : orderPendingWeekend ? "周末顺序还没有确定，请回到周五完成最后一步。"
       : key && isFriday && orderSaved ? "周末完成日期和三天顺序都安排好了。"
@@ -2527,14 +2524,13 @@
       : `${formatDate(date)}的记录`;
     const key = weekendKeyFor(date);
     elements.ledgerButton.hidden = Boolean(key && date !== key);
-    const holiday = HolidayPlans.find(state, date);
-    if (holiday && date !== holiday.planDate) elements.ledgerButton.hidden = true;
     renderDailyCheckins();
     elements.ledgerButton.setAttribute("aria-pressed", String(Boolean(record.ledgerConfirmed)));
     elements.ledgerTitle.textContent = record.ledgerConfirmed
       ? "我已核对钉钉，也补全了成长记录册" : "核对钉钉，补全成长记录册";
     elements.ledgerStatus.textContent = record.ledgerConfirmed
-      ? `${record.ledgerAt || "已"} 完成` : "把钉钉里新增的作业补充进去";
+      ? `${record.ledgerAt || "已"} 完成` : "";
+    elements.ledgerStatus.hidden = !record.ledgerConfirmed;
     const result = weekendMode && !includeDailyInLedger(date, record) ? null : resultFor(record);
     elements.dayResult.hidden = !result;
     if (result) {
@@ -2569,32 +2565,14 @@
     const record = currentRecord(true);
     record[field] = !record[field];
     if (record[field]) record[timeField] = currentTime(); else delete record[timeField];
-    if (field === "ledgerConfirmed" && !HolidayPlans.find(state, elements.recordDate.value) && !currentRecord()?.holidayDaily && tasksForDate().length && allTasksDone()) {
-      if (record[field]) {
-        record.finishTime = record.tasksFinishedAt || currentTime();
-        const result = ruleForFinish(record.finishTime);
-        return saveAndRender(`成长记录册已补全，自动${result.amount < 0 ? "扣款" : result.amount === 0 ? "结算" : "奖励"} ${amountText(result.amount, false)}`);
-      }
-      delete record.finishTime;
-    }
     saveAndRender(message);
   }
 
-  function toggleSport(activity) {
+  function toggleSport() {
     const record = currentRecord(true);
-    const sports = sportsForRecord(record);
-    const selected = sports.includes(activity);
-    const next = selected ? sports.filter((item) => item !== activity) : [...sports, activity];
-    if (next.length) {
-      record.sportActivities = SPORTS.filter((activity) => next.includes(activity));
-      if (!record.sportAt) record.sportAt = currentTime();
-    } else {
-      delete record.sportActivities;
-      delete record.sportAt;
-    }
-    delete record.ropeDone;
-    delete record.ropeAt;
-    saveAndRender(selected ? `已取消${activity}` : `${activity}已打卡`);
+    record.sportDone = !isSportDone(record);
+    if (record.sportDone) record.sportAt = currentTime(); else delete record.sportAt;
+    saveAndRender(record.sportDone ? "运动已打卡" : "已取消运动打卡");
   }
   function performSessionAction(action) {
     const record = currentRecord(true);
@@ -2622,8 +2600,6 @@
       if (!weekendMode && tasks.length && !allTasksDone()) return showToast("还有作业没有完成");
       if (weekendMode && (!weekend?.confirmed || !weekend?.planSaved))
         return showToast("请先确认作业并保存周末计划");
-      if (!weekendMode && !record.ledgerConfirmed)
-        return showToast("请先核对钉钉，并补全成长记录册");
       record.finishTime = now;
       delete record.ruleId;
       if (weekendMode) {
@@ -2666,8 +2642,6 @@
       return showToast("还有作业没有完成");
     if (values[3] && weekendMode && (!weekend?.confirmed || !weekend?.planSaved))
       return showToast("请先确认作业并保存周末计划");
-    if (values[3] && !weekendMode && !currentRecord()?.ledgerConfirmed)
-      return showToast("请先核对钉钉，并补全成长记录册");
     const record = currentRecord(true);
     TIME_FIELDS.forEach((field, index) => {
       if (values[index]) record[field] = values[index]; else delete record[field];
@@ -2842,8 +2816,8 @@
     delete updated.tasksFinishedAt;
     if (key) {
       delete updated.allDoneDate; delete updated.allDoneTime; delete updated.penaltyConfirmed;
-    } else if (!updated.holidayDaily) {
-      delete updated.finishTime; delete updated.ruleId;
+    } else {
+      delete updated.finishTime; delete updated.ruleId; delete updated.legacyWeekendSettlement;
     }
     const nextState = key ? { ...state, weekends: { ...state.weekends, [key]: updated } }
       : { ...state, records: { ...state.records, [date]: updated } };
@@ -3239,7 +3213,7 @@
     if (key && date === addDays(key, 1) && plannedDayForTask(task) === "sunday" && action !== "undo")
       return showToast("这项安排在周日，今天先做周六计划");
     const record = currentRecord(true);
-    if (!key && record.finishTime && !record.holidayDaily && action !== "undo") return showToast("当天已经结算，如需修改可先撤销一项完成");
+    if (!key && record.finishTime && !record.legacyWeekendSettlement && action !== "undo") return showToast("当天已经结算，如需修改可先撤销一项完成");
     const skipping = action === "skip" || action === "skip-paused";
     if (action === "start" || skipping) {
       let taskToStart = task;
@@ -3256,6 +3230,7 @@
       if (skipping) stopTaskClock(task, "paused");
       taskToStart.status = "active";
       taskToStart.activeSince = Date.now();
+      taskToStart.lastWorkedDate = date;
       if (!taskToStart.startedAt) taskToStart.startedAt = currentTime();
       if (!record.startTime) record.startTime = currentTime();
       focusAfterRenderTaskId = String(taskToStart.id);
@@ -3272,22 +3247,15 @@
       stopTaskClock(task, "done");
       closeFocusModal();
       task.completedAt = currentTime();
-      if (key || task.holidayId) task.completedDate = date;
+      task.completedDate = date;
       const completedAll = tasks.every((item) => item.status === "done");
-      if (completedAll && record.holidayDaily) {
-        record.tasksFinishedAt = task.completedAt;
-        showToast("我完成今天安排的作业啦！");
-      } else if (completedAll && !key) {
+      if (completedAll && !key) {
         record.tasksFinishedAt = task.completedAt;
         delete record.ruleId;
-        if (record.ledgerConfirmed) {
-          record.finishTime = record.tasksFinishedAt;
-          const result = ruleForFinish(record.finishTime);
-          showToast(`已全部完成，自动${result.amount < 0 ? "扣款" : result.amount === 0 ? "结算" : "奖励"} ${amountText(result.amount, false)}`);
-        } else {
-          delete record.finishTime;
-          showToast("作业已全部完成，补全成长记录册后自动结算");
-        }
+        delete record.legacyWeekendSettlement;
+        record.finishTime = record.tasksFinishedAt;
+        const result = ruleForFinish(record.finishTime);
+        showToast(`已全部完成，自动${result.amount < 0 ? "扣款" : result.amount === 0 ? "结算" : "奖励"} ${amountText(result.amount, false)}`);
       } else if (completedAll && key) {
         weekend.allDoneDate = date;
         weekend.allDoneTime = task.completedAt;
@@ -3323,7 +3291,7 @@
         delete weekend.penaltyConfirmed;
       } else {
         delete record.tasksFinishedAt;
-        if (!task.holidayId) { delete record.finishTime; delete record.ruleId; }
+        delete record.finishTime; delete record.ruleId;
       }
       showToast("已撤销完成，可以继续这项作业");
     }
@@ -3476,6 +3444,7 @@
     const restored = JSON.parse(JSON.stringify({
       records: source.records, weekends: source.weekends,
       holidays: isObject(source.holidays) ? source.holidays : {},
+      planningVersion: Number(source.planningVersion || 0),
       dictationCustom: isObject(source.dictationCustom) ? source.dictationCustom : {},
       dictationLesson: DICTATION_LESSONS.some(lesson => lesson.id === source.dictationLesson)
         ? source.dictationLesson : DICTATION_LESSONS[0].id,
@@ -3494,6 +3463,7 @@
       }
       Object.values(value).forEach(pauseSavedClocks);
     }
+    HolidayPlans.migrate(restored, todayIso());
     pauseSavedClocks(restored);
     return restored;
   }
@@ -3576,7 +3546,9 @@
   }
 
   holidayUI = mountHolidayUI({ getState: () => state, date: () => elements.recordDate.value, today: todayIso,
+    restore(snapshot) { state = snapshot; render(); },
     estimates: ESTIMATE_OPTIONS, keywords: taskKeywordItems, persist, render, toast: showToast, goDate: setRecordDate,
+    parseDraft: parseTaskDraft,
     confirmed() { const first = nextTaskForToday(); if (first && !activeTaskForDate() && !startPlanSession && !breakSession) openStartPlanChoice(first.id); },
     open(page) {
       hideSettingsDetailPages();
@@ -3743,14 +3715,7 @@
   });
   elements.saveWeekendTaskPlanButton.addEventListener("click", saveWeekendTaskPlan);
   elements.weekendPenaltyButton.addEventListener("click", toggleWeekendPenalty);
-  elements.sportCard.addEventListener("click", () => {
-    sportOptionsExpanded = !sportOptionsExpanded;
-    renderDailyCheckins();
-  });
-  elements.sportOptions.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-sport]");
-    if (button) toggleSport(button.dataset.sport);
-  });
+  elements.sportCard.addEventListener("click", toggleSport);
   elements.ledgerButton.addEventListener("click", () => togglePrep("ledgerConfirmed", "ledgerAt", "钉钉和成长记录册核对状态已更新"));
   elements.readingButton.addEventListener("click", () => togglePrep("readingDone", "readingAt", "中文阅读状态已更新"));
   elements.mathThinkingButton.addEventListener("click", () => togglePrep("mathThinkingDone", "mathThinkingAt", "数学思维状态已更新"));

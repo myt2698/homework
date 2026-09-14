@@ -102,14 +102,21 @@ const daily = tasks => ({ records: { [today]: owner(tasks) }, weekends: {} });
     await save();
     assertOnlyReordered(beforeFailure, (await read()).records[today], ['done', 'paused', 'b', 'a']);
 
-    // Saturday can reorder Friday carryover and Saturday pending work, but Sunday stays fixed.
+    // Legacy weekend dates migrate separately. Carryover joins today only when explicitly moved.
     const saturday = '2026-09-12', friday = '2026-09-11';
     await seed({ records: {}, weekends: { [friday]: { tasks: [active(saturday), task('carry', { plannedDay: 'friday' }), task('future', { plannedDay: 'sunday' }), task('sat', { plannedDay: 'saturday' })], confirmed: true, planSaved: true, orderSaved: true } } }, saturday);
     const weekend = (await read()).weekends[friday];
-    await page.locator('#focusPendingOrderButton').click();
-    assert.deepEqual(await picks(), ['carry', 'sat']); await pick('sat'); await pick('carry'); await save();
-    assertOnlyReordered(weekend, (await read()).weekends[friday], ['active', 'sat', 'future', 'carry']);
-    assert.equal((await read()).weekends[friday].tasks[2].plannedDay, 'sunday');
+    assert.equal(await page.locator('#focusPendingOrderButton').isVisible(), false);
+    await page.locator('#focusPauseButton').click();
+    await page.locator('#breakChoiceCloseButton').click();
+    await page.locator('#holidayOverdueSummary').click();
+    await page.locator('#holidayOverdueList [data-holiday-action=move]').click();
+    const saturdayBefore = (await read()).records[saturday];
+    await page.locator('#taskOrderButton').click();
+    assert.deepEqual(await picks(), ['sat', 'carry']); await pick('carry'); await pick('sat'); await save();
+    assertOnlyReordered(saturdayBefore, (await read()).records[saturday], ['active', 'carry', 'sat']);
+    assert.deepEqual((await read()).weekends[friday], weekend, 'original weekend archive stays intact');
+    assert.equal((await read()).records['2026-09-13'].tasks[0].id, 'future');
 
     // Holiday daily records keep holiday identifiers and operate independently of weekend grouping.
     const holiday = daily([active(), task('a', { holidayId: 'h' }), task('b', { holidayId: 'h' })]);

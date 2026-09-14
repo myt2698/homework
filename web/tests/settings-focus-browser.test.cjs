@@ -119,7 +119,7 @@ const { chromium } = require('playwright');
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.locator('#taskList [data-task-action=start]').click();
     const color = selector => page.locator(selector).evaluate(e => getComputedStyle(e).color);
-    assert.equal(await color('#focusModalElapsed'), 'rgb(196, 93, 20)');
+    assert.equal(await color('#focusModalElapsed'), 'rgb(36, 59, 83)');
     assert.equal(await color('#focusModalTitle'), 'rgb(145, 75, 43)');
     assert.equal(await color('#focusModalEstimate'), 'rgb(91, 101, 115)');
     for (const width of [1024, 390, 320]) {
@@ -129,22 +129,22 @@ const { chromium } = require('playwright');
     await page.locator('#focusCompleteButton').click();
     assert.equal(await page.locator('#focusModal').isVisible(), false);
 
-    // Compare ordinary/holiday composers using their shared control classes.
+    // Single-day and migrated multi-day plans use the same composer.
     await page.evaluate(() => localStorage.setItem('homework-ledger-v1', JSON.stringify({ records: { '2026-09-09': { ledgerConfirmed: true, tasks: [] } }, weekends: {} })));
     await page.reload();
     await page.setViewportSize({ width: 1024, height: 768 });
-    await page.locator('#taskEntryLauncher').click();
-    await page.locator('#subjectPickerButton').click();
+    await page.locator('#holidayPlanEntry').click();
+    await page.locator('#holidaySubject').click();
     async function checkList(selector) {
       const boxes = await page.locator(`${selector} button`).evaluateAll(items => items.map(e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, height: r.height }; }));
       assert.equal(boxes.length, 4);
       boxes.slice(1).forEach((b, i) => { assert.equal(b.x, boxes[i].x); assert(b.y >= boxes[i].y + boxes[i].height); });
     }
-    await checkList('#subjectTabs');
-    await page.locator('#subjectTabs [data-subject="数学"]').click();
-    assert.equal(await page.locator('#subjectPickerLabel').innerText(), '数学');
+    await checkList('#holidaySubjectOptions');
+    await page.locator('#holidaySubjectOptions [data-subject="数学"]').click();
+    assert.equal(await page.locator('#holidaySubjectLabel').innerText(), '数学');
     const dimensions = ids => page.evaluate(ids => ids.map(id => { const r = document.getElementById(id).getBoundingClientRect(); return [r.width, r.height]; }), ids);
-    const normal = await dimensions(['subjectPickerButton', 'taskDraft', 'addTasksButton']);
+    const normal = await dimensions(['holidaySubject', 'holidayTaskTitle']);
     await page.evaluate(() => {
       const state = JSON.parse(localStorage.getItem('homework-ledger-v1'));
       state.holidays = { autumn: { id: 'autumn', name: '测试假期', start: '2026-09-10', end: '2026-09-13', planDate: '2026-09-09' } };
@@ -166,7 +166,7 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#holidayTaskList').innerText(), /复习第一单元/);
     assert.equal(await page.locator('#holidayTaskTitle').inputValue(), '');
     assert.equal(await page.locator('#holidaySubjectLabel').innerText(), '英语');
-    assert.equal(await page.locator('#holidayTaskMinutes').count(), 0);
+    assert.equal(await page.locator('#holidayTaskMinutes').count(), 1);
     assert.deepEqual(errors, []);
     console.log('PASS: settings child pages, recording cancellation/save/preview, backup roundtrip, centered cards, focus colors, shared entry layout and subject lists.');
     console.log('Screenshots: ' + output);
