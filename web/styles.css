@@ -1055,6 +1055,17 @@ footer { padding: 10px 6px; color: #6681ad; font-size: .74rem; font-weight: 650;
 #holidayConfirm { min-width: 72px; padding: 10px 16px; }
 .holiday-day-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-bottom: 10px; font-size: .8rem; }
 .holiday-day-toolbar > span { flex: 1; }
+.plan-export-dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; margin: auto; padding: 24px; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: #fff; box-shadow: var(--shadow); }
+.plan-export-dialog::backdrop { background: rgba(25, 40, 60, .38); }
+.plan-export-dialog h2 { margin: 0 0 20px; font-size: 1.2rem; }
+.plan-export-dialog label { display: block; margin-bottom: 8px; font-size: .85rem; }
+.plan-export-dialog select { width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+.plan-export-dialog p { font-size: .85rem; line-height: 1.6; overflow-wrap: anywhere; }
+.plan-export-dialog .plan-export-hint { color: var(--muted); font-size: .78rem; }
+.plan-export-status:empty { display: none; }
+.plan-export-dialog button { min-height: 44px; }
+.plan-export-dialog button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 420px) { #holidayDaySummary { flex-basis: 100%; } }
 #holidayDaySummary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
 .holiday-summary-date { color: var(--muted); font-size: .65rem; white-space: nowrap; }
 .holiday-short-days { display: flex; flex-shrink: 0; gap: 6px; min-width: 0; overflow-x: auto; padding: 2px 2px 6px; margin-bottom: 6px; }

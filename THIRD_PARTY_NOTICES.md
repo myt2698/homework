@@ -1,5 +1,14 @@
 # Third-party notices
 
+## pdf-lib (offline plan export)
+
+- pdf-lib 1.17.1: <https://github.com/Hopding/pdf-lib> — MIT license.
+- Copyright (c) 2019 Andrew Dillon.
+- Unmodified browser distribution: `web/vendor/pdf-lib-1.17.1.min.js`.
+- License: `web/vendor/pdf-lib-LICENSE.md`.
+- SHA-256: `0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f`.
+- Used only by the offline web planner to package rendered plan sheets as PDF.
+
 ## Hanzi Writer and offline stroke data
 
 - Hanzi Writer 3.7.3: https://github.com/chanind/hanzi-writer — MIT license.

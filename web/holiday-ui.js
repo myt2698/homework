@@ -4,6 +4,48 @@
     const H = root.HolidayPlans, $ = s => document.querySelector(s), state = host.getState;
     const e = Object.fromEntries(["holidaySettingsPage", "holidaySettingsList", "holidayConfigForm", "holidayConfigTitle", "holidayName", "holidayStart", "holidayEnd", "holidayPlanDate", "holidayConfigCancel", "holidayPlanPage", "holidayPlanTitle", "holidayDaySummary", "holidaySort", "holidaySortReset", "holidayShortDays", "holidayTaskList", "holidayTaskForm", "holidayRepeat", "holidayRepeatDates", "holidayRepeatDateList", "holidaySubject", "holidayTaskTitle", "holidayPlanEntry", "holidayOverdue", "holidayOverdueSummary", "holidayOverdueList", "holidayLedgerHint", "holidayLedgerText", "holidayTaskEdit", "holidayEditContent", "holidayEditMinutes", "holidayEditSeries", "holidayEditSeriesLabel"].map(id => [id, $("#" + id)]));
     let configId = null, planId = null, viewDate = null, fromSettings = false, sortIds = null, editRef = null;
+    const exportDialog = $("#planExportDialog"), exportScope = $("#planExportScope"), exportStatus = $("#planExportStatus");
+    let exportBusy = false;
+    function exportDates() {
+      const h = currentHoliday();
+      return exportScope.value === "range" ? H.days(h.planDate, h.end) : [viewDate];
+    }
+    function exportSummary() {
+      const dates = exportDates(), days = root.PlanExport.snapshot(state(), dates);
+      const count = days.reduce((n, day) => n + day.tasks.length, 0);
+      $("#planExportSummary").textContent = `${dates[0]}${dates.length > 1 ? ` 至 ${dates[dates.length - 1]}` : ""} · ${dates.length} 天 · ${count} 项作业`;
+      exportStatus.textContent = "";
+    }
+    $("#planExportOpen").addEventListener("click", () => {
+      if (e.holidayTaskTitle.value.trim()) { host.toast("还有未添加的作业，请先点加号"); return; }
+      if (sortIds) { host.toast("请先确定当天顺序，再下载或打印"); return; }
+      exportScope.value = "day";
+      exportScope.options[1].disabled = currentHoliday().planDate === currentHoliday().end;
+      exportSummary(); exportDialog.showModal();
+    });
+    exportScope.addEventListener("change", exportSummary);
+    $("#planExportClose").addEventListener("click", () => exportDialog.close());
+    exportDialog.addEventListener("cancel", event => { if (exportBusy) event.preventDefault(); });
+    exportDialog.addEventListener("close", () => $("#planExportOpen").focus({ preventScroll: true }));
+    async function exportPlan(mode) {
+      if (exportBusy) return;
+      const days = root.PlanExport.snapshot(state(), exportDates());
+      exportBusy = true; exportDialog.setAttribute("aria-busy", "true");
+      exportDialog.querySelectorAll("button, select").forEach(control => { control.disabled = true; });
+      exportStatus.textContent = "正在准备计划…";
+      try {
+        await root.PlanExport[mode](days, (n, total) => { exportStatus.textContent = `正在准备第 ${n} / ${total} 页…`; });
+        exportStatus.textContent = mode === "download" ? "PDF 已生成，请在浏览器下载记录中查看。" : "已打开打印窗口，也可以选择另存为 PDF。";
+      } catch (error) {
+        console.error("Plan export failed", error);
+        exportStatus.textContent = "生成失败，请重试；也可下载 PDF 后再打印。";
+      } finally {
+        exportBusy = false; exportDialog.removeAttribute("aria-busy");
+        exportDialog.querySelectorAll("button, select").forEach(control => { control.disabled = false; });
+      }
+    }
+    $("#planExportDownload").addEventListener("click", () => exportPlan("download"));
+    $("#planExportPrint").addEventListener("click", () => exportPlan("print"));
     const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
     const attempt = action => {
       const snapshot = JSON.stringify(state()), oldDate = viewDate, oldSort = sortIds && [...sortIds];
@@ -153,6 +195,7 @@
       e.holidayOverdueList.innerHTML = overdue.map(ref => row(ref, true)).join("");
     }
     function back() {
+      if (exportDialog.open) { if (!exportBusy) exportDialog.close(); return true; }
       if (!subjectOptions.hidden) { subjectMenu(false); e.holidaySubject.focus(); return true; }
       if (!e.holidayTaskEdit.hidden) { closeEdit(); return true; }
       if (!e.holidayPlanPage.hidden) { e.holidayPlanPage.hidden = true; sortIds = null; if (fromSettings) { settings(); host.open(e.holidaySettingsPage); } else host.back(false); return true; }

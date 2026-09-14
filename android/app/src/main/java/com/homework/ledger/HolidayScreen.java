@@ -143,7 +143,12 @@ final class HolidayScreen {
         LinearLayout toolbar=row();
         sortButton=button("调整当天顺序",()->{if(orderIds==null)orderIds=new ArrayList<>();else{StudyPlans.order(host.state(),viewDate,orderIds);orderIds=null;persist();}renderPlan();});toolbar.addView(sortButton,weight());resetButton=button("清空重选",()->{orderIds=new ArrayList<>();renderPlan();});toolbar.addView(resetButton);page.addView(toolbar);
         undoButton=button("撤销一步",()->{if(orderIds!=null&&!orderIds.isEmpty()){orderIds.remove(orderIds.size()-1);renderPlan();}});toolbar.addView(undoButton);
-        summary=text("",13,INK);page.addView(summary);
+        LinearLayout summaryRow=row();summary=text("",13,INK);summaryRow.addView(summary,weight());
+        summaryRow.addView(button("下载 / 打印",()->{
+            if(!taskInput.getText().toString().trim().isEmpty())throw new IllegalArgumentException("还有未添加的作业，请先点加号");
+            if(orderIds!=null)throw new IllegalArgumentException("请先确定当天顺序，再下载或打印");
+            hideKeyboard();JSONObject plan=holiday();PlanPdfExport.show(activity,host.state(),viewDate,plan.optString("planDate"),plan.optString("end"));
+        }));page.addView(summaryRow);
         if(!ready()){page.addView(text("先在 "+h.optString("planDate")+" 核对钉钉，补全成长记录册。",13,MUTED));page.addView(button("去核对",()->{host.back(false);host.goDate(h.optString("planDate"));}));}
         ScrollView listScroll=new ScrollView(activity);taskList=col();listScroll.addView(taskList,wrap());page.addView(listScroll,new LinearLayout.LayoutParams(-1,0,1));
         composer=col();LinearLayout options=row();repeat=spinner(new String[]{"只做一次","每天都做"});options.addView(repeat,weight());Button dateOptions=button("选择重复日期",()->{List<String> dates=StudyPlans.days(h.optString("start"),h.optString("end"));boolean[] selected=new boolean[dates.size()];for(int i=0;i<dates.size();i++)selected[i]=repeatDates.contains(dates.get(i));new AlertDialog.Builder(activity).setTitle("选择重复日期").setMultiChoiceItems(dates.toArray(new String[0]),selected,(d,i,checked)->selected[i]=checked).setNegativeButton("取消",null).setPositiveButton("确定",(d,w)->{repeatDates=new ArrayList<>();for(int i=0;i<dates.size();i++)if(selected[i])repeatDates.add(dates.get(i));}).show();});dateOptions.setVisibility(View.GONE);options.addView(dateOptions,weight());repeat.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){}public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long itemId){dateOptions.setVisibility(position==1?View.VISIBLE:View.GONE);}});composer.addView(options);

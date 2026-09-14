@@ -387,7 +387,7 @@
         <button class="primary-button compact-button" id="holidayConfirm" type="button">确定</button>
       </header>
       <div class="holiday-short-days" id="holidayShortDays" role="group" aria-label="选择计划天数"></div>
-      <div class="holiday-day-toolbar"><span id="holidayDaySummary"></span><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortUndo" type="button" hidden>撤销一步</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
+      <div class="holiday-day-toolbar"><span id="holidayDaySummary"></span><button class="text-button bordered" id="planExportOpen" type="button">下载 / 打印</button><button class="text-button bordered" id="holidaySort" type="button">调整当天顺序</button><button class="text-button" id="holidaySortUndo" type="button" hidden>撤销一步</button><button class="text-button" id="holidaySortReset" type="button" hidden>清空重选</button></div>
       <div class="holiday-ledger-hint" id="holidayLedgerHint" hidden><span id="holidayLedgerText"></span><button class="text-button bordered" id="holidayCheckLedger" type="button">去核对</button></div>
       <div class="holiday-task-list" id="holidayTaskList"></div>
       <form class="task-entry-composer holiday-composer" id="holidayTaskForm">
@@ -410,6 +410,15 @@
       </form>
     </div>
   </section>
+  <dialog class="plan-export-dialog" id="planExportDialog" aria-labelledby="planExportTitle" aria-describedby="planExportHint">
+    <h2 id="planExportTitle">下载 / 打印计划</h2>
+    <label for="planExportScope">选择范围</label>
+    <select id="planExportScope"><option value="day">当前一天</option><option value="range">整个计划范围</option></select>
+    <p id="planExportSummary"></p>
+    <p class="plan-export-hint" id="planExportHint">A4 纸张，按日期分页，包含科目、作业内容、预计用时和完成状态。</p>
+    <p class="plan-export-status" id="planExportStatus" role="status" aria-live="polite"></p>
+    <div class="holiday-actions"><button class="primary-button compact-button" id="planExportDownload" type="button">下载 PDF</button><button class="secondary-button" id="planExportPrint" type="button">打印</button><button class="text-button" id="planExportClose" type="button">关闭</button></div>
+  </dialog>
   <div class="task-edit-modal" id="holidayTaskEdit" role="dialog" aria-modal="true" aria-labelledby="holidayEditTitle" hidden>
     <form class="task-edit-dialog settings-card" id="holidayTaskEditForm"><h2 id="holidayEditTitle">修改作业</h2><input id="holidayEditContent" maxlength="120" aria-label="作业内容" required><label class="holiday-edit-estimate" for="holidayEditMinutes"><span>预计用时</span><select id="holidayEditMinutes"></select></label><label id="holidayEditSeriesLabel"><input id="holidayEditSeries" type="checkbox" checked>同时修改之后未开始的同类作业</label><div class="holiday-actions"><button class="primary-button compact-button" type="submit">保存</button><button class="text-button" id="holidayEditCancel" type="button">取消</button></div></form>
   </div>
@@ -682,6 +691,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="holiday-plans.js"></script>
   <script src="study-plans.js"></script>
+  <script src="vendor/pdf-lib-1.17.1.min.js"></script>
+  <script src="plan-export.js"></script>
   <script src="holiday-ui.js"></script>
   <script src="app.js"></script>
   <script src="hanzi-entry.js"></script>
