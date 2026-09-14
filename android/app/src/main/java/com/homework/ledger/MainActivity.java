@@ -326,6 +326,14 @@ public class MainActivity extends Activity {
     private TextView emptyTaskView;
     private TextView taskConfirmHintView;
     private Button taskOrderButton;
+    private Button focusPendingOrderButton;
+    private AlertDialog pendingOrderDialog;
+    private JSONObject pendingOrderOwner;
+    private String pendingOrderDate;
+    private List<String> pendingOrderIds = new ArrayList<>(), pendingOrderSelected = new ArrayList<>();
+    private LinearLayout pendingOrderList;
+    private TextView pendingOrderHint;
+    private Button pendingOrderSave, pendingOrderUndo, pendingOrderReset;
     private LinearLayout taskOrderPanel;
     private LinearLayout taskEntryDaysPanel;
     private Button taskEntryOrderButton;
@@ -563,6 +571,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (hanziLookupDialog != null) hanziLookupDialog.dismiss();
         dismissSupplementDialog();
+        if (pendingOrderDialog != null) pendingOrderDialog.dismiss();
         clearCompletionUndo();
         if (currentToast != null) currentToast.cancel();
         timerHandler.removeCallbacks(clearTaskEntryNotice);
@@ -1429,7 +1438,7 @@ public class MainActivity extends Activity {
         taskOrderButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         taskOrderButton.setAllCaps(false);
         taskOrderButton.setBackground(rounded(GREEN, 13, GREEN, 0));
-        taskOrderButton.setOnClickListener(v -> toggleTaskOrder());
+        taskOrderButton.setOnClickListener(v -> showPendingOrder());
         panel.addView(taskOrderButton, matchFixed(dp(43)));
         taskConfirmButton = new Button(this);
         taskConfirmButton.setText("确认作业清单");
@@ -2437,6 +2446,11 @@ public class MainActivity extends Activity {
         lookupActions.addView(createHanziLookupButton(true), new LinearLayout.LayoutParams(0, dp(44), 1f));
         lookupActions.addView(createSupplementButton(), new LinearLayout.LayoutParams(0, dp(44), 1f));
         content.addView(lookupActions, matchWrap());
+        focusPendingOrderButton = textButton("调整未开始顺序");
+        focusPendingOrderButton.setTextSize(12);
+        focusPendingOrderButton.setVisibility(canReorderPendingTasks() ? View.VISIBLE : View.GONE);
+        focusPendingOrderButton.setOnClickListener(v -> showPendingOrder());
+        content.addView(focusPendingOrderButton, matchFixed(dp(44)));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content, matchWrap());
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -3607,6 +3621,124 @@ public class MainActivity extends Activity {
         return canEditTaskPlan() && taskArray(false).length() > 0;
     }
 
+    private List<String> pendingOrderTaskIds() {
+        JSONArray tasks = taskArray(false);
+        int active = -1;
+        for (int i = 0; i < tasks.length(); i++) {
+            JSONObject task = tasks.optJSONObject(i);
+            if (task != null && "active".equals(task.optString("status"))) { active = i; break; }
+        }
+        List<String> ids = new ArrayList<>();
+        // Match nextTaskIndexAfter: begin after the active task, then wrap around.
+        for (int offset = 0; offset < tasks.length(); offset++) {
+            int index = active < 0 ? offset : (active + 1 + offset) % tasks.length();
+            JSONObject task = tasks.optJSONObject(index);
+            if (task != null && "pending".equals(task.optString("status", "pending")) && taskCanRunToday(task)) ids.add(task.optString("id"));
+        }
+        return ids;
+    }
+
+    private boolean canReorderPendingTasks() {
+        return canSupplementTasks() && pendingOrderTaskIds().size() > 1;
+    }
+
+    private void showPendingOrder() {
+        if (!canReorderPendingTasks() || pendingOrderDialog != null) return;
+        pendingOrderDate = currentDate;
+        pendingOrderOwner = taskOwner(false);
+        pendingOrderIds = pendingOrderTaskIds();
+        pendingOrderSelected = new ArrayList<>();
+        LinearLayout content = vertical();
+        content.setPadding(dp(16), dp(16), dp(16), dp(16));
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        Button cancel = textButton("取消");
+        cancel.setOnClickListener(v -> pendingOrderDialog.dismiss());
+        header.addView(cancel, new LinearLayout.LayoutParams(-2, dp(44)));
+        TextView title = text("调整未开始顺序", 16, INK, true);
+        title.setGravity(Gravity.CENTER);
+        header.addView(title, weightedWrap(1));
+        pendingOrderSave = smallButton("确定");
+        pendingOrderSave.setMinWidth(0); pendingOrderSave.setMinimumWidth(0);
+        pendingOrderSave.setOnClickListener(v -> savePendingOrder());
+        header.addView(pendingOrderSave, new LinearLayout.LayoutParams(-2, dp(44)));
+        content.addView(header, matchWrap());
+        pendingOrderHint = text("", 12, MUTED, false);
+        pendingOrderHint.setPadding(0, dp(12), 0, dp(12));
+        content.addView(pendingOrderHint, matchWrap());
+        ScrollView scroll = new ScrollView(this);
+        pendingOrderList = vertical(); scroll.addView(pendingOrderList, matchWrap());
+        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout actions = horizontal();
+        pendingOrderUndo = smallButton("撤销上一步");
+        pendingOrderUndo.setOnClickListener(v -> {
+            if (!pendingOrderSelected.isEmpty()) pendingOrderSelected.remove(pendingOrderSelected.size() - 1);
+            renderPendingOrder();
+        });
+        pendingOrderReset = textButton("清空重选");
+        pendingOrderReset.setOnClickListener(v -> { pendingOrderSelected.clear(); renderPendingOrder(); });
+        actions.addView(pendingOrderUndo, weightedFixed(1, dp(44)));
+        actions.addView(pendingOrderReset, weightedFixed(1, dp(44)));
+        content.addView(actions, matchWrap());
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(content).create();
+        pendingOrderDialog = dialog;
+        dialog.setOnDismissListener(ignored -> { if (pendingOrderDialog == dialog) pendingOrderDialog = null; });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setLayout(-1, (int)(getResources().getDisplayMetrics().heightPixels * .88f));
+        renderPendingOrder();
+    }
+
+    private void renderPendingOrder() {
+        if (pendingOrderDialog == null) return;
+        boolean ready = pendingOrderSelected.size() == pendingOrderIds.size();
+        pendingOrderHint.setText(ready ? "顺序选好了，点确定保存" : "第 " + (pendingOrderSelected.size() + 1) + " 项，我选……");
+        pendingOrderSave.setEnabled(ready);
+        pendingOrderUndo.setEnabled(!pendingOrderSelected.isEmpty());
+        pendingOrderReset.setEnabled(!pendingOrderSelected.isEmpty());
+        pendingOrderList.removeAllViews();
+        for (String id : ready ? pendingOrderSelected : pendingOrderIds) {
+            JSONObject task = taskArray(false).optJSONObject(taskIndexById(id));
+            if (task == null) continue;
+            String subject = task.optString("subject", "其他");
+            int number = pendingOrderSelected.indexOf(id) + 1, color = taskSubjectColor(subject);
+            LinearLayout row = horizontal(); row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(60)); row.setClipToOutline(true);
+            row.setBackground(rounded(taskSubjectSoftColor(subject), 13, LINE, 1));
+            row.addView(taskSubjectLabel(subject), fixed(dp(28), -1));
+            TextView badge = text(number > 0 ? String.valueOf(number) : "", 13, Color.WHITE, true);
+            badge.setGravity(Gravity.CENTER); badge.setBackground(rounded(number > 0 ? color : SURFACE, 18, color, 1));
+            LinearLayout.LayoutParams badgeParams = fixed(dp(30), dp(30)); badgeParams.leftMargin = dp(8); badgeParams.rightMargin = dp(8);
+            row.addView(badge, badgeParams);
+            TextView title = text(task.optString("title"), 14, INK, true);
+            title.setPadding(0, dp(10), dp(10), dp(10)); row.addView(title, weightedWrap(1));
+            row.setSelected(number > 0); row.setFocusable(true);
+            row.setContentDescription((number > 0 ? "第 " + number + " 项：" : "选择：") + subject + "，" + task.optString("title"));
+            row.setOnClickListener(v -> {
+                if (!pendingOrderSelected.contains(id)) { pendingOrderSelected.add(id); renderPendingOrder(); }
+            });
+            LinearLayout.LayoutParams params = matchWrap(); params.bottomMargin = dp(8);
+            pendingOrderList.addView(row, params);
+        }
+    }
+
+    private void savePendingOrder() {
+        if (!canReorderPendingTasks() || !currentDate.equals(pendingOrderDate) || taskOwner(false) != pendingOrderOwner
+                || !pendingOrderIds.equals(pendingOrderTaskIds())) {
+            pendingOrderDialog.dismiss(); toast("清单已变化，请重新调整顺序"); return;
+        }
+        if (pendingOrderSelected.size() != pendingOrderIds.size()) return;
+        JSONArray original = taskArray(false), ordered = new JSONArray();
+        for (int i = 0; i < original.length(); i++) {
+            JSONObject task = original.optJSONObject(i);
+            int slot = pendingOrderIds.indexOf(task.optString("id"));
+            ordered.put(slot < 0 ? task : original.optJSONObject(taskIndexById(pendingOrderSelected.get(slot))));
+        }
+        put(pendingOrderOwner, "tasks", ordered);
+        pendingOrderOwner.remove("orderDraft");
+        saveTaskData(); pendingOrderDialog.dismiss(); renderTasks(); updateTaskFocusProgress();
+        toast("未开始的作业顺序已更新");
+    }
+
     private String orderDayForTask(JSONObject task) {
         return weekendKeyFor(currentDate) == null ? "daily" : plannedDayForTask(task);
     }
@@ -3989,8 +4121,9 @@ public class MainActivity extends Activity {
                 : "核对钉钉并补全成长记录册后，再录入作业。");
         taskConfirmButton.setVisibility(holiday == null && confirmed && canEditList && allPending ? View.VISIBLE : View.GONE);
         taskConfirmButton.setText("修改计划");
-        taskOrderButton.setVisibility(View.GONE);
-        taskOrderButton.setText(sortingMode ? "选择作业顺序" : "重新选择顺序");
+        taskOrderButton.setVisibility(canReorderPendingTasks() ? View.VISIBLE : View.GONE);
+        taskOrderButton.setText("调整未开始顺序");
+        if (focusPendingOrderButton != null) focusPendingOrderButton.setVisibility(canReorderPendingTasks() ? View.VISIBLE : View.GONE);
         taskOrderButton.setTextColor(sortingMode ? Color.WHITE : GREEN);
         taskOrderButton.setBackground(rounded(sortingMode ? GREEN : GREEN_SOFT, 13,
                 sortingMode ? GREEN : Color.rgb(156, 188, 245), sortingMode ? 0 : 1));
@@ -4429,7 +4562,7 @@ public class MainActivity extends Activity {
         row.addView(copy, weightedWrap(1));
         LinearLayout actions = horizontal();
         actions.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-        actions.setPadding(0, dp(6), 0, 0);
+        actions.setPadding(0, dp(8), dp(8), dp(8));
         if (weekendKeyFor(currentDate) != null) {
             String[] days = {"friday", "saturday", "sunday"};
             android.widget.Spinner day = new android.widget.Spinner(this);
@@ -4452,12 +4585,17 @@ public class MainActivity extends Activity {
             });
             actions.addView(day, new LinearLayout.LayoutParams(-2, dp(44)));
         }
+        TextView estimate = taskEstimateView(task);
+        estimate.setText(estimatedMinutes(task) + " 分钟");
+        LinearLayout.LayoutParams estimateParams = new LinearLayout.LayoutParams(-2, dp(44));
+        if (actions.getChildCount() > 0) estimateParams.leftMargin = dp(5);
+        actions.addView(estimate, estimateParams);
         if (editable) {
             LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(dp(44), dp(44));
             deleteParams.leftMargin = dp(6);
             actions.addView(pendingTaskIcon(false, task.optString("title"), () -> performTaskAction("delete", taskIndexById(id))), deleteParams);
         }
-        if (actions.getChildCount() > 0) copy.addView(actions, matchWrap());
+        if (actions.getChildCount() > 0) row.addView(actions, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams params = matchWrap();
         params.bottomMargin = dp(7);
         taskEntryPendingList.addView(row, params);

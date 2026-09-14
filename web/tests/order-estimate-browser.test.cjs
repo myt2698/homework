@@ -1,4 +1,4 @@
-// Real browser coverage for moving estimated duration from the composer into sorting.
+// Real browser coverage for estimated durations in the composer and sorting.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -28,7 +28,7 @@ const task = (id, minutes, extra = {}) => ({ id, subject: '数学', title: `完�
 
     await seed({ records: { [date]: { ledgerConfirmed: true, tasks: [task('1', 60), task('2', 20)] } }, weekends: {} });
     await page.locator('#taskEntryLauncher').click();
-    assert.equal(await page.locator('#taskEntryEstimate, #holidayTaskMinutes').count(), 0);
+    assert.equal(await page.locator('#taskEntryEstimate').inputValue(), '15');
     await page.locator('#taskDraft').fill('背诵第三课');
     await page.locator('#addTasksButton').click();
     const tasks = (await read()).records[date].tasks, third = tasks[2].id;

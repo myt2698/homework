@@ -92,7 +92,7 @@ for (const selector of ['.task-item', '.pending-task-row.task-plan-row', '.weeke
   assert(/box-shadow:\s*none\s*;/.test(rule), `${selector} has no decorative shadow`);
   assert(!/border-left|linear-gradient/.test(rule), `${selector} has no left accent or shaded gradient`);
 }
-assert.equal((androidSource.match(/addView\(taskSubjectLabel\(/g) || []).length, 4, 'all four native task-list renderers use the shared edge label');
+assert.equal((androidSource.match(/addView\(taskSubjectLabel\(/g) || []).length, 5, 'native task lists and pending-order cards use the shared edge label');
 assert.equal((androidSource.match(/addView\(taskEstimateView\(/g) || []).length, 2, 'native home and weekend preview keep estimates; entry uses the editor');
 assert(!androidSource.includes('TextView subjectBadge'), 'native inline subject badges are removed');
 assert(!/\.order-choice-row\.is-picked\s*\{/.test(styles), 'selected task cards retain the same subject background and text styles');
@@ -332,7 +332,7 @@ function assertOrderEstimateControls(markup) {
 function assertUnifiedTaskCards(markup, expectedCount, entry = false) {
   const labels = [...markup.matchAll(/<span class="task-subject-label"><span>([^<]*)<\/span><span>([^<]*)<\/span><\/span>/g)];
   assert.equal(labels.length, expectedCount, 'one two-row subject label per task');
-  assert.equal([...markup.matchAll(/class="task-estimate"/g)].length, entry ? 0 : expectedCount, entry ? 'entry cards keep estimates in the editor' : 'one separate estimate per task');
+  assert.equal([...markup.matchAll(/class="task-estimate"/g)].length, expectedCount, 'one separate estimate per task');
   for (const match of labels) assert(match[1] && match[2], 'each subject uses two populated rows');
   assert(!markup.includes('class="subject-badge"'), 'old inline pill labels are removed');
 }
@@ -483,11 +483,11 @@ assert.deepEqual(Array.from(h.api.tasks(), item => item.subject), subjects);
 const entryMarkup = h.el('taskEntryPendingList').innerHTML;
 assertUnifiedTaskCards(entryMarkup, subjects.length, true);
 assert(/class="task-plan-title"><strong[^>]*>[^<]*<\/strong><button[^>]*data-task-action="edit"/.test(entryMarkup), 'small edit icon follows the task title');
-assert(/class="task-plan-actions"><button[^>]*data-task-action="delete"/.test(entryMarkup), 'delete icon stays in the right-side controls');
+assert(/class="task-plan-actions"><span class="task-estimate"[^>]*>[^<]*<\/span><button[^>]*data-task-action="delete"/.test(entryMarkup), 'estimate is immediately before the delete icon');
 assert(!entryMarkup.includes('task-plan-number'), 'entry task titles have no redundant sequence numbers');
 const nativeEntryRow = androidSource.split('private void addPendingTaskRow(')[1].split('private void showPendingTaskEditDialog(')[0];
 assert(!nativeEntryRow.includes('String.valueOf(number)'), 'native entry has no sequence numbers');
-assert(!nativeEntryRow.includes('showTaskEstimatePicker'), 'native entry hides estimates on the card');
+assert(!nativeEntryRow.includes('showTaskEstimatePicker'), 'native card estimates remain editable through the pencil dialog');
 for (const subject of subjects) assert(entryMarkup.includes('data-subject="' + subject + '"'));
 h.el('taskEntryOrderButton').click();
 assertOrderEstimateControls(h.el('taskOrderChoices').innerHTML);
@@ -895,8 +895,9 @@ focusTab(false); assert.equal(h.activeElement(), h.el('focusCompleteButton'));
 focusTab(false); assert.equal(h.activeElement(), h.el('focusSkipButton'));
 focusTab(false); assert.equal(h.activeElement(), h.el('focusLookupButton'), 'lookup entry is reachable while timing');
 focusTab(false); assert.equal(h.activeElement(), h.el('focusSupplementButton'), 'supplement entry is reachable while timing');
+focusTab(false); assert.equal(h.activeElement(), h.el('focusPendingOrderButton'), 'pending order entry is reachable while timing');
 focusTab(false); assert.equal(h.activeElement(), h.el('focusPauseButton'), 'Tab stays within focus actions');
-focusTab(true); assert.equal(h.activeElement(), h.el('focusSupplementButton'), 'Shift+Tab also stays inside');
+focusTab(true); assert.equal(h.activeElement(), h.el('focusPendingOrderButton'), 'Shift+Tab also stays inside');
 h.setClock(planNow + 2 * 60000);
 h.el('focusSkipButton').click();
 assert.deepEqual(Array.from(h.api.tasks(), item => item.status), ['paused', 'active', 'pending']);

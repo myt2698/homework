@@ -484,6 +484,23 @@
     </div>
   </div>
 
+  <div class="pending-order-modal" id="pendingOrderModal" role="dialog" aria-modal="true" aria-labelledby="pendingOrderTitle" hidden>
+    <div class="pending-order-dialog">
+      <div class="pending-order-heading">
+        <button class="text-button" id="pendingOrderCloseButton" type="button">取消</button>
+        <h2 id="pendingOrderTitle">调整未开始顺序</h2>
+        <button class="primary-button" id="pendingOrderSaveButton" type="button" disabled>确定</button>
+      </div>
+      <p class="pending-order-hint" id="pendingOrderHint" aria-live="polite">按先后点选作业</p>
+      <div class="order-choice-list" id="pendingOrderList"></div>
+      <p class="field-error" id="pendingOrderError" role="alert" hidden></p>
+      <div class="order-secondary-actions">
+        <button class="text-button bordered" id="pendingOrderUndoButton" type="button">撤销上一步</button>
+        <button class="text-button" id="pendingOrderResetButton" type="button">清空重选</button>
+      </div>
+    </div>
+  </div>
+
   <div class="task-edit-modal" id="taskEditModal" role="dialog" aria-modal="true" aria-labelledby="taskEditTitle" hidden>
     <div class="task-edit-dialog">
       <button class="focus-close" id="taskEditCloseButton" type="button" aria-label="关闭作业修改">×</button>
@@ -544,6 +561,7 @@
         <button class="text-button" id="focusLookupButton" type="button" aria-controls="hanziLookupModal">查字 · 看笔顺</button>
         <button class="text-button supplement-entry" id="focusSupplementButton" type="button" hidden>＋ 补加作业</button>
       </div>
+      <button class="text-button pending-order-entry" id="focusPendingOrderButton" type="button" hidden>调整未开始顺序</button>
     </div>
   </div>
 

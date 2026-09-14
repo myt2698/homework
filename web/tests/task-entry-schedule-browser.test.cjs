@@ -34,7 +34,8 @@ const { chromium } = require('playwright');
     for (const [width, height] of [[1024, 768], [390, 844], [320, 740]]) {
       await page.setViewportSize({ width, height });
       for (const row of await page.locator('.task-plan-row').all()) {
-        assert.equal(await row.locator('.task-plan-estimate, .task-estimate').count(), 0, 'entry cards hide estimates like holiday cards');
+        assert.equal(await row.locator('.task-estimate').count(), 1, 'entry cards show one estimate');
+        const estimate = await row.locator('.task-estimate').boundingBox();
         const title = await row.locator('.pending-task-title').boundingBox();
         const edit = await row.locator('[data-task-action="edit"]').boundingBox();
         const remove = await row.locator('[data-task-action="delete"]').boundingBox();
@@ -42,6 +43,8 @@ const { chromium } = require('playwright');
         const card = await row.boundingBox();
         assert(edit.x >= title.x + title.width && edit.x - title.x - title.width < 4, 'edit stays just after the title');
         assert(date.x + date.width <= remove.x, 'delete is to the right of the date');
+        assert(date.x + date.width <= estimate.x && estimate.x + estimate.width <= remove.x, 'estimate sits between the date and delete');
+        assert(Math.abs(estimate.y + estimate.height / 2 - remove.y - remove.height / 2) < 1, 'estimate stays vertically centered with delete');
         assert(Math.abs(remove.y + remove.height / 2 - date.y - date.height / 2) < 1, 'date and delete align vertically');
         for (const box of [title, edit, remove, date]) assert(box.x >= card.x && box.x + box.width <= card.x + card.width && box.y + box.height <= card.y + card.height, 'content and controls stay inside the card');
         assert.equal((await row.locator('[data-task-action="edit"] svg').boundingBox()).width, 14);

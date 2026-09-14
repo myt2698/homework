@@ -202,6 +202,11 @@
     taskSummary: $("#taskSummary"),
     taskPanel: $("#taskPanel"), taskPanelHeading: $("#taskPanelHeading"), taskPanelTitle: $("#taskPanelTitle"), taskPanelHelp: $("#taskPanelHelp"),
     taskOrderButton: $("#taskOrderButton"),
+    focusPendingOrderButton: $("#focusPendingOrderButton"), pendingOrderModal: $("#pendingOrderModal"),
+    pendingOrderTitle: $("#pendingOrderTitle"), pendingOrderHint: $("#pendingOrderHint"), pendingOrderList: $("#pendingOrderList"),
+    pendingOrderCloseButton: $("#pendingOrderCloseButton"), pendingOrderSaveButton: $("#pendingOrderSaveButton"),
+    pendingOrderUndoButton: $("#pendingOrderUndoButton"), pendingOrderResetButton: $("#pendingOrderResetButton"),
+    pendingOrderError: $("#pendingOrderError"),
     taskOrderModal: $("#taskOrderModal"), taskOrderCloseButton: $("#taskOrderCloseButton"),
     taskOrderTitle: $("#taskOrderTitle"),
     taskOrderDays: $("#taskOrderDays"), taskOrderChoices: $("#taskOrderChoices"),
@@ -2312,7 +2317,7 @@
       ${taskSubjectBadgeHtml(task.subject)}
       <div class="task-plan-copy"><div class="task-plan-title"><strong class="pending-task-title">${escapeHtml(task.title || "未命名作业")}</strong>${editable ? pendingTaskIcon("edit", task) : ""}</div>
         ${!editable && task.status === "done" ? "<small>已完成</small>" : ""}</div>
-      <div class="task-plan-actions">${dayControl}${editable ? pendingTaskIcon("delete", task) : ""}</div>
+      <div class="task-plan-actions">${dayControl}${taskEstimateHtml(task, true)}${editable ? pendingTaskIcon("delete", task) : ""}</div>
     </div>`;
   }
 
@@ -2360,8 +2365,8 @@
     if (holiday) elements.emptyTaskList.textContent = "这一天还没有安排作业，可以打开假期计划查看。";
     elements.confirmTaskListButton.hidden = Boolean(holiday) || !confirmed || !canEditList || !allPending;
     elements.confirmTaskListButton.textContent = "修改计划";
-    elements.taskOrderButton.hidden = true;
-    elements.taskOrderButton.textContent = sortingMode ? "选择作业顺序" : "重新选择顺序";
+    elements.taskOrderButton.hidden = !canReorderPendingTasks();
+    elements.taskOrderButton.textContent = "调整未开始顺序";
     elements.taskOrderButton.className = sortingMode
       ? "primary-button compact-button" : "text-button bordered compact-order-button";
     const currentRecordData = recordFor(date) || {};
@@ -2685,6 +2690,87 @@
   }
 
   let supplementContext = null;
+  let pendingOrderContext = null;
+
+  function pendingOrderTasks() {
+    const tasks = tasksForDate(), activeIndex = tasks.findIndex(task => task.status === "active");
+    // Follow the same wraparound order as completing/skipping the current task.
+    const queue = activeIndex < 0 ? tasks : tasks.slice(activeIndex + 1).concat(tasks.slice(0, activeIndex));
+    return queue.filter(task => (task.status || "pending") === "pending" && taskCanRunToday(task));
+  }
+
+  function canReorderPendingTasks() {
+    return canSupplementTasks() && pendingOrderTasks().length > 1;
+  }
+
+  function openPendingOrder() {
+    if (!canReorderPendingTasks() || pendingOrderContext) return;
+    pendingOrderContext = { date: elements.recordDate.value, owner: taskOwnerForDate(),
+      ids: pendingOrderTasks().map(task => String(task.id)), selected: [], trigger: document.activeElement,
+      overflow: document.body.style.overflow,
+      backgrounds: [elements.mainPage, elements.focusModal, elements.startPlanModal, elements.breakChoiceModal, elements.breakTimerModal]
+        .map(element => ({ element, inert: element.inert })) };
+    pendingOrderContext.backgrounds.forEach(({ element }) => { element.inert = true; });
+    elements.pendingOrderModal.hidden = false;
+    elements.pendingOrderError.hidden = true;
+    document.body.style.overflow = "hidden";
+    renderPendingOrder();
+    elements.pendingOrderCloseButton.focus();
+  }
+
+  function closePendingOrder() {
+    const context = pendingOrderContext;
+    if (!context) return;
+    pendingOrderContext = null;
+    elements.pendingOrderModal.hidden = true;
+    context.backgrounds.forEach(({ element, inert }) => { element.inert = inert; });
+    document.body.style.overflow = context.overflow;
+    context.trigger?.focus();
+  }
+
+  function renderPendingOrder() {
+    const context = pendingOrderContext;
+    if (!context) return;
+    const ready = context.selected.length === context.ids.length;
+    elements.pendingOrderHint.textContent = ready ? "顺序选好了，点确定保存" : `第 ${context.selected.length + 1} 项，我选……`;
+    elements.pendingOrderList.innerHTML = (ready ? context.selected : context.ids).map(id => {
+      const task = taskById(id);
+      if (!task) return "";
+      const number = context.selected.indexOf(id) + 1;
+      return `<article class="task-item order-choice-row${number ? " is-picked" : ""}" data-subject="${escapeAttribute(task.subject || "其他")}">
+        <button class="order-pick-card" type="button" data-pending-order-pick="${escapeAttribute(id)}" aria-pressed="${number > 0}" aria-label="${escapeAttribute(`${number ? `第 ${number} 项：` : "选择："}${task.subject}，${task.title}`)}">
+          ${taskSubjectBadgeHtml(task.subject)}<span class="order-number" aria-hidden="true">${number || ""}</span>
+          <span class="task-copy"><strong class="task-title">${escapeHtml(task.title)}</strong></span>
+        </button></article>`;
+    }).join("");
+    elements.pendingOrderSaveButton.disabled = !ready;
+    elements.pendingOrderUndoButton.disabled = !context.selected.length;
+    elements.pendingOrderResetButton.disabled = !context.selected.length;
+  }
+
+  function savePendingOrder() {
+    const context = pendingOrderContext;
+    if (!context) return;
+    if (!canReorderPendingTasks() || context.date !== elements.recordDate.value || context.owner !== taskOwnerForDate()
+        || JSON.stringify(context.ids) !== JSON.stringify(pendingOrderTasks().map(task => String(task.id)))) {
+      closePendingOrder(); return showToast("清单已变化，请重新调整顺序");
+    }
+    if (context.selected.length !== context.ids.length) return;
+    const original = tasksForDate(), tasks = original.slice();
+    context.ids.forEach((id, index) => {
+      tasks[original.findIndex(task => String(task.id) === id)] = original.find(task => String(task.id) === context.selected[index]);
+    });
+    const owner = { ...context.owner, tasks };
+    delete owner.orderDraft;
+    const date = context.date, key = weekendKeyFor(date);
+    const nextState = key ? { ...state, weekends: { ...state.weekends, [key]: owner } }
+      : { ...state, records: { ...state.records, [date]: owner } };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState)); }
+    catch (_) { elements.pendingOrderError.textContent = "保存失败，请检查本机存储空间后重试"; elements.pendingOrderError.hidden = false; return; }
+    state = nextState;
+    closePendingOrder(); renderTasks(); updateFocusModal();
+    showToast("未开始的作业顺序已更新");
+  }
 
   function canSupplementTasks() {
     const date = elements.recordDate.value, key = weekendKeyFor(date);
@@ -2694,6 +2780,7 @@
 
   function updateSupplementButtons() {
     const enabled = canSupplementTasks();
+    elements.focusPendingOrderButton.hidden = !canReorderPendingTasks();
     [elements.supplementTaskButton, elements.focusSupplementButton,
       elements.startPlanSupplementButton, elements.breakSupplementButton].forEach(button => { button.hidden = !enabled; });
   }
@@ -2965,8 +3052,8 @@
     return `<span class="task-subject-label"><span>${escapeHtml(characters.slice(0, split).join(""))}</span><span>${escapeHtml(characters.slice(split).join(""))}</span></span>`;
   }
 
-  function taskEstimateHtml(task) {
-    return `<span class="task-estimate" aria-label="${escapeAttribute(task.title || "作业")}预计用时 ${estimatedMinutes(task)} 分钟">预计 ${estimatedMinutes(task)} 分钟</span>`;
+  function taskEstimateHtml(task, compact = false) {
+    return `<span class="task-estimate" aria-label="${escapeAttribute(task.title || "作业")}预计用时 ${estimatedMinutes(task)} 分钟">${compact ? "" : "预计 "}${estimatedMinutes(task)} 分钟</span>`;
   }
 
   function taskOrderEstimateHtml(task) {
@@ -3601,6 +3688,15 @@
   });
   window.addEventListener("keydown", (event) => {
     if (window.HanziLookup?.isOpen()) return;
+    if (pendingOrderContext) {
+      if (event.key === "Escape") { event.preventDefault(); closePendingOrder(); }
+      if (event.key === "Tab") {
+        const buttons = [...elements.pendingOrderModal.querySelectorAll("button:not(:disabled)")];
+        const index = buttons.indexOf(document.activeElement);
+        event.preventDefault(); buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+      }
+      return;
+    }
     if (!elements.supplementModal.hidden) {
       if (event.key === "Escape") { event.preventDefault(); closeSupplementDialog(); }
       if (event.key === "Tab") {
@@ -3615,8 +3711,8 @@
     if (!elements.focusModal.hidden) {
       if (event.key === "Escape") event.preventDefault();
       if (event.key === "Tab") {
-        const buttons = [elements.focusPauseButton, elements.focusCompleteButton, elements.focusSkipButton, elements.focusLookupButton, elements.focusSupplementButton]
-          .filter((button) => !button.disabled && (button !== elements.focusSupplementButton || !button.hidden));
+        const buttons = [elements.focusPauseButton, elements.focusCompleteButton, elements.focusSkipButton, elements.focusLookupButton, elements.focusSupplementButton, elements.focusPendingOrderButton]
+          .filter((button) => !button.disabled && (![elements.focusSupplementButton, elements.focusPendingOrderButton].includes(button) || !button.hidden));
         const current = buttons.indexOf(document.activeElement);
         const next = current < 0 ? (event.shiftKey ? buttons.length - 1 : 0)
           : (current + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
@@ -3716,7 +3812,19 @@
     else performTaskAction(action, button.dataset.taskId);
   });
   elements.confirmTaskListButton.addEventListener("click", toggleTaskListConfirmation);
-  elements.taskOrderButton.addEventListener("click", toggleTaskOrder);
+  elements.taskOrderButton.addEventListener("click", openPendingOrder);
+  elements.focusPendingOrderButton.addEventListener("click", openPendingOrder);
+  elements.pendingOrderCloseButton.addEventListener("click", closePendingOrder);
+  elements.pendingOrderSaveButton.addEventListener("click", savePendingOrder);
+  elements.pendingOrderUndoButton.addEventListener("click", () => { pendingOrderContext?.selected.pop(); renderPendingOrder(); });
+  elements.pendingOrderResetButton.addEventListener("click", () => { if (pendingOrderContext) pendingOrderContext.selected = []; renderPendingOrder(); });
+  elements.pendingOrderList.addEventListener("click", event => {
+    const button = event.target.closest("button[data-pending-order-pick]"), context = pendingOrderContext;
+    const id = button?.dataset.pendingOrderPick;
+    if (!context || !context.ids.includes(id) || context.selected.includes(id)) return;
+    context.selected.push(id); renderPendingOrder();
+    [...elements.pendingOrderList.querySelectorAll("button")].find(item => item.dataset.pendingOrderPick === id)?.focus({ preventScroll: true });
+  });
   elements.taskOrderCloseButton.addEventListener("click", returnToTaskEntry);
   elements.taskOrderUndoButton.addEventListener("click", () => undoTaskOrderSelection());
   elements.taskOrderResetButton.addEventListener("click", () => undoTaskOrderSelection(true));
