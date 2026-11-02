@@ -8,3 +8,11 @@ local.properties
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# iOS / Swift local build and user state
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.build/
+.swiftpm/
+*.ipa

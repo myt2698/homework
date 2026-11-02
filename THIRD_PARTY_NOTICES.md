@@ -24,7 +24,7 @@ All 9,574 characters and their original stroke geometry, medians and radical
 indices are retained. Every transformed shard includes a modification notice.
 The transformed data files are distributed under the same APL terms, without
 warranty, as readable JavaScript files in `web/hanzi/data/` (also packaged as
-Android assets). The MIT component is shipped unchanged. The lookup UI is
+Android assets and iOS bundle resources). The MIT component is shipped unchanged. The lookup UI is
 independent application code; the APL applies to the character data.
 
 ## sherpa-onnx Android runtime
